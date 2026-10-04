@@ -67,19 +67,18 @@ Before the repository goes public:
   `ghcr.io/redouane-e/warqa`). If the repository moves, search for `Redouane-E` and `redouane-e` and update them.
 - [x] **Code of Conduct contact**: private reports go through GitHub's private vulnerability reporting.
 - [x] **Maintainers**: listed in `GOVERNANCE.md`.
-- [ ] **Labels**: create the labels listed in `GOVERNANCE.md` (issue forms only apply labels that exist).
-- [ ] **Discussions**: *Settings → General → Features → Discussions*, with a *Q&A* category (the issue chooser links to it).
-- [ ] **Private vulnerability reporting**: *Settings → Code security → Private vulnerability reporting* (used by `SECURITY.md` and the issue chooser).
-- [ ] **Pages**: *Settings → Pages → Build and deployment → Source: GitHub Actions*. If the site is a project
-  site (`https://<owner>.github.io/warqa/`), the web app must be built with a relative base or with
-  `WARQA_BASE_PATH`, which the workflow sets to `/<repo>/`.
-- [ ] **Actions permissions**: *Settings → Actions → General → Workflow permissions: Read repository contents* (the workflows ask for more only where needed).
-- [ ] **Branch protection** on `master` (a ruleset): require a pull request and the checks
-  *Build, lint, typecheck, test*, *E2E (chromium)* and *Python worker*.
+- [x] **Labels**: the labels listed in `GOVERNANCE.md` exist (issue forms only apply labels that exist).
+- [x] **Discussions** are on (the issue chooser links to them).
+- [x] **Private vulnerability reporting** is on (used by `SECURITY.md`, the Code of Conduct and the issue chooser).
+- [x] **Pages** builds from GitHub Actions; the workflow builds the web app with `WARQA_BASE=/<repo>/`.
+- [x] **Actions permissions**: the default token is read-only (the workflows ask for more only where needed).
+- [x] **Branch protection**: the ruleset *Protect master* requires a pull request (squash or rebase, linear
+  history, resolved conversations) and the checks *Build, lint, typecheck, test*, *E2E (chromium)*, *Web app
+  (Chromium)* and *Python worker*; it blocks force pushes and deletion. Repository admins can bypass it.
 - [ ] **Container package**: after the first release, open the package on the organisation's *Packages*
   page and set its visibility to **public** (new GHCR packages are private), so `docker pull` works without logging in.
-- [ ] **Dependabot**: *Settings → Code security*: enable Dependabot alerts and security updates
-  (version updates are configured in `.github/dependabot.yml`).
+- [x] **Security**: Dependabot alerts and security updates, secret scanning with push protection, and
+  CodeQL code scanning are on (version updates are configured in `.github/dependabot.yml`).
 - [ ] **Funding** (optional): uncomment `.github/FUNDING.yml`.
 
 ### Hardening (recommended)
