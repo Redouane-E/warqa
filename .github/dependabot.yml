@@ -1,0 +1,86 @@
+# Dependency updates, once a week, grouped so maintainers review a few PRs instead of dozens.
+version: 2
+updates:
+  # The pnpm workspace (all package.json files, one pnpm-lock.yaml).
+  - package-ecosystem: npm
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    # Let new releases age a few days before proposing them (supply-chain safety).
+    cooldown:
+      default-days: 3
+      semver-major-days: 14
+    open-pull-requests-limit: 10
+    labels: [dependencies]
+    commit-message:
+      prefix: deps
+      prefix-development: deps-dev
+    groups:
+      ai-sdk:
+        patterns: ['ai', '@ai-sdk/*', '@openrouter/*', 'ollama-ai-provider*']
+      # Keep in step with the mcr.microsoft.com/playwright image in the Dockerfile.
+      playwright:
+        patterns: ['playwright', '@playwright/*', '@axe-core/*']
+      tooling:
+        patterns:
+          - '@biomejs/*'
+          - 'turbo'
+          - 'typescript'
+          - 'tsx'
+          - 'esbuild'
+          - 'vite'
+          - '@vitejs/*'
+          - 'vitest'
+          - 'happy-dom'
+          - 'fast-check'
+          - '@types/*'
+      react:
+        patterns: ['react', 'react-dom']
+      minor-and-patch:
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, ci]
+    commit-message:
+      prefix: ci
+    groups:
+      actions:
+        patterns: ['*']
+
+  # Optional Python worker (uv project with uv.lock).
+  - package-ecosystem: uv
+    directory: /workers/py
+    schedule:
+      interval: weekly
+      day: monday
+    cooldown:
+      default-days: 3
+    labels: [dependencies, worker]
+    commit-message:
+      prefix: deps(worker)
+    groups:
+      python:
+        patterns: ['*']
+        update-types: [minor, patch]
+
+  # Base images of the studio image and the worker image.
+  - package-ecosystem: docker
+    directories: [/, /workers/py]
+    schedule:
+      interval: weekly
+      day: monday
+    labels: [dependencies, docker]
+    commit-message:
+      prefix: deps(docker)
+    ignore:
+      # Node stays on the version in .nvmrc and package.json "engines"; move it on purpose.
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
+      - dependency-name: python
+        update-types: ['version-update:semver-minor', 'version-update:semver-major']

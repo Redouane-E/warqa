@@ -1,0 +1,14 @@
+{
+  "servers": {
+    "warqa": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${workspaceFolder}/apps/mcp/dist/server.js"]
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest", "--headless", "--isolated"]
+    }
+  }
+}

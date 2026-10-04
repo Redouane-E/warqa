@@ -1,0 +1,17 @@
+blank_issues_enabled: false
+contact_links:
+  - name: "Questions and ideas · أسئلة وأفكار · Questions et idées"
+    url: https://github.com/Redouane-E/warqa/discussions
+    about: "Ask anything, share a book you made, discuss an idea. · اطرح سؤالك أو شارك كتابًا صنعته. · Posez vos questions, partagez un livre."
+  - name: "Start here (English)"
+    url: https://github.com/Redouane-E/warqa/blob/master/docs/en/start-here.md
+    about: "A short guide for teachers and parents: the three ways to use Warqa, API keys, your first book."
+  - name: "ابدأ من هنا (العربية)"
+    url: https://github.com/Redouane-E/warqa/blob/master/docs/ar/start-here.md
+    about: "دليل قصير للمدرّسين والآباء: طرق استعمال «ورقة» ومفاتيح الذكاء الاصطناعي وأول كتاب."
+  - name: "Commencer ici (français)"
+    url: https://github.com/Redouane-E/warqa/blob/master/docs/fr/start-here.md
+    about: "Un guide court pour les enseignants et les parents : utiliser Warqa, les clés d’API, votre premier livre."
+  - name: "Security problem · مشكلة أمنية · Problème de sécurité"
+    url: https://github.com/Redouane-E/warqa/security/advisories/new
+    about: "Report it privately, never in a public issue. · أبلغ عنها بشكل خاص. · Signalez-le en privé."

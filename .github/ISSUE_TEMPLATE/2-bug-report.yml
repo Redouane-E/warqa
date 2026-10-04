@@ -1,0 +1,112 @@
+name: "Bug report · خلل برمجي · Signaler un bug"
+description: "Something in Warqa is broken (player, studio, CLI, MCP, worker, exports). · خلل في البرنامج. · Quelque chose ne fonctionne pas."
+title: "[Bug] "
+labels: [bug, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting! If your problem is with a particular PDF and you are not a developer, the
+        **"My PDF didn't work"** form is simpler. You may write in English, Arabic or French
+        (يمكنك الكتابة بالعربية · vous pouvez écrire en français).
+
+        **Never paste API keys.** Remove them from logs and `.env` excerpts.
+
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: "What happened? · ماذا حدث؟ · Que s'est-il passé ?"
+      description: "Include the exact error message if there is one."
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: "Steps to reproduce · خطوات إعادة المشكلة · Étapes pour reproduire"
+      placeholder: |
+        1. pnpm warqa preview examples/integers.warqa
+        2. Switch the language to Arabic
+        3. Press → twice
+        4. …
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: "What did you expect? · ماذا كنت تنتظر؟ · Résultat attendu"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: "Where? · أين؟ · Où ?"
+      multiple: true
+      options:
+        - "Player (watching a lesson)"
+        - "Studio (local web app)"
+        - "Web app (GitHub Pages)"
+        - "CLI (warqa …)"
+        - "MCP server (coding agents)"
+        - "Exports (zip, SCORM, Anki, CSV, video)"
+        - "PDF reading (ingest, OCR, Arabic repairs)"
+        - "Lesson writing, translation or validation"
+        - "Narration (voices, timings)"
+        - "Python worker"
+        - "Docker or launchers"
+        - "Documentation"
+    validations:
+      required: true
+
+  - type: input
+    id: version
+    attributes:
+      label: "Version or commit · الإصدار · Version"
+      description: "`pnpm warqa --version`, the release tag, or `git rev-parse --short HEAD`."
+      placeholder: "0.1.0 / a1b2c3d"
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: "Environment · البيئة · Environnement"
+      description: "OS, browser and version, Node version, how you run Warqa (source, Docker, web app), model provider and model, speech engine."
+      placeholder: |
+        OS: Windows 11 / macOS 15 / Ubuntu 24.04
+        Browser: Firefox 140
+        Node: 22.x
+        Run with: Docker
+        Models: preset google (google:gemini-3.8-flash)
+        Speech: edge
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: "Logs · السجلات · Journaux"
+      description: "Terminal output, `WARQA_DEBUG=1` stack traces, browser console. Remove keys and private paths."
+      render: shell
+    validations:
+      required: false
+
+  - type: textarea
+    id: screenshots
+    attributes:
+      label: "Screenshots · لقطات شاشة · Captures d'écran"
+      description: "For layout problems, a screenshot in each affected language (especially right-to-left) helps a lot."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: "Checks"
+      options:
+        - label: "I searched the existing issues and did not find this bug."
+          required: true
+        - label: "I removed API keys and private data from what I pasted."
+          required: true

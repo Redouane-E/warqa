@@ -1,0 +1,41 @@
+{
+  "name": "@warqa/lesson",
+  "version": "0.1.0",
+  "description": "Warqa lesson format (Zod schema, compiler, validators) and the framework-free player.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    },
+    "./player": {
+      "types": "./dist/player/index.d.ts",
+      "default": "./dist/player/index.js"
+    },
+    "./bundle/*": "./dist/bundle/*",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "dist",
+    "fonts"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && node build.mjs",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@warqa/i18n": "workspace:*",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@fontsource/noto-naskh-arabic": "^5.3.0",
+    "@fontsource/readex-pro": "^5.3.0",
+    "@fontsource/stix-two-text": "^5.3.0",
+    "@types/topojson-client": "^3.1.5",
+    "happy-dom": "^20.0.0",
+    "topojson-client": "^3.1.0",
+    "world-atlas": "^2.0.2"
+  }
+}

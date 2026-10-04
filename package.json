@@ -1,0 +1,35 @@
+{
+  "name": "warqa-monorepo",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Warqa (ورقة): turn PDFs into animated, narrated, interactive books — Arabic-first, any model.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@11.6.0",
+  "scripts": {
+    "build": "turbo run build",
+    "test": "turbo run test --filter=!@warqa/e2e",
+    "typecheck": "turbo run typecheck",
+    "lint": "biome check .",
+    "format": "biome format --write .",
+    "e2e": "pnpm --filter @warqa/e2e test",
+    "warqa": "node apps/cli/dist/warqa.js",
+    "docs:components": "tsx packages/lesson/scripts/gen-docs.mts",
+    "studio": "node apps/studio/dist/server/index.js --root books --port 5170",
+    "mcp": "node apps/mcp/dist/server.js",
+    "eval": "pnpm --filter @warqa/evals eval --"
+  },
+  "devDependencies": {
+    "@biomejs/biome": "^2.5.15",
+    "turbo": "^2.11.7",
+    "typescript": "^6.0.3",
+    "vitest": "^5.0.3",
+    "fast-check": "^4.10.2",
+    "tsx": "^4.23.15",
+    "esbuild": "^0.28.2",
+    "@types/node": "^22"
+  }
+}

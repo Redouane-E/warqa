@@ -1,0 +1,78 @@
+[project]
+name = "warqa-worker"
+version = "0.1.0"
+description = "Optional Python sidecar for Warqa: OCR, forced alignment, Arabic diacritization and local speech over HTTP."
+readme = "README.md"
+license = "Apache-2.0"
+authors = [{ name = "The Warqa contributors" }]
+requires-python = ">=3.12"
+keywords = ["warqa", "arabic", "ocr", "tts", "forced-alignment", "tashkeel"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Natural Language :: Arabic",
+    "Natural Language :: French",
+    "Natural Language :: English",
+]
+# Core: the server starts with only these. Every engine is an optional extra, imported lazily.
+dependencies = [
+    "fastapi>=0.115",
+    "uvicorn>=0.30",
+    "pydantic>=2.7",
+]
+
+[project.optional-dependencies]
+# Tesseract (Apache-2.0) through pytesseract, plus RapidOCR (Apache-2.0). The legacy
+# `rapidocr-onnxruntime` package is capped at Python <3.13 and has no Arabic model, so the
+# maintained `rapidocr` 3.x package is used instead (the code still accepts the legacy one).
+ocr = [
+    "pytesseract>=0.3.10",
+    "pillow>=10",
+    "rapidocr>=3.4",
+    "onnxruntime>=1.18",
+    "python-bidi>=0.6",
+]
+# stable-ts (MIT) on OpenAI Whisper (MIT code and weights). Pulls in torch.
+align = [
+    "stable-ts>=2.17",
+]
+# CATT (Apache-2.0). Its package metadata asks for onnxruntime-gpu, which has no macOS wheels and
+# clashes with onnxruntime; uv drops it (see tool.uv below) and the CPU runtime is used instead.
+tashkeel = [
+    "catt-tashkeel>=1.0.2",
+    "onnxruntime>=1.18",
+]
+# Piper (piper1-gpl) is GPL-3.0-or-later. Optional and never bundled: installing it is your choice.
+tts = [
+    "piper-tts>=1.3",
+]
+# Habibi-TTS (code MIT) on F5-TTS (code MIT). Weight licences: see README. Heavy (torch).
+habibi = [
+    "habibi-tts>=0.1.1",
+]
+all = [
+    "warqa-worker[ocr,align,tashkeel,tts]",
+]
+
+[project.scripts]
+warqa-worker = "warqa_worker.__main__:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8",
+    "httpx2>=2",
+]
+
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["warqa_worker"]
+
+[tool.uv]
+# catt-tashkeel declares onnxruntime-gpu; replace it with the CPU onnxruntime listed in the extra.
+override-dependencies = ["onnxruntime-gpu; sys_platform == 'never'"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

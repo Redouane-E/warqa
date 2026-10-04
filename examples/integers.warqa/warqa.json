@@ -1,0 +1,47 @@
+{
+  "schema": "warqa.book/1",
+  "id": "integers",
+  "title": {
+    "en": "Integers, step by step",
+    "fr": "Les entiers relatifs, pas à pas",
+    "ar": "الأعداد الصحيحة النسبية خطوة بخطوة"
+  },
+  "subtitle": {
+    "en": "An animated, narrated lesson you can explore and answer.",
+    "fr": "Une leçon animée et narrée à explorer et à pratiquer.",
+    "ar": "درس متحرك ومسموع تستكشفه وتتمرّن عليه."
+  },
+  "langs": [
+    "en",
+    "fr",
+    "ar"
+  ],
+  "defaultLang": "ar",
+  "sourceLang": "en",
+  "digits": "latn",
+  "theme": "chalk",
+  "units": [
+    {
+      "title": {
+        "en": "Integers",
+        "fr": "Entiers relatifs",
+        "ar": "الأعداد الصحيحة النسبية"
+      },
+      "chapters": [
+        "ch05"
+      ]
+    }
+  ],
+  "license": "MIT (lesson content, from Papermorph); Apache-2.0 (Warqa)",
+  "attribution": "Chapter 5 re-implemented from Papermorph's Elementary Algebra (MIT).",
+  "pipeline": {
+    "models": {},
+    "tts": {
+      "provider": "edge",
+      "voices": {},
+      "rate": "-4%",
+      "tashkeel": false
+    },
+    "budget": {}
+  }
+}

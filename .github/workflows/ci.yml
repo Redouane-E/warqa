@@ -1,0 +1,170 @@
+name: CI
+
+on:
+  push:
+    branches: [master]
+  pull_request:
+  workflow_dispatch:
+
+# Least privilege: every job only reads the repository.
+permissions:
+  contents: read
+
+# One run per PR or branch; a new push cancels the PR run it replaces (never runs on master).
+concurrency:
+  group: ci-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+  DO_NOT_TRACK: '1'
+
+jobs:
+  check:
+    name: Build, lint, typecheck, test
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # No `version` input: the action reads "packageManager": "pnpm@x.y.z" from package.json.
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      # pnpm 11 refuses dependency build scripts that are not listed under `allowBuilds` in
+      # pnpm-workspace.yaml (esbuild, Biome, @napi-rs/canvas). @napi-rs/canvas ships prebuilt
+      # binaries per platform (linux-x64-gnu here), so no system libraries are needed.
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build
+
+      # `biome check .` fails on errors (lint errors, formatting, import order), not on warnings.
+      - name: Lint
+        run: pnpm lint
+
+      - name: Typecheck
+        run: pnpm typecheck
+
+      - name: Unit tests
+        run: pnpm test
+
+      - name: Component docs are up to date
+        run: |
+          pnpm docs:components
+          if ! git diff --quiet -- docs/en/components.md; then
+            git diff --stat -- docs/en/components.md
+            echo "::error file=docs/en/components.md::docs/en/components.md is out of date. Run 'pnpm docs:components' and commit the result."
+            exit 1
+          fi
+
+  e2e:
+    # Pull requests run Chromium only: it is the fastest to install and catches nearly every player
+    # regression. Pushes to master and manual runs add Firefox and WebKit, which take longer to install
+    # and are slower (WebKit throttles animation frames), so engine-specific bugs are caught before a
+    # release without slowing down every PR.
+    name: E2E (${{ matrix.browser }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    strategy:
+      fail-fast: false
+      matrix:
+        browser: ${{ fromJSON(github.event_name == 'pull_request' && '["chromium"]' || '["chromium","firefox","webkit"]') }}
+    env:
+      BROWSER: ${{ matrix.browser }}
+      PLAYWRIGHT_HTML_OPEN: never
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      # The tests export examples/integers.warqa with @warqa/pipeline: build it and its dependencies.
+      - name: Build
+        run: pnpm build --filter=@warqa/e2e...
+
+      - name: Install the browser
+        run: pnpm --filter @warqa/e2e exec playwright install --with-deps "$BROWSER"
+
+      # pnpm passes the extra arguments to `playwright test` (do not add `--`: pnpm forwards it as is).
+      - name: Run Playwright
+        run: pnpm --filter @warqa/e2e test --project="$BROWSER" --reporter=list,github,html
+
+      - name: Upload the Playwright report
+        if: failure()
+        uses: actions/upload-artifact@v6
+        with:
+          name: playwright-report-${{ matrix.browser }}
+          path: |
+            e2e/playwright-report/
+            e2e/test-results/
+          retention-days: 14
+          if-no-files-found: ignore
+
+  web:
+    # The browser-only web app (apps/web): its own Playwright tests in Chromium, served under /warqa/ as on Pages.
+    name: Web app (Chromium)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm build --filter=@warqa/web...
+
+      - name: Install the browser
+        run: pnpm --filter @warqa/web exec playwright install --with-deps chromium
+
+      - name: Run Playwright
+        run: pnpm --filter @warqa/web e2e --reporter=list,github
+
+  worker:
+    name: Python worker
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: workers/py
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      # setup-uv publishes exact version tags; Dependabot keeps this one current.
+      - uses: astral-sh/setup-uv@v10.1.0
+        with:
+          working-directory: workers/py
+          python-version: '3.12'
+          enable-cache: true
+
+      # --locked fails if uv.lock no longer matches pyproject.toml.
+      - name: Tests
+        run: uv run --locked --with pytest --with httpx pytest -q

@@ -1,0 +1,76 @@
+name: "New component · مكوّن جديد · Nouveau composant"
+description: "A new kind of picture or animation for lessons (a diagram, a manipulative, a map…). · نوع جديد من الرسوم أو الحركات. · Un nouveau type d'image ou d'animation."
+title: "[Component] "
+labels: [component, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Components are the building blocks of every lesson picture: number lines, equations, balances, maps, timelines…
+        See the [current list](../blob/master/docs/en/components.md) first. Teachers: describe what you draw on the board,
+        no code needed. Developers: [docs/en/contributing-components.md](../blob/master/docs/en/contributing-components.md).
+
+        <div dir="rtl" lang="ar">
+
+        المكوّنات هي لبنات الصور في الدروس. أيها المدرّسون: صِفوا ما ترسمونه على السبورة، دون أي شيفرة.
+
+        </div>
+
+        Enseignants : décrivez ce que vous dessinez au tableau, sans code.
+
+  - type: textarea
+    id: what
+    attributes:
+      label: "What should it show? · ماذا يعرض؟ · Que doit-il montrer ?"
+      description: "Describe the picture. A photo or sketch of a textbook page helps (only if you may share it)."
+    validations:
+      required: true
+
+  - type: textarea
+    id: teaching
+    attributes:
+      label: "What does it help explain? · ماذا يساعد على شرحه؟ · Qu'aide-t-il à expliquer ?"
+      description: "Subject, school level and the idea it makes visible (e.g. 'equivalent fractions, 5th grade')."
+    validations:
+      required: true
+
+  - type: textarea
+    id: changes
+    attributes:
+      label: "How should it move or change? · كيف يتحرك أو يتغيّر؟ · Comment doit-il bouger ou changer ?"
+      description: "The steps a teacher would show one after another, and what a learner could click or answer."
+      placeholder: |
+        1. A circle cut into 4 equal parts
+        2. Shade 1 part while the narrator says "one quarter"
+        3. Cut each part in two: 2 of 8 parts are shaded
+    validations:
+      required: true
+
+  - type: dropdown
+    id: rtl
+    attributes:
+      label: "In Arabic (right to left), should it mirror? · هل يُعكس في العربية؟ · En arabe, doit-il être inversé ?"
+      description: "Order and reading flow mirror; mathematical orientation (axes, graphs) usually stays."
+      options:
+        - "Yes, it follows the reading direction"
+        - "No, it keeps its orientation (like a number line or a graph)"
+        - "Partly (explain below)"
+        - "I don't know · لا أعرف · Je ne sais pas"
+    validations:
+      required: false
+
+  - type: textarea
+    id: notes
+    attributes:
+      label: "Anything else · ملاحظات أخرى · Autres remarques"
+      description: "Similar tools you like, data it needs (maps, tables), accessibility concerns."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: help
+    attributes:
+      label: "Contributing · المساهمة · Contribuer"
+      options:
+        - label: "I would like to build this component (TypeScript)."
+          required: false

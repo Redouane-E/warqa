@@ -1,0 +1,14 @@
+{
+  "name": "@warqa/i18n",
+  "version": "0.1.0",
+  "description": "Warqa i18n: UI catalogs (ar/fr/en), number parsing/formatting, Arabic normalization, sentence splitting, bidi helpers.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": { ".": { "types": "./dist/index.d.ts", "default": "./dist/index.js" } },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  }
+}

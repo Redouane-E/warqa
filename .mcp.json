@@ -1,0 +1,15 @@
+{
+  "mcpServers": {
+    "warqa": {
+      "type": "stdio",
+      "command": "node",
+      "args": ["${CLAUDE_PROJECT_DIR:-.}/apps/mcp/dist/server.js"],
+      "env": {}
+    },
+    "playwright": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["-y", "@playwright/mcp@latest", "--headless", "--isolated"]
+    }
+  }
+}

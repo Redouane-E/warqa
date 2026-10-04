@@ -1,0 +1,115 @@
+{
+  "schema": "warqa.lesson/1",
+  "id": "story",
+  "title": "زيتون والصفحة الطائرة",
+  "minutes": 3,
+  "lang": "ar",
+  "beats": [
+    {
+      "id": "cover",
+      "title": "زيتون والصفحة الطائرة",
+      "move": "intro",
+      "narration": "زيتون والصفحة الطائرة. [[about]]قصة عن ثعلب صغير يحب القراءة.",
+      "scene": {
+        "clear": true,
+        "add": [
+          { "id": "tc", "type": "title", "kicker": "قصة مصوّرة", "title": "زيتون والصفحة الطائرة", "lines": ["قصة عن ثعلب صغير يحب القراءة"] }
+        ]
+      },
+      "cues": [
+        { "at": "about", "do": "show", "target": "tc#line:0" },
+        { "at": { "mark": "end", "offset": -0.7 }, "do": "hide", "target": "tc", "dur": 0.6 }
+      ]
+    },
+    {
+      "id": "p1",
+      "title": "القرية",
+      "move": "story",
+      "narration": "في قرية بيضاء قرب البحر، كان يعيش ثعلب صغير اسمه زيتون. [[love]]وكان زيتون يحب الكتب أكثر من أي شيء آخر.",
+      "scene": {
+        "clear": true,
+        "add": [
+          { "id": "pg1", "type": "storypage", "image": "assets/page1.svg", "alt": "ثعلب صغير يقرأ كتابًا في قرية بيضاء أبوابها زرقاء", "layout": "start" }
+        ]
+      },
+      "cues": [{ "at": "love", "do": "pulse", "target": "pg1#picture" }]
+    },
+    {
+      "id": "p2",
+      "title": "شجرة الأركان",
+      "move": "story",
+      "narration": "كل صباح، كان يجلس تحت شجرة الأركان الكبيرة ويقرأ. [[shade]]وكانت أغصانها تحميه من شمس الصيف الحارة.",
+      "scene": {
+        "clear": true,
+        "add": [
+          { "id": "pg2", "type": "storypage", "image": "assets/page2.svg", "alt": "الثعلب يقرأ في ظل شجرة أركان كبيرة تحت الشمس", "layout": "end" }
+        ]
+      },
+      "cues": [{ "at": "shade", "do": "pulse", "target": "pg2#picture" }]
+    },
+    {
+      "id": "p3",
+      "title": "الريح",
+      "move": "story",
+      "narration": "وذات يوم، هبّت ريح قوية، فطارت صفحة من كتابه! [[run]]ركض زيتون وراءها، ومرّ بالسوق، حتى وصل إلى الشاطئ.",
+      "scene": {
+        "clear": true,
+        "add": [
+          { "id": "pg3", "type": "storypage", "image": "assets/page3.svg", "alt": "صفحة تطير مع الريح والثعلب يركض نحو البحر", "layout": "start" }
+        ]
+      },
+      "cues": [{ "at": "run", "do": "pulse", "target": "pg3#picture" }]
+    },
+    {
+      "id": "p4",
+      "title": "نور",
+      "move": "story",
+      "narration": "هناك، وجد عنزة صغيرة اسمها نور، تقرأ صفحته بفرح. [[say]]قال زيتون: «تعالَيْ نقرأ معًا!» [[friends]]ومنذ ذلك اليوم، صارت لزيتون صديقة تحب الكتب مثله تمامًا.",
+      "scene": {
+        "clear": true,
+        "add": [
+          { "id": "pg4", "type": "storypage", "image": "assets/page4.svg", "alt": "الثعلب وعنزة صغيرة على الشاطئ بينهما صفحة وقلب", "layout": "end" }
+        ]
+      },
+      "cues": [
+        { "at": "say", "do": "pulse", "target": "pg4#picture" },
+        { "at": "friends", "do": "pulse", "target": "pg4#picture" }
+      ]
+    },
+    {
+      "id": "q1",
+      "title": "سؤال صغير",
+      "move": "check",
+      "narration": "سؤال صغير. أين كان زيتون يقرأ كل صباح؟",
+      "scene": {
+        "clear": true,
+        "add": [
+          { "id": "qimg", "type": "image", "src": "assets/page1.svg", "alt": "زيتون في قريته", "slot": "main" }
+        ]
+      },
+      "cues": [],
+      "card": { "place": "band", "label": "check" },
+      "questions": [
+        {
+          "kind": "choice",
+          "id": "where",
+          "prompt": "أين كان زيتون يقرأ كل صباح؟",
+          "options": [
+            { "id": "a", "text": "تحت شجرة الأركان" },
+            { "id": "b", "text": "على شاطئ البحر", "why": "وصل زيتون إلى الشاطئ يوم الريح فقط." },
+            { "id": "c", "text": "في السوق", "why": "مرّ زيتون بالسوق وهو يركض وراء الصفحة." }
+          ],
+          "correct": ["a"],
+          "explain": "كل صباح، كان زيتون يقرأ تحت شجرة الأركان الكبيرة."
+        }
+      ]
+    },
+    {
+      "id": "finish",
+      "title": "النهاية",
+      "move": "finish",
+      "narration": "أحسنت! هذه نهاية القصة.",
+      "scene": { "clear": true }
+    }
+  ]
+}

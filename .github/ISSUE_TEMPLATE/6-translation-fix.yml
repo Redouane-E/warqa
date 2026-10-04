@@ -1,0 +1,67 @@
+name: "Translation or wording fix · تصحيح ترجمة · Corriger une traduction"
+description: "A word or sentence in the interface is wrong, unclear or missing. · كلمة أو جملة خاطئة في الواجهة. · Un texte de l'interface est faux ou peu clair."
+title: "[Wording] "
+labels: [translation, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you! Native speakers make Warqa feel at home. You can also open a pull request directly:
+        player strings are in `packages/i18n/src/catalog/<lang>.ts`, studio strings in `apps/studio/src/client/messages.ts`.
+
+        <div dir="rtl" lang="ar">
+
+        شكرًا لك! اكتب النص الحالي والنص الذي تقترحه، ولا حاجة إلى أي شيفرة.
+
+        </div>
+
+        Merci ! Indiquez le texte actuel et votre proposition, sans code.
+
+  - type: dropdown
+    id: language
+    attributes:
+      label: "Language · اللغة · Langue"
+      options:
+        - "Arabic · العربية"
+        - "French · Français"
+        - "English"
+        - "Other · أخرى · Autre"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: where
+    attributes:
+      label: "Where did you see it? · أين رأيته؟ · Où l'avez-vous vu ?"
+      options:
+        - "Lesson player (buttons, questions, help, finish card)"
+        - "Studio"
+        - "Web app (GitHub Pages)"
+        - "Launcher or install messages"
+        - "Documentation"
+        - "Inside a generated lesson (narration, on-screen text)"
+    validations:
+      required: true
+
+  - type: textarea
+    id: current
+    attributes:
+      label: "Current text · النص الحالي · Texte actuel"
+      description: "Copy it exactly. A screenshot helps."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposed
+    attributes:
+      label: "Proposed text · النص المقترح · Texte proposé"
+    validations:
+      required: true
+
+  - type: textarea
+    id: why
+    attributes:
+      label: "Why? · لماذا؟ · Pourquoi ?"
+      description: "Grammar, meaning, school vocabulary used in your country, tone, a plural form…"
+    validations:
+      required: false

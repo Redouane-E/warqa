@@ -1,0 +1,11 @@
+packages:
+  - packages/*
+  - apps/*
+  - e2e
+  - evals
+allowBuilds:
+  esbuild: true
+  "@biomejs/biome": true
+  "@napi-rs/canvas": true
+minimumReleaseAgeExclude:
+  - pdfjs-dist@6.4.299

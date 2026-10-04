@@ -1,0 +1,14 @@
+**/node_modules
+**/dist
+**/.turbo
+**/coverage
+e2e/.site
+e2e/test-results
+**/*.warqa/dist
+**/*.warqa/cache
+**/*.warqa/source/*.pdf
+books
+workers/py/.venv
+.git
+.env
+.env.*

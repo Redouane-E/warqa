@@ -1,0 +1,265 @@
+{
+  "schema": "warqa.lesson/1",
+  "id": "regions",
+  "title": "جهات المغرب",
+  "minutes": 3,
+  "lang": "ar",
+  "beats": [
+    {
+      "id": "intro",
+      "title": "جهات المغرب",
+      "move": "intro",
+      "narration": "جهات المغرب. [[n]]منذ سنة ألفين وخمسة عشر، يتكون المغرب من اثنتي عشرة جهة.",
+      "scene": {
+        "clear": true,
+        "add": [
+          {
+            "id": "tc",
+            "type": "title",
+            "kicker": "جغرافيا",
+            "title": "جهات المغرب",
+            "lines": [
+              "اثنتا عشرة جهة منذ 2015"
+            ]
+          }
+        ]
+      },
+      "cues": [
+        {
+          "at": "n",
+          "do": "show",
+          "target": "tc#line:0"
+        },
+        {
+          "at": {
+            "mark": "end",
+            "offset": -0.7
+          },
+          "do": "hide",
+          "target": "tc",
+          "dur": 0.6
+        }
+      ]
+    },
+    {
+      "id": "where",
+      "title": "أين يقع المغرب؟",
+      "move": "define",
+      "narration": "يقع المغرب في شمال غرب إفريقيا، [[sea]]بين البحر الأبيض المتوسط شمالًا والمحيط الأطلسي غربًا. [[rabat]]وعاصمته الرباط.",
+      "scene": {
+        "clear": true,
+        "add": [
+          {
+            "id": "m1",
+            "type": "map",
+            "area": "africa",
+            "highlight": [
+              {
+                "country": "Morocco",
+                "color": "coral",
+                "label": "المغرب"
+              }
+            ],
+            "markers": [
+              {
+                "lon": -6.84,
+                "lat": 34.02,
+                "label": "الرباط"
+              }
+            ]
+          }
+        ]
+      },
+      "cues": [
+        {
+          "at": 0.3,
+          "do": "show",
+          "target": "m1#c:0"
+        },
+        {
+          "at": "sea",
+          "do": "pulse",
+          "target": "m1#c:0"
+        },
+        {
+          "at": "rabat",
+          "do": "show",
+          "target": "m1#pin:0"
+        }
+      ]
+    },
+    {
+      "id": "twelve",
+      "title": "اثنتا عشرة جهة",
+      "move": "example",
+      "narration": "هذه هي الجهات الاثنتا عشرة. [[casa]]جهة الدار البيضاء سطات هي الأكثر سكانًا، [[mar]]وتليها جنوبًا جهة مراكش آسفي، [[souss]]ثم جهة سوس ماسة وعاصمتها أكادير. [[south]]وفي الجنوب، جهة العيون الساقية الحمراء.",
+      "scene": {
+        "clear": true,
+        "add": [
+          {
+            "id": "m2",
+            "type": "map",
+            "area": "fit",
+            "regions": {
+              "layer": "MAR-ADM1",
+              "highlight": [
+                {
+                  "region": "MA-06",
+                  "color": "sky",
+                  "label": "الدار البيضاء - سطات"
+                },
+                {
+                  "region": "MA-07",
+                  "color": "gold",
+                  "label": "مراكش - آسفي"
+                },
+                {
+                  "region": "MA-09",
+                  "color": "mint",
+                  "label": "سوس - ماسة"
+                },
+                {
+                  "region": "MA-11",
+                  "color": "coral",
+                  "label": "العيون - الساقية الحمراء"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "cues": [
+        {
+          "at": "casa",
+          "do": "show",
+          "target": "m2#r:0"
+        },
+        {
+          "at": "mar",
+          "do": "show",
+          "target": "m2#r:1"
+        },
+        {
+          "at": "souss",
+          "do": "show",
+          "target": "m2#r:2"
+        },
+        {
+          "at": "south",
+          "do": "show",
+          "target": "m2#r:3"
+        }
+      ]
+    },
+    {
+      "id": "q1",
+      "title": "سؤال سريع",
+      "move": "check",
+      "narration": "سؤال سريع. أين تقع جهة سوس ماسة؟",
+      "scene": {
+        "clear": true,
+        "add": [
+          {
+            "id": "qmap",
+            "type": "map",
+            "area": "fit",
+            "regions": {
+              "layer": "MAR-ADM1",
+              "highlight": [
+                {
+                  "region": "MA-06",
+                  "color": "sky"
+                },
+                {
+                  "region": "MA-02",
+                  "color": "sky"
+                },
+                {
+                  "region": "MA-09",
+                  "color": "sky"
+                },
+                {
+                  "region": "MA-12",
+                  "color": "sky"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      "cues": [],
+      "card": {
+        "label": "check"
+      },
+      "questions": [
+        {
+          "kind": "pick",
+          "id": "souss",
+          "prompt": "انقر على جهة سوس ماسة في الخريطة.",
+          "on": "qmap",
+          "correct": [
+            "r:2"
+          ],
+          "wrong": {
+            "r:0": "هذه جهة الدار البيضاء سطات، على الساحل الأطلسي في الوسط.",
+            "r:1": "هذه الجهة الشرقية، قرب الحدود مع الجزائر.",
+            "r:3": "هذه جهة الداخلة وادي الذهب، في أقصى الجنوب."
+          },
+          "explain": "تقع جهة سوس ماسة على المحيط الأطلسي، جنوب جهة مراكش آسفي، وعاصمتها أكادير."
+        }
+      ]
+    },
+    {
+      "id": "wrap",
+      "title": "خلاصة",
+      "move": "summary",
+      "narration": "لنتذكر. [[a]]للمغرب اثنتا عشرة جهة، [[b]]لكل جهة عاصمة، [[c]]وأكثرها سكانًا جهة الدار البيضاء سطات.",
+      "scene": {
+        "clear": true,
+        "add": [
+          {
+            "id": "sum",
+            "type": "list",
+            "items": [
+              {
+                "text": "اثنتا عشرة جهة منذ 2015"
+              },
+              {
+                "text": "لكل جهة عاصمة، مثل أكادير لجهة سوس ماسة"
+              },
+              {
+                "text": "الدار البيضاء سطات هي الأكثر سكانًا"
+              }
+            ]
+          }
+        ]
+      },
+      "cues": [
+        {
+          "at": "a",
+          "do": "show",
+          "target": "sum#item:0"
+        },
+        {
+          "at": "b",
+          "do": "show",
+          "target": "sum#item:1"
+        },
+        {
+          "at": "c",
+          "do": "show",
+          "target": "sum#item:2"
+        }
+      ]
+    },
+    {
+      "id": "finish",
+      "title": "النهاية",
+      "move": "finish",
+      "narration": "أحسنت! انتهى الدرس.",
+      "scene": {
+        "clear": true
+      }
+    }
+  ]
+}

@@ -1,0 +1,30 @@
+# docker compose up            → studio on http://localhost:5170 (books in ./books)
+# docker compose --profile worker up   → also the optional Python worker (OCR, alignment, diacritics, local voices)
+services:
+  studio:
+    build: .
+    # set WARQA_IMAGE=ghcr.io/redouane-e/warqa:latest (and run `docker compose pull`) to use the published image
+    image: ${WARQA_IMAGE:-warqa}
+    ports:
+      - "127.0.0.1:5170:5170"
+    volumes:
+      - ./books:/books
+      - warqa-home:/data
+    env_file:
+      - path: .env
+        required: false
+    restart: unless-stopped
+
+  worker:
+    build: ./workers/py
+    image: warqa-worker
+    profiles: ["worker"]
+    ports:
+      - "127.0.0.1:8790:8790"
+    volumes:
+      - warqa-models:/cache
+    restart: unless-stopped
+
+volumes:
+  warqa-home:
+  warqa-models:

@@ -1,0 +1,34 @@
+node_modules/
+dist/
+coverage/
+.turbo/
+.DS_Store
+*.log
+.env
+.env.*
+!.env.example
+# Book projects: the source PDF, caches and builds are private/regenerable.
+**/*.warqa/source/*.pdf
+**/*.warqa/source/pages/
+**/*.warqa/cache/
+**/*.warqa/dist/
+**/*.warqa/.ledger.jsonl
+**/*.warqa/qa/
+test-results/
+playwright-report/
+workers/py/.venv/
+__pycache__/
+e2e/.site/
+books/*
+!books/README.md
+.pytest_cache/
+_site/
+panel-kit*/
+**/*.warqa/dist*.zip
+**/*.warqa/dist-panel/
+**/*.warqa/flashcards.*
+**/*.warqa/*.mp4
+.playwright-mcp/
+# Claude Code: personal settings and notes stay local
+.claude/settings.local.json
+CLAUDE.local.md

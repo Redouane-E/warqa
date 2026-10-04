@@ -1,0 +1,37 @@
+# Line endings: LF everywhere in the repository and in working trees, whatever the OS.
+* text=auto eol=lf
+
+# Windows launchers must keep CRLF or cmd.exe misreads labels and GOTOs.
+*.bat text eol=crlf
+*.cmd text eol=crlf
+*.ps1 text eol=crlf
+
+# Shell scripts and macOS launchers must stay LF.
+*.sh text eol=lf
+*.command text eol=lf
+
+# Binary files: never convert, never diff as text.
+*.mp3 binary
+*.wav binary
+*.ogg binary
+*.m4a binary
+*.mp4 binary
+*.webm binary
+*.woff binary
+*.woff2 binary
+*.ttf binary
+*.otf binary
+*.png binary
+*.jpg binary
+*.jpeg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.zip binary
+*.onnx binary
+
+# Generated files: collapsed in GitHub diffs and left out of language statistics.
+pnpm-lock.yaml linguist-generated=true
+workers/py/uv.lock linguist-generated=true
+docs/en/components.md linguist-generated=true

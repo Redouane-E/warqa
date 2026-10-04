@@ -1,0 +1,419 @@
+{
+  "schema": "warqa.lesson/1",
+  "id": "ch05",
+  "title": "Subtracting positive and negative numbers",
+  "number": 5,
+  "unit": "Unit 2",
+  "minutes": 6,
+  "lang": "en",
+  "beats": [
+    {
+      "id": "intro",
+      "title": "Subtracting positive and negative numbers",
+      "move": "intro",
+      "narration": "Seven minus three is four. [[b]]Seven plus negative three is also four. [[key]]That's no coincidence, and it's the key idea of this chapter.",
+      "scene": {
+        "clear": true,
+        "add": [
+          {
+            "id": "tc",
+            "type": "title",
+            "kicker": "Unit 2, Chapter 5",
+            "title": "Subtracting positive and negative numbers",
+            "lines": ["$7 − 3 = 4$", "$7 + (−3) = 4$"]
+          }
+        ]
+      },
+      "cues": [
+        { "at": "b", "do": "show", "target": "tc#line:1" },
+        { "at": "key", "do": "pulse", "target": "tc#line:0" },
+        { "at": { "mark": "key", "offset": 0.2 }, "do": "pulse", "target": "tc#line:1" },
+        { "at": { "mark": "end", "offset": -0.9 }, "do": "hide", "target": "tc", "dur": 0.8 }
+      ]
+    },
+    {
+      "id": "inverse",
+      "title": "Opposites",
+      "move": "define",
+      "narration": "Every number has an opposite, also called its additive inverse. [[def]]It's the number you add to get zero. [[ex1]]The additive inverse of three is negative three, and [[ex2]]the additive inverse of negative six is six. [[mirror]]On the number line, a number and its inverse are mirror images across zero.",
+      "scene": {
+        "clear": true,
+        "add": [
+          { "id": "cap1", "type": "text", "text": "Additive inverse: the number you add to get 0", "slot": "title", "enter": "cue" },
+          { "id": "nl", "type": "numberline", "min": -8, "max": 8 },
+          { "id": "e1", "type": "equation", "steps": [["3", " + ", "(−3)", " = ", "0"]], "size": "md", "enter": "cue" },
+          { "id": "e2", "type": "equation", "steps": [["−6", " + ", "6", " = ", "0"]], "size": "md", "enter": "cue" }
+        ]
+      },
+      "cues": [
+        { "at": "def", "do": "show", "target": "cap1" },
+        { "at": "ex1", "do": "dot", "target": "nl", "args": { "at": 3, "color": "sky" } },
+        { "at": { "mark": "ex1", "offset": 0.3 }, "do": "arc", "target": "nl", "args": { "from": 3, "to": -3 } },
+        { "at": { "mark": "ex1", "offset": 0.6 }, "do": "dot", "target": "nl", "args": { "at": -3, "color": "coral" } },
+        { "at": { "mark": "ex1", "offset": 1 }, "do": "show", "target": "e1" },
+        { "at": "ex2", "do": "dot", "target": "nl", "args": { "at": -6, "color": "coral" } },
+        { "at": { "mark": "ex2", "offset": 0.3 }, "do": "arc", "target": "nl", "args": { "from": -6, "to": 6 } },
+        { "at": { "mark": "ex2", "offset": 0.6 }, "do": "dot", "target": "nl", "args": { "at": 6, "color": "sky" } },
+        { "at": { "mark": "ex2", "offset": 1 }, "do": "show", "target": "e2" },
+        { "at": "mirror", "do": "vline", "target": "nl", "args": { "at": 0, "label": "mirror at 0" } }
+      ]
+    },
+    {
+      "id": "rule",
+      "title": "Add the opposite",
+      "move": "transform",
+      "narration": "Here's the rule. [[r]]Subtracting a number is the same as adding its opposite. [[ex]]Take seven minus three. [[keep]]Keep the seven. [[chg1]]Change the minus to a plus. [[chg2]]Change the three to its opposite, negative three. [[add]]Now it's an addition problem you already know: move [[m1]]seven right, then [[m2]]three left. [[land]]You land on four.",
+      "scene": {
+        "clear": true,
+        "keep": ["nl"],
+        "add": [
+          { "id": "cap2", "type": "text", "text": "Subtracting a number = adding its opposite", "size": "lg", "slot": "title", "enter": "cue" },
+          {
+            "id": "eq1",
+            "type": "equation",
+            "enter": "cue",
+            "steps": [
+              [{ "t": "7", "c": "sky", "note": "keep" }, { "t": " − ", "note": "change" }, { "t": "3", "c": "sky", "note": "change" }],
+              [{ "t": "7", "c": "sky" }, " + ", { "t": "3", "c": "sky" }],
+              [{ "t": "7", "c": "sky" }, " + ", { "t": "(−3)", "c": "coral" }],
+              [{ "t": "7", "c": "sky" }, " + ", { "t": "(−3)", "c": "coral" }, " = ", "4"]
+            ]
+          }
+        ]
+      },
+      "cues": [
+        { "at": "r", "do": "show", "target": "cap2" },
+        { "at": "ex", "do": "show", "target": "eq1" },
+        { "at": "keep", "do": "highlight", "target": "eq1#tok:0", "args": { "color": "good" } },
+        { "at": { "mark": "keep", "offset": 0.3 }, "do": "show", "target": "eq1#note:0" },
+        { "at": "chg1", "do": "unhighlight", "target": "eq1#tok:0" },
+        { "at": "chg1", "do": "step", "target": "eq1" },
+        { "at": { "mark": "chg1", "offset": 0.3 }, "do": "show", "target": "eq1#note:1" },
+        { "at": "chg2", "do": "step", "target": "eq1" },
+        { "at": { "mark": "chg2", "offset": 0.3 }, "do": "show", "target": "eq1#note:2" },
+        { "at": "m1", "do": "hop", "target": "nl", "args": { "from": 0, "to": 7 } },
+        { "at": "m2", "do": "hop", "target": "nl", "args": { "from": 7, "to": 4, "level": 2 } },
+        { "at": "land", "do": "dot", "target": "nl", "args": { "at": 4 } },
+        { "at": "land", "do": "step", "target": "eq1" }
+      ]
+    },
+    {
+      "id": "ex1",
+      "title": "−3 − 5",
+      "move": "example",
+      "narration": "Now negative three minus five. [[rw]]Rewrite it as negative three plus negative five. [[m1]]Move three left, then [[m2]]five more to the left. [[land]]The answer is negative eight.",
+      "scene": {
+        "clear": true,
+        "keep": ["nl"],
+        "add": [
+          {
+            "id": "eq2",
+            "type": "equation",
+            "steps": [
+              [{ "t": "−3", "c": "coral" }, " − ", { "t": "5", "c": "sky" }],
+              [{ "t": "−3", "c": "coral" }, " + ", { "t": "5", "c": "sky" }],
+              [{ "t": "−3", "c": "coral" }, " + ", { "t": "(−5)", "c": "coral" }],
+              [{ "t": "−3", "c": "coral" }, " + ", { "t": "(−5)", "c": "coral" }, " = ", "−8"]
+            ]
+          }
+        ]
+      },
+      "cues": [
+        { "at": "rw", "do": "step", "target": "eq2" },
+        { "at": { "mark": "rw", "offset": 1.4 }, "do": "step", "target": "eq2" },
+        { "at": "m1", "do": "hop", "target": "nl", "args": { "from": 0, "to": -3 } },
+        { "at": "m2", "do": "hop", "target": "nl", "args": { "from": -3, "to": -8, "level": 2 } },
+        { "at": "land", "do": "dot", "target": "nl", "args": { "at": -8 } },
+        { "at": "land", "do": "step", "target": "eq2" }
+      ]
+    },
+    {
+      "id": "ex2",
+      "title": "−7 − (−6)",
+      "move": "example",
+      "narration": "What about negative seven minus negative six? [[rw]]Adding the opposite turns it into negative seven plus six. [[land]]The answer is negative one. [[why]]Here's why it makes sense. [[tiles]]Start with seven minus tiles. [[take]]Subtracting negative six means taking six minus tiles away. [[left]]One minus tile is left: negative one. [[debt]]Taking away a debt leaves you better off.",
+      "scene": {
+        "clear": true,
+        "keep": ["nl"],
+        "add": [
+          {
+            "id": "eq3",
+            "type": "equation",
+            "steps": [
+              [{ "t": "−7", "c": "coral" }, " − ", { "t": "(−6)", "c": "coral" }],
+              [{ "t": "−7", "c": "coral" }, " + ", { "t": "(−6)", "c": "coral" }],
+              [{ "t": "−7", "c": "coral" }, " + ", { "t": "6", "c": "sky" }],
+              [{ "t": "−7", "c": "coral" }, " + ", { "t": "6", "c": "sky" }, " = ", "−1"]
+            ]
+          },
+          { "id": "tiles", "type": "counters", "count": 7, "kind": "neg", "slot": "main", "enter": "cue" },
+          { "id": "take", "type": "text", "text": "take away 6 minus tiles", "tone": "coral", "size": "sm", "slot": "title", "enter": "cue" },
+          { "id": "debt", "type": "text", "text": "Taking away a debt leaves you better off.", "tone": "dim", "slot": "band", "enter": "cue" }
+        ]
+      },
+      "cues": [
+        { "at": "rw", "do": "step", "target": "eq3" },
+        { "at": { "mark": "rw", "offset": 1.4 }, "do": "step", "target": "eq3" },
+        { "at": { "mark": "rw", "offset": 1.4 }, "do": "hop", "target": "nl", "args": { "from": 0, "to": -7 } },
+        { "at": { "mark": "rw", "offset": 2.6 }, "do": "hop", "target": "nl", "args": { "from": -7, "to": -1, "level": 2 } },
+        { "at": "land", "do": "dot", "target": "nl", "args": { "at": -1 } },
+        { "at": "land", "do": "step", "target": "eq3" },
+        { "at": "why", "do": "hide", "target": "nl" },
+        { "at": "tiles", "do": "show", "target": "tiles" },
+        { "at": "take", "do": "show", "target": "take" },
+        { "at": { "mark": "take", "offset": 0.3 }, "do": "remove", "target": "tiles", "args": { "count": 6 } },
+        { "at": "left", "do": "pulse", "target": "tiles#item:0", "args": { "amount": 0.3 } },
+        { "at": "left", "do": "highlight", "target": "eq3#tok:4", "args": { "color": "coral" } },
+        { "at": "debt", "do": "show", "target": "debt" }
+      ]
+    },
+    {
+      "id": "q1",
+      "title": "Quick check",
+      "move": "check",
+      "narration": "Quick check. Rewrite, then subtract.",
+      "scene": {
+        "clear": true,
+        "add": [
+          {
+            "id": "eq4",
+            "type": "equation",
+            "slot": "main",
+            "size": "xl",
+            "steps": [
+              [{ "t": "4", "c": "sky" }, " − ", { "t": "(−9)", "c": "coral" }],
+              [{ "t": "4", "c": "sky" }, " + ", { "t": "9", "c": "sky" }]
+            ]
+          }
+        ]
+      },
+      "card": { "place": "band", "label": "check" },
+      "questions": [
+        {
+          "kind": "choice",
+          "id": "c-rewrite",
+          "prompt": "Which addition is the same as $4 − (−9)$?",
+          "options": [
+            { "id": "a", "text": "$4 + 9$" },
+            { "id": "b", "text": "$4 + (−9)$", "why": "You changed − to +, but −9 must also change to its opposite." },
+            { "id": "c", "text": "$−4 + 9$", "why": "Keep the first number as it is: 4 stays 4." }
+          ],
+          "correct": ["a"],
+          "explain": "Keep 4, change − to +, and change −9 to its opposite, 9.",
+          "resolve": [{ "at": 0, "do": "step", "target": "eq4" }]
+        },
+        {
+          "kind": "blanks",
+          "id": "c-sub",
+          "prompt": "Now find the difference.",
+          "rows": [{ "template": "4 − (−9) = [[a]]", "answers": { "a": "13" }, "explain": "$4 − (−9) = 4 + 9 = 13$.", "hint": "Add the opposite: $4 + 9$." }]
+        }
+      ]
+    },
+    {
+      "id": "temp",
+      "title": "A falling temperature",
+      "move": "example",
+      "narration": "In the afternoon, the temperature is five degrees. [[fall]]By night it has fallen twelve degrees. [[q]]What is the temperature at night? [[expr]]A fall means subtraction: five minus twelve. [[rw]]Add the opposite: five plus negative twelve. [[ans]]That's negative seven degrees.",
+      "scene": {
+        "clear": true,
+        "add": [
+          { "id": "th", "type": "vscale", "min": -10, "max": 10, "step": 5, "unit": "°", "style": "thermometer", "value": 5, "color": "coral" },
+          {
+            "id": "eq5",
+            "type": "equation",
+            "slot": "end",
+            "enter": "cue",
+            "steps": [
+              [{ "t": "5", "c": "sky" }, " − ", { "t": "12", "c": "sky" }],
+              [{ "t": "5", "c": "sky" }, " + ", { "t": "12", "c": "sky" }],
+              [{ "t": "5", "c": "sky" }, " + ", { "t": "(−12)", "c": "coral" }],
+              [{ "t": "−7", "c": "coral" }]
+            ]
+          },
+          { "id": "tcap", "type": "text", "text": "$−7$ degrees at night", "tone": "good", "slot": "end", "enter": "cue" }
+        ]
+      },
+      "cues": [
+        { "at": 0.4, "do": "marker", "target": "th", "args": { "at": 5, "label": "afternoon", "color": "sky" } },
+        { "at": "fall", "do": "set", "target": "th", "args": { "value": -7 } },
+        { "at": { "mark": "fall", "offset": 2 }, "do": "marker", "target": "th", "args": { "at": -7, "label": "night", "color": "coral" } },
+        { "at": "expr", "do": "show", "target": "eq5" },
+        { "at": "rw", "do": "step", "target": "eq5" },
+        { "at": { "mark": "rw", "offset": 1.4 }, "do": "step", "target": "eq5" },
+        { "at": "ans", "do": "step", "target": "eq5" },
+        { "at": { "mark": "ans", "offset": 1.4 }, "do": "show", "target": "tcap" }
+      ]
+    },
+    {
+      "id": "distance",
+      "title": "Distance apart",
+      "move": "example",
+      "narration": "Subtraction also measures distance. [[drone]]A drone hovers ninety meters above a lake. [[diver]]A diver is forty meters below the surface. [[q]]How far apart are they? [[expr]]Subtract the lower position from the higher one: ninety minus negative forty. [[rw]]That's ninety plus forty, which is [[ans]]one hundred thirty meters. [[see]]You can see it on the scale: ninety meters above the surface, plus forty meters below.",
+      "scene": {
+        "clear": true,
+        "add": [
+          { "id": "ax", "type": "vscale", "min": -60, "max": 100, "step": 20, "unit": " m", "zones": [{ "from": -60, "to": 0, "color": "sky", "label": "lake" }] },
+          {
+            "id": "eq6",
+            "type": "equation",
+            "slot": "end",
+            "enter": "cue",
+            "steps": [
+              [{ "t": "90", "c": "sky" }, " − ", { "t": "(−40)", "c": "coral" }],
+              [{ "t": "90", "c": "sky" }, " + ", { "t": "(−40)", "c": "coral" }],
+              [{ "t": "90", "c": "sky" }, " + ", { "t": "40", "c": "sky" }],
+              [{ "t": "130", "c": "good" }]
+            ]
+          },
+          { "id": "dcap", "type": "text", "text": "130 m apart", "tone": "good", "slot": "end", "enter": "cue" }
+        ]
+      },
+      "cues": [
+        { "at": "drone", "do": "marker", "target": "ax", "args": { "at": 90, "label": "drone, 90 m up", "color": "sky" } },
+        { "at": "diver", "do": "marker", "target": "ax", "args": { "at": -40, "label": "diver, 40 m down", "color": "coral" } },
+        { "at": "expr", "do": "show", "target": "eq6" },
+        { "at": { "mark": "rw", "offset": -0.8 }, "do": "step", "target": "eq6" },
+        { "at": { "mark": "rw", "offset": 0.6 }, "do": "step", "target": "eq6" },
+        { "at": "ans", "do": "step", "target": "eq6" },
+        { "at": { "mark": "ans", "offset": 1.4 }, "do": "show", "target": "dcap" },
+        { "at": "see", "do": "brace", "target": "ax", "args": { "from": 90, "to": 0, "label": "90 m", "color": "sky" } },
+        { "at": { "mark": "see", "offset": 1 }, "do": "brace", "target": "ax", "args": { "from": 0, "to": -40, "label": "40 m", "color": "coral" } },
+        { "at": { "mark": "see", "offset": 2 }, "do": "brace", "target": "ax", "args": { "from": 90, "to": -40, "label": "130 m", "color": "good" } }
+      ]
+    },
+    {
+      "id": "q2",
+      "title": "Quick check",
+      "move": "check",
+      "narration": "Quick check. Find the distance.",
+      "scene": {
+        "clear": true,
+        "add": [{ "id": "ax2", "type": "vscale", "min": -10, "max": 30, "step": 5, "unit": " m", "zones": [{ "from": -10, "to": 0, "color": "sky" }] }]
+      },
+      "cues": [
+        { "at": 0.5, "do": "marker", "target": "ax2", "args": { "at": 25, "label": "hawk", "color": "sky" } },
+        { "at": 0.7, "do": "marker", "target": "ax2", "args": { "at": -8, "label": "fish", "color": "coral" } }
+      ],
+      "card": { "place": "side", "label": "check" },
+      "questions": [
+        {
+          "kind": "blanks",
+          "id": "c-dist",
+          "prompt": "A hawk flies 25 m above sea level. A fish swims 8 m below sea level. How far apart are they?",
+          "rows": [
+            {
+              "template": "25 − (−8) = [[a]] meters",
+              "answers": { "a": "33" },
+              "explain": "$25 − (−8) = 25 + 8 = 33$ meters.",
+              "hint": "Subtract the lower position from the higher one, then add the opposite."
+            }
+          ],
+          "resolve": [{ "at": 0, "do": "brace", "target": "ax2", "args": { "from": 25, "to": -8, "label": "33 m", "color": "good" } }]
+        }
+      ]
+    },
+    {
+      "id": "wrap",
+      "title": "Summary",
+      "move": "summary",
+      "narration": "To subtract, add the opposite. [[w1]]Keep the first number, change minus to plus, and change the second number to its opposite. [[w2]]Subtracting a positive number moves you left. [[w3]]Subtracting a negative number moves you right. [[end]]Now try the chapter practice.",
+      "scene": {
+        "clear": true,
+        "add": [
+          {
+            "id": "sum",
+            "type": "list",
+            "items": [
+              { "text": "To subtract, add the opposite: keep, change, change.", "sub": "$a − b = a + (−b)$" },
+              { "text": "Subtracting a positive number moves you left.", "sub": "$2 − 5 = 2 + (−5) = −3$" },
+              { "text": "Subtracting a negative number moves you right.", "sub": "$2 − (−5) = 2 + 5 = 7$" }
+            ]
+          }
+        ]
+      },
+      "cues": [
+        { "at": 0.4, "do": "show", "target": "sum#item:0" },
+        { "at": "w1", "do": "pulse", "target": "sum#item:0", "args": { "amount": 0.06 } },
+        { "at": "w2", "do": "show", "target": "sum#item:1" },
+        { "at": "w3", "do": "show", "target": "sum#item:2" },
+        { "at": "end", "do": "dim", "target": "sum" }
+      ]
+    },
+    {
+      "id": "final1",
+      "title": "Chapter practice",
+      "move": "practice",
+      "narration": "Chapter practice. Find each difference.",
+      "scene": { "clear": true },
+      "card": { "place": "screen", "label": "practice" },
+      "questions": [
+        {
+          "kind": "blanks",
+          "id": "p-diffs",
+          "prompt": "Find each difference.",
+          "rows": [
+            { "template": "3 − 10 = [[a]]", "answers": { "a": "-7" }, "explain": "$3 + (−10) = −7$." },
+            { "template": "6 − 9 = [[a]]", "answers": { "a": "-3" }, "explain": "$6 + (−9) = −3$." },
+            { "template": "−4 − 7 = [[a]]", "answers": { "a": "-11" }, "explain": "$−4 + (−7) = −11$." },
+            { "template": "7 − (−6) = [[a]]", "answers": { "a": "13" }, "explain": "$7 + 6 = 13$." },
+            { "template": "−5 − (−11) = [[a]]", "answers": { "a": "6" }, "explain": "$−5 + 11 = 6$." },
+            { "template": "12 − (−15) = [[a]]", "answers": { "a": "27" }, "explain": "$12 + 15 = 27$." },
+            { "template": "−14 − (−9) = [[a]]", "answers": { "a": "-5" }, "explain": "$−14 + 9 = −5$." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "final2",
+      "title": "Chapter practice",
+      "move": "practice",
+      "narration": "Next, write each subtraction as adding the opposite.",
+      "card": { "place": "screen", "label": "practice" },
+      "questions": [
+        {
+          "kind": "blanks",
+          "id": "p-rewrite",
+          "prompt": "Write each subtraction as adding the opposite.",
+          "rows": [
+            { "template": "9 − 4 = 9 + [[a]]", "answers": { "a": "-4" }, "explain": "The opposite of $4$ is $−4$." },
+            { "template": "−3 − 7 = −3 + [[a]]", "answers": { "a": "-7" }, "explain": "The opposite of $7$ is $−7$." },
+            { "template": "6 − (−2) = 6 + [[a]]", "answers": { "a": "2" }, "explain": "The opposite of $−2$ is $2$." },
+            { "template": "−5 − (−8) = −5 + [[a]]", "answers": { "a": "8" }, "explain": "The opposite of $−8$ is $8$." },
+            { "template": "0 − 11 = 0 + [[a]]", "answers": { "a": "-11" }, "explain": "The opposite of $11$ is $−11$." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "final3",
+      "title": "Chapter practice",
+      "move": "practice",
+      "narration": "Last one. Decide whether each statement is true or false.",
+      "card": { "place": "screen", "label": "practice" },
+      "questions": [
+        {
+          "kind": "grid",
+          "id": "p-tf",
+          "prompt": "True or false?",
+          "cols": "tf",
+          "rows": [
+            { "id": "r1", "text": "Subtracting a number is the same as adding its opposite.", "correct": "t", "why": "$a − b = a + (−b)$." },
+            { "id": "r2", "text": "$5 − (−3) = 2$", "correct": "f", "why": "$5 − (−3) = 5 + 3 = 8$." },
+            { "id": "r3", "text": "The additive inverse of $−12$ is $12$.", "correct": "t", "why": "$−12 + 12 = 0$." },
+            { "id": "r4", "text": "$−4 − 6 = −2$", "correct": "f", "why": "$−4 − 6 = −4 + (−6) = −10$." },
+            { "id": "r5", "text": "Subtracting a negative number makes the result larger.", "correct": "t", "why": "It is the same as adding a positive number." },
+            { "id": "r6", "text": "$0 − 9 = 9$", "correct": "f", "why": "$0 − 9 = 0 + (−9) = −9$." }
+          ]
+        }
+      ]
+    },
+    {
+      "id": "finish",
+      "title": "Finished",
+      "move": "finish",
+      "narration": "Well done. That's the end of chapter five, subtracting positive and negative numbers.",
+      "scene": { "clear": true }
+    }
+  ]
+}

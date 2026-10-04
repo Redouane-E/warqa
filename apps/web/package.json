@@ -1,0 +1,42 @@
+{
+  "name": "@warqa/web",
+  "private": true,
+  "version": "0.1.0",
+  "description": "Warqa in the browser: the studio and its pipeline running entirely in a web page (no server, no install). Keys and books stay in the browser.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run",
+    "e2e": "playwright test",
+    "e2e:install": "playwright install chromium"
+  },
+  "dependencies": {
+    "@noble/hashes": "^2.0.1",
+    "@warqa/i18n": "workspace:*",
+    "@warqa/lesson": "workspace:*",
+    "@warqa/pipeline": "workspace:*",
+    "ai": "^7.0.127",
+    "buffer": "^6.0.3",
+    "fflate": "^0.8.3",
+    "hono": "^4.13.12",
+    "pathe": "^2.0.3",
+    "pdfjs-dist": "6.4.299",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
+    "zod": "^4.6.5"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.63.0",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.1.1",
+    "@warqa/studio": "workspace:*",
+    "fake-indexeddb": "^6.2.5",
+    "vite": "^8.3.2",
+    "vitest": "^5.0.3"
+  }
+}

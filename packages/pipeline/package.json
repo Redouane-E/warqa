@@ -1,0 +1,47 @@
+{
+  "name": "@warqa/pipeline",
+  "version": "0.1.0",
+  "description": "Warqa pipeline: PDF ingest, models (any provider), lesson generation, validation and repair, narration, QA and export.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@ai-sdk/anthropic": "^4.0.71",
+    "@ai-sdk/deepseek": "^3.0.58",
+    "@ai-sdk/google": "^4.0.87",
+    "@ai-sdk/groq": "^4.0.54",
+    "@ai-sdk/mistral": "^4.0.56",
+    "@ai-sdk/openai": "^4.0.83",
+    "@ai-sdk/openai-compatible": "^3.0.62",
+    "@ai-sdk/xai": "^5.0.14",
+    "@mathjax/mathjax-mhchem-font-extension": "^4.1.3",
+    "@mathjax/mathjax-newcm-font": "^4.1.3",
+    "@mathjax/src": "^4.1.3",
+    "@napi-rs/canvas": "^1.0.10",
+    "@openrouter/ai-sdk-provider": "^3.1.0",
+    "@warqa/i18n": "workspace:*",
+    "@warqa/lesson": "workspace:*",
+    "ai": "^7.0.127",
+    "fflate": "^0.8.3",
+    "jsonrepair": "^3.15.0",
+    "ollama-ai-provider-v2": "^4.0.1",
+    "pdfjs-dist": "^6.4.299",
+    "zod": "^4.6.5"
+  },
+  "optionalDependencies": {
+    "playwright": "^1.63.0"
+  }
+}
