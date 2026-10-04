@@ -112,7 +112,7 @@ export function webRoutes({ root, base, fake, jobs }: Options): Hono {
   app.post('/demo', async (c) => {
     const existing = registry.dir('integers');
     if (existing) return c.json({ id: 'integers', created: false });
-    const res = await fetch(new URL(`${base}demo/integers.zip`, self.location.origin));
+    const res = await fetch(new URL(`${base}example/integers.zip`, self.location.origin));
     if (!res.ok) throw new Error(`the example book is missing from this site (HTTP ${res.status})`);
     const dir = unpack(root, new Uint8Array(await res.arrayBuffer()), 'integers');
     // its narration is already recorded; no speech engine is needed to replay it

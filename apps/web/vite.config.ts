@@ -50,9 +50,10 @@ function staticFiles(): Map<string, () => Uint8Array> {
   const pdfjs = dirname(require.resolve('pdfjs-dist/package.json'));
   for (const sub of ['cmaps', 'standard_fonts', 'wasm', 'iccs'])
     for (const f of walk(join(pdfjs, sub))) files.set(`pdfjs/${sub}/${f}`, () => readFileSync(join(pdfjs, sub, f)));
-  // the example book (its sources and recorded narration; the browser exports it itself)
+  // the example book (its sources and recorded narration; the browser exports it itself). Not under demo/:
+  // the Pages workflow exports the demo books there, and an export empties its folder first.
   const example = join(here, '../../examples/integers.warqa');
-  files.set('demo/integers.zip', () => {
+  files.set('example/integers.zip', () => {
     const z: Zippable = {};
     for (const f of walk(example, (rel) => /^(dist|cache|qa|source)(\/|$)|^\.|(^|\/)\.DS_Store$/.test(rel)))
       z[`integers.warqa/${f}`] = f.endsWith('.mp3')
