@@ -83,6 +83,8 @@ jobs:
           pnpm warqa export examples/fox.warqa --out "$PWD/_site/demo/story"
           pnpm warqa export examples/morocco.warqa --out "$PWD/_site/demo/geography"
           test -f _site/demo/index.html && test -f _site/demo/story/index.html && test -f _site/demo/geography/index.html
+          # the web app's "open the example book" button downloads this file
+          test -f _site/example/integers.zip || { echo "::error::_site/example/integers.zip is missing: the web app's example book would fail"; exit 1; }
           du -sh _site _site/demo
 
       - if: steps.web.outputs.present == 'true'
