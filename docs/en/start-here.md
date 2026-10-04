@@ -14,6 +14,8 @@ an account, on a computer, a tablet or a phone.
 
 Want to see one first? Open the example lesson: <https://redouane-e.github.io/warqa/demo/>
 
+No PDF at hand? Try one of the [sample PDFs](../../examples/pdfs/README.md): an Arabic maths chapter, a French science chapter and an Arabic picture book.
+
 ## Three ways to use Warqa
 
 | | What you need | Good for |

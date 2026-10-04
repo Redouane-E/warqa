@@ -29,6 +29,9 @@ You don't need to know how to program:
 2. **On your computer, every feature:** download Warqa and double-click the launcher for
    [Windows, Mac or Linux](launchers/README.md).
 
+No PDF at hand? Use one of the [sample PDFs](examples/pdfs/README.md): an Arabic maths chapter, a French
+science chapter, or an Arabic picture book.
+
 The [start-here guide](docs/en/start-here.md) walks you through your first book, in
 [Arabic](docs/ar/start-here.md), [French](docs/fr/start-here.md) and English.
 

@@ -15,6 +15,8 @@ Le résultat est un petit site que vous partagez sous la forme d’un seul fichi
 
 Envie d’en voir une d’abord ? Ouvrez la leçon d’exemple : <https://redouane-e.github.io/warqa/demo/>
 
+Pas de PDF sous la main ? Essayez un des [PDF d'exemple](../../examples/pdfs/README.md) : un chapitre de maths en arabe, un chapitre de sciences en français et un album illustré en arabe.
+
 ## Trois façons d’utiliser Warqa
 
 | | Ce qu’il faut | Idéal pour |

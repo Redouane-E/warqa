@@ -358,6 +358,20 @@ describe('sections from bookmarks', () => {
     expect(outlineSummary([{ level: 1, title: 'Only one', page: 1 }]).suggested).toBeUndefined();
   });
 
+  it('keeps one or two named chapters whole instead of cutting at numbered subsections', () => {
+    const short = [
+      { level: 1, title: 'الفصل الأول: الأعداد العشرية النسبية', page: 2 },
+      { level: 2, title: '1. تعريف', page: 2 },
+      { level: 2, title: '2. المستقيم المدرج', page: 2 },
+      { level: 2, title: '3. مقابل عدد', page: 3 },
+      { level: 1, title: 'الفصل الثاني: جمع وطرح الأعداد النسبية', page: 3 },
+      { level: 2, title: '1. جمع عددين نسبيين', page: 3 },
+      { level: 2, title: '2. طرح عددين نسبيين', page: 4 },
+    ];
+    expect(outlineSummary(short).suggested).toBe(1);
+    expect(outlineSummary([{ level: 1, title: "Chapitre 3 : Le cycle de l'eau", page: 2 }, ...short.slice(1, 3)]).suggested).toBe(1);
+  });
+
   it('merges chapters that start on the same page and never leaves a gap', () => {
     const sections = sectionsFromOutline(
       [
