@@ -81,22 +81,28 @@ export interface OutlineLevel {
 }
 
 /**
- * Bookmark levels with their counts, and the suggested chapter level: among levels with 3–80 entries, the one
- * whose titles look most like chapters or lessons (ties go to the shallower level); else the shallowest level
- * with 3–80 entries; else any level with 2–80.
+ * Bookmark levels with their counts, and the suggested chapter level:
+ * - the shallowest level whose titles are mostly chapter or lesson headings ("Chapitre 3", "الفصل الأول"),
+ *   however few (a short PDF with one or two chapters must not be cut at its numbered subsections);
+ * - else, among levels with 3–80 entries, the one whose titles look most like chapters, lessons or numbered
+ *   sections (ties go to the shallower level); else the shallowest level with 3–80 entries; else any with 2–80.
  */
 export function outlineSummary(outline: OutlineItem[]): { levels: OutlineLevel[]; suggested?: number } {
   const by = new Map<number, OutlineLevel>();
+  const chapterWords = new Map<number, number>();
   for (const o of outline) {
     const l = by.get(o.level) ?? { level: o.level, count: 0, chapterLike: 0, unitLike: 0, sample: [] };
     l.count++;
     const kind = headingKind(o.title);
     if (kind === 'chapter' || kind === 'numbered') l.chapterLike++;
+    if (kind === 'chapter') chapterWords.set(o.level, (chapterWords.get(o.level) ?? 0) + 1);
     if (kind === 'unit') l.unitLike++;
     if (l.sample.length < 5) l.sample.push(o.title);
     by.set(o.level, l);
   }
   const levels = [...by.values()].sort((a, b) => a.level - b.level);
+  const named = levels.find((l) => l.count <= 80 && (chapterWords.get(l.level) ?? 0) / l.count >= 0.5);
+  if (named) return { levels, suggested: named.level };
   const fit = levels.filter((l) => l.count >= 3 && l.count <= 80);
   const score = (l: OutlineLevel) => (l.chapterLike + 0.5 * l.unitLike) / l.count;
   const best = [...fit].sort((a, b) => score(b) - score(a) || a.level - b.level)[0];
