@@ -72,6 +72,12 @@ English, with any AI model.
   local voices over HTTP.
 - **Example books**: a chapter on subtracting integers (ar/fr/en), a picture book read word by word
   (ar/ary/fr/en), and a geography lesson on Morocco's regions (ar/fr/en), all narrated.
+- **Sample PDFs** to try Warqa without your own (`examples/pdfs/`): an Arabic maths chapter, a French
+  science chapter and an Arabic picture book (CC BY 4.0).
+- **Chapter detection** keeps a short PDF's one or two named chapters ("Chapitre 3", "الفصل الأول") whole
+  instead of cutting at numbered subsections.
+- **Set up for AI coding agents**: `AGENTS.md` (root and per folder), task procedures in the open Agent
+  Skills format (`.agents/skills/`), and configuration for Claude Code, Codex, Cursor, Copilot and Gemini CLI.
 - **Project**: Apache-2.0 licence; contributing guide, code of conduct, issue forms in three languages,
   CI (build, lint, typecheck, unit, end-to-end and worker tests), release and GitHub Pages workflows,
   one-click launchers for Windows, macOS and Linux, and start-here guides for teachers and parents.
