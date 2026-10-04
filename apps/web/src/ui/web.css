@@ -1,0 +1,386 @@
+/* Web app additions, on the studio's tokens (apps/studio/src/client/styles.css). Logical properties throughout,
+   so the Arabic interface mirrors. */
+
+.link-btn {
+  appearance: none;
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  color: inherit;
+  text-decoration: underline;
+  text-underline-offset: 3px;
+  cursor: pointer;
+}
+.link-btn:hover {
+  color: var(--amber-ink);
+}
+.link-btn:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ---------- banner under the top bar ---------- */
+
+.web-banner {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+  padding: 6px 20px;
+  background: color-mix(in srgb, var(--amber) 10%, var(--paper));
+  border-block-end: 1px solid var(--rule);
+  font-size: 13.5px;
+  color: var(--ink-2);
+}
+.web-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 9px;
+  border-radius: 999px;
+  background: var(--board);
+  color: var(--chalk);
+  font-size: 12.5px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+.web-chip-test {
+  background: var(--amber);
+  color: var(--on-amber);
+}
+.web-links {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+  margin-inline-start: auto;
+}
+.web-links a {
+  color: inherit;
+}
+.web-warning {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  padding: 8px 20px;
+  background: color-mix(in srgb, var(--bad) 12%, var(--paper));
+  font-size: 14px;
+}
+.web-warning .icon {
+  flex: none;
+  margin-block-start: 3px;
+}
+.web-warning-soft {
+  background: color-mix(in srgb, var(--amber) 14%, var(--paper));
+}
+.web-action-error {
+  flex-basis: 100%;
+  margin: 0;
+}
+
+/* ---------- privacy dialog ---------- */
+
+.web-dialog {
+  max-inline-size: min(560px, calc(100vw - 32px));
+  color: var(--ink);
+}
+.web-dialog::backdrop {
+  background: #0b1210a6;
+}
+.web-dialog h2 {
+  margin: 0;
+}
+
+/* ---------- start screen ---------- */
+
+.boot {
+  display: grid;
+  place-items: center;
+  min-block-size: 100vh;
+  padding: 24px 16px;
+}
+.boot-card {
+  display: grid;
+  justify-items: center;
+  gap: 14px;
+  max-inline-size: 34rem;
+  text-align: center;
+}
+.boot-card .brand,
+.welcome-head .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--ink);
+}
+.boot-card .brand-ar {
+  font-size: 30px;
+}
+.boot-error {
+  max-inline-size: 100%;
+  overflow-x: auto;
+  white-space: pre-wrap;
+  font-size: 13px;
+  color: var(--bad);
+}
+
+/* ---------- start guide ---------- */
+
+.welcome {
+  min-block-size: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+.welcome-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 12px;
+  padding: 14px 24px;
+  font-size: 14px;
+  color: var(--ink-2);
+}
+.welcome-main {
+  flex: 1;
+  display: grid;
+  justify-items: center;
+  align-content: start;
+  gap: 18px;
+  padding: 8px 16px 48px;
+}
+.welcome-card {
+  inline-size: min(720px, 100%);
+  padding: 28px 32px 24px;
+}
+.welcome-card h1 {
+  margin-block: 6px 6px;
+}
+.welcome-sub {
+  font-size: 17px;
+  font-weight: 500;
+  margin-block: 18px 6px;
+}
+.welcome-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0;
+  font-size: 13px;
+  color: var(--ink-3);
+}
+.welcome-dots {
+  display: inline-flex;
+  gap: 5px;
+}
+.welcome-dots i {
+  inline-size: 22px;
+  block-size: 4px;
+  border-radius: 2px;
+  background: var(--rule-strong);
+}
+.welcome-dots i.on {
+  background: var(--amber-rule);
+}
+.welcome-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-block-start: 22px;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--rule);
+}
+.welcome-example {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 8px 12px;
+  text-align: center;
+}
+
+.lang-choice {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  margin-block: 8px 4px;
+}
+.lang-btn {
+  appearance: none;
+  padding: 18px 10px;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 12px;
+  background: var(--field);
+  color: var(--ink);
+  font: inherit;
+  font-size: 19px;
+  cursor: pointer;
+}
+.lang-btn:lang(ar) {
+  font-size: 21px;
+}
+.lang-btn:hover {
+  border-color: var(--amber-rule);
+}
+.lang-btn.is-on {
+  border-color: var(--amber-rule);
+  background: var(--amber-tint);
+  box-shadow: inset 0 0 0 1px var(--amber-rule);
+}
+.lang-btn:focus-visible,
+.provider-card:focus-within {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.providers {
+  border: 0;
+  padding: 0;
+  margin: 14px 0 0;
+  min-inline-size: 0;
+}
+.providers legend {
+  padding: 0;
+  margin-block-end: 8px;
+  font-weight: 500;
+}
+.provider-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 10px;
+}
+.provider-card {
+  position: relative;
+  display: grid;
+  gap: 4px;
+  align-content: start;
+  padding: 12px 14px;
+  border: 1.5px solid var(--rule-strong);
+  border-radius: 12px;
+  background: var(--field);
+  cursor: pointer;
+}
+.provider-card:hover {
+  border-color: var(--amber-rule);
+}
+.provider-card.is-on {
+  border-color: var(--amber-rule);
+  background: var(--amber-tint);
+  box-shadow: inset 0 0 0 1px var(--amber-rule);
+}
+.provider-card input {
+  position: absolute;
+  inset-block-start: 13px;
+  inset-inline-end: 12px;
+  margin: 0;
+  accent-color: var(--amber-rule);
+}
+.provider-name {
+  font-weight: 600;
+  padding-inline-end: 24px;
+}
+.provider-note {
+  font-size: 13.5px;
+  color: var(--ink-2);
+  line-height: 1.45;
+}
+.provider-more {
+  margin-block-start: 12px;
+}
+.provider-more summary {
+  cursor: pointer;
+  color: var(--ink-2);
+  margin-block-end: 10px;
+}
+.key-box {
+  margin-block-start: 16px;
+  padding: 16px 18px;
+  box-shadow: none;
+  background: var(--paper);
+}
+.howto h3 {
+  font-size: 15px;
+  margin: 0 0 4px;
+}
+.howto ol {
+  margin: 0 0 12px;
+  padding-inline-start: 22px;
+}
+.howto a {
+  color: var(--amber-ink);
+  white-space: nowrap;
+}
+.key-check {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 4px 12px;
+}
+.key-check .field {
+  flex: 1 1 260px;
+  margin: 0;
+}
+.key-check .btn {
+  margin-block-start: 26px;
+}
+.check-detail {
+  display: block;
+  overflow-wrap: anywhere;
+}
+.budget-input {
+  inline-size: 9em;
+}
+.summary {
+  margin-block: 14px 0;
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: var(--paper);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 760px) {
+  .web-banner {
+    padding-inline: 16px;
+  }
+  .web-links {
+    margin-inline-start: 0;
+  }
+  .web-warning {
+    padding-inline: 16px;
+  }
+  .welcome-head {
+    padding-inline: 16px;
+  }
+  .welcome-card {
+    padding: 20px 16px 18px;
+  }
+  .lang-choice {
+    grid-template-columns: 1fr;
+  }
+  .lang-btn {
+    padding: 14px 10px;
+  }
+  .key-check .btn {
+    margin-block-start: 0;
+  }
+  .welcome-actions .btn {
+    flex: 1 1 auto;
+    justify-content: center;
+  }
+}
+
+/* "back" points the way the page reads */
+:root[dir="rtl"] .welcome-actions .icon {
+  transform: scaleX(-1);
+}
+
+/* long badges (French and Arabic prices, "unknown model") wrap on phones instead of widening the page */
+@media (max-width: 760px) {
+  .model-badges {
+    flex-wrap: wrap;
+  }
+  .model-badges .badge {
+    white-space: normal;
+    border-radius: 10px;
+  }
+}

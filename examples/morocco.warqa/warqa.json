@@ -1,0 +1,30 @@
+{
+  "schema": "warqa.book/1",
+  "id": "morocco-regions",
+  "title": {
+    "ar": "جهات المغرب",
+    "ary": "الجهات ديال المغرب",
+    "fr": "Les régions du Maroc",
+    "en": "The regions of Morocco"
+  },
+  "subtitle": {
+    "ar": "درس جغرافيا قصير بخرائط متحركة.",
+    "ary": "درس ديال الجغرافيا قصير بخرائط كتتحرك.",
+    "fr": "Une courte leçon de géographie avec des cartes animées.",
+    "en": "A short geography lesson with animated maps."
+  },
+  "langs": ["ar", "fr", "en"],
+  "defaultLang": "ar",
+  "sourceLang": "ar",
+  "digits": "latn",
+  "theme": "chalk",
+  "units": [{ "title": { "ar": "الجغرافيا", "fr": "Géographie", "en": "Geography" }, "chapters": ["regions"] }],
+  "license": "CC BY 4.0 (lesson text); map data: Natural Earth (public domain) and geoBoundaries / © OpenStreetMap contributors (ODbL)",
+  "attribution": "Lesson written for the Warqa examples.",
+  "pipeline": {
+    "models": {},
+    "tts": { "provider": "edge", "voices": {}, "rate": "-4%", "tashkeel": false },
+    "budget": {},
+    "packs": ["humanities"]
+  }
+}

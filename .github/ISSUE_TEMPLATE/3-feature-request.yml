@@ -1,0 +1,55 @@
+name: "Feature request · اقتراح ميزة · Proposer une fonctionnalité"
+description: "An idea that would make Warqa better for learners, teachers or developers. · فكرة لتحسين «ورقة». · Une idée pour améliorer Warqa."
+title: "[Idea] "
+labels: [enhancement, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ideas are welcome in any of our languages (يمكنك الكتابة بالعربية · vous pouvez écrire en français).
+        For a new kind of picture or animation, use **"New component"**; for a new language, use **"New language"**.
+        Not sure yet? Start a conversation in Discussions.
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: "What problem would it solve? · ما المشكلة التي يحلّها؟ · Quel problème cela résout-il ?"
+      description: "Describe the situation: who you are (teacher, parent, student, developer…) and what is hard today."
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: "What would you like? · ماذا تقترح؟ · Que proposez-vous ?"
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: "Other options you considered · بدائل أخرى · Autres solutions envisagées"
+    validations:
+      required: false
+
+  - type: dropdown
+    id: who
+    attributes:
+      label: "Who benefits most? · من المستفيد؟ · À qui cela profite-t-il ?"
+      multiple: true
+      options:
+        - "Learners · المتعلمون · Élèves"
+        - "Teachers · المدرّسون · Enseignants"
+        - "Parents · الآباء · Parents"
+        - "Book makers (people who build lessons)"
+        - "Developers and contributors"
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: help
+    attributes:
+      label: "Contributing · المساهمة · Contribuer"
+      options:
+        - label: "I would like to help build this. · أودّ المساعدة في إنجازه. · J'aimerais aider à le réaliser."
+          required: false

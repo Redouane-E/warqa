@@ -1,0 +1,4 @@
+# the build the browser tests run against (WARQA_BASE=/warqa/), and Playwright's output
+e2e/.dist/
+test-results/
+playwright-report/

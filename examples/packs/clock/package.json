@@ -1,0 +1,9 @@
+{
+  "name": "warqa-pack-clock",
+  "version": "0.1.0",
+  "description": "Warqa component pack: an analogue clock for learning to tell the time.",
+  "license": "Apache-2.0",
+  "keywords": ["warqa-pack", "warqa", "clock", "kids"],
+  "files": ["pack.js", "README.md"],
+  "warqa": { "pack": "pack.js" }
+}

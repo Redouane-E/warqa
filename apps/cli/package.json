@@ -1,0 +1,20 @@
+{
+  "name": "@warqa/cli",
+  "version": "0.1.0",
+  "description": "warqa — turn PDFs into animated, narrated, interactive books (Arabic, French, English; any model).",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": { "warqa": "./dist/warqa.js" },
+  "files": ["dist"],
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json && chmod +x dist/warqa.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run --passWithNoTests"
+  },
+  "dependencies": {
+    "@warqa/i18n": "workspace:*",
+    "@warqa/lesson": "workspace:*",
+    "@warqa/pipeline": "workspace:*",
+    "commander": "^15.0.0"
+  }
+}

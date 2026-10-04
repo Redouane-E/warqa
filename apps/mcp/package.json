@@ -1,0 +1,25 @@
+{
+  "name": "@warqa/mcp",
+  "version": "0.1.0",
+  "description": "Warqa as an MCP server: let coding agents (Claude Code, Cursor, …) make and check Warqa lessons.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "bin": {
+    "warqa-mcp": "./dist/server.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc -p tsconfig.json && chmod +x dist/server.js",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "@modelcontextprotocol/sdk": "^1.32.0",
+    "@warqa/i18n": "workspace:*",
+    "@warqa/lesson": "workspace:*",
+    "@warqa/pipeline": "workspace:*",
+    "zod": "^4.6.5"
+  }
+}

@@ -1,0 +1,51 @@
+{
+  "schema": "warqa.book/1",
+  "id": "zitoun",
+  "title": {
+    "ar": "زيتون والصفحة الطائرة",
+    "fr": "Zitoun et la page envolée",
+    "en": "Zitoun and the Flying Page",
+    "ary": "زيتون والورقة اللي طارت"
+  },
+  "subtitle": {
+    "ar": "قصة مصوّرة مسموعة، تُقرأ كلمةً كلمة.",
+    "fr": "Un album illustré et narré, lu mot à mot.",
+    "en": "A narrated picture book, read word by word.",
+    "ary": "قصة بالتصاور مسموعة، كتتقرا كلمة بكلمة."
+  },
+  "langs": [
+    "ar",
+    "ary",
+    "fr",
+    "en"
+  ],
+  "defaultLang": "ar",
+  "sourceLang": "ar",
+  "digits": "latn",
+  "theme": "chalk",
+  "units": [
+    {
+      "title": {
+        "ar": "قصص",
+        "fr": "Histoires",
+        "en": "Stories",
+        "ary": "قصص"
+      },
+      "chapters": [
+        "story"
+      ]
+    }
+  ],
+  "license": "CC BY 4.0 (story and illustrations), Apache-2.0 (Warqa)",
+  "attribution": "Story and illustrations written for the Warqa examples.",
+  "pipeline": {
+    "models": {},
+    "tts": {
+      "provider": "edge",
+      "voices": {},
+      "rate": "-12%",
+      "tashkeel": false
+    },
+    "budget": {}
+  }
+}

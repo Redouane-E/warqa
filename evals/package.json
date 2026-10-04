@@ -1,0 +1,9 @@
+{
+  "name": "@warqa/evals",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "scripts": { "eval": "tsx run.mts" },
+  "dependencies": { "@warqa/lesson": "workspace:*", "@warqa/pipeline": "workspace:*" },
+  "devDependencies": { "tsx": "^4.23.15" }
+}

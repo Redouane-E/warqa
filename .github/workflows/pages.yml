@@ -1,0 +1,107 @@
+name: Pages
+
+# Publishes the browser-only web app (apps/web) to GitHub Pages, with the example book under /demo/.
+# One-time setup: Settings → Pages → Source: "GitHub Actions" (see docs/en/release.md).
+# If apps/web does not exist yet, the run ends with a notice and deploys nothing.
+on:
+  push:
+    branches: [master]
+  workflow_dispatch:
+
+permissions: {}
+
+# Never cancel a deployment half-way; queue the next one instead.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  TURBO_TELEMETRY_DISABLED: '1'
+  DO_NOT_TRACK: '1'
+
+jobs:
+  build:
+    name: Build the site
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: read
+      pages: read
+    outputs:
+      has_web: ${{ steps.web.outputs.present }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          persist-credentials: false
+
+      - name: Is there a web app?
+        id: web
+        run: |
+          if [ -f apps/web/package.json ]; then
+            echo "present=true" >> "$GITHUB_OUTPUT"
+            echo "name=$(jq -r .name apps/web/package.json)" >> "$GITHUB_OUTPUT"
+          else
+            echo "present=false" >> "$GITHUB_OUTPUT"
+            echo "::notice::apps/web does not exist yet: nothing to deploy to GitHub Pages."
+          fi
+
+      - if: steps.web.outputs.present == 'true'
+        uses: pnpm/action-setup@v6
+
+      - if: steps.web.outputs.present == 'true'
+        uses: actions/setup-node@v6
+        with:
+          node-version-file: .nvmrc
+          cache: pnpm
+
+      - if: steps.web.outputs.present == 'true'
+        name: Install
+        run: pnpm install --frozen-lockfile
+
+      # base_path is "/<repository>" for a project site, "" for a custom domain or a user site.
+      - if: steps.web.outputs.present == 'true'
+        id: pages
+        uses: actions/configure-pages@v5
+
+      # Turbo builds the web app, the CLI (for the example export) and everything they depend on.
+      # Same output as `pnpm --filter @warqa/web build` once the workspace packages are built.
+      - if: steps.web.outputs.present == 'true'
+        name: Build the web app and the CLI
+        env:
+          WEB: ${{ steps.web.outputs.name }}
+          # The web app is built for its address on Pages (e.g. /warqa/); turbo.json passes it to the build.
+          WARQA_BASE: ${{ steps.pages.outputs.base_path }}/
+        run: pnpm build --filter="$WEB..." --filter=@warqa/cli...
+
+      - if: steps.web.outputs.present == 'true'
+        name: Assemble the site (web app at /, example book at /demo/)
+        run: |
+          test -f apps/web/dist/index.html || { echo "::error::apps/web/dist/index.html was not built"; exit 1; }
+          mkdir -p _site
+          cp -R apps/web/dist/. _site/
+          pnpm warqa export examples/integers.warqa --out "$PWD/_site/demo"
+          pnpm warqa export examples/fox.warqa --out "$PWD/_site/demo/story"
+          pnpm warqa export examples/morocco.warqa --out "$PWD/_site/demo/geography"
+          test -f _site/demo/index.html && test -f _site/demo/story/index.html && test -f _site/demo/geography/index.html
+          du -sh _site _site/demo
+
+      - if: steps.web.outputs.present == 'true'
+        uses: actions/upload-pages-artifact@v4
+        with:
+          path: _site
+
+  deploy:
+    name: Deploy
+    needs: build
+    if: needs.build.outputs.has_web == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      pages: write
+      id-token: write
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

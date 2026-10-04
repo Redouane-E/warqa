@@ -1,0 +1,79 @@
+name: "New language · لغة جديدة · Nouvelle langue"
+description: "Ask for Warqa in another language, for the interface or for lessons and voices. · اطلب لغة جديدة. · Demander une nouvelle langue."
+title: "[Language] "
+labels: [language, needs-triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Lessons can already be written and translated into **any** language. This form is for making a
+        language first-class: the player and studio interface, voices, number formats, textbook vocabulary.
+        Contributors: see [docs/en/adding-a-language.md](../blob/master/docs/en/adding-a-language.md).
+
+        <div dir="rtl" lang="ar">
+
+        يمكن منذ الآن كتابة الدروس وترجمتها إلى أي لغة. هذه الاستمارة لطلب دعم كامل للغة: واجهة المشغّل والاستوديو، والأصوات، وصيغ الأرقام، ومصطلحات الكتب المدرسية.
+
+        </div>
+
+        Les leçons peuvent déjà être écrites et traduites dans n'importe quelle langue. Ce formulaire sert à demander une prise en charge complète : interface, voix, format des nombres, vocabulaire scolaire.
+
+  - type: input
+    id: language
+    attributes:
+      label: "Language · اللغة · Langue"
+      description: "Name in English and in the language itself, plus its code if you know it (BCP 47, e.g. es, tr, ber-MA, ary)."
+      placeholder: "Spanish · Español (es)"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: direction
+    attributes:
+      label: "Writing direction · اتجاه الكتابة · Sens d'écriture"
+      options:
+        - "Left to right · من اليسار إلى اليمين · De gauche à droite"
+        - "Right to left · من اليمين إلى اليسار · De droite à gauche"
+        - "I don't know · لا أعرف · Je ne sais pas"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: parts
+    attributes:
+      label: "What do you need in this language? · ماذا تحتاج بهذه اللغة؟ · De quoi avez-vous besoin ?"
+      multiple: true
+      options:
+        - "Player interface (buttons, questions, help)"
+        - "Studio interface"
+        - "Lessons written directly in this language"
+        - "Narration voices"
+        - "Answers typed with this language's digits or number format"
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: "Who would use it? · من سيستعملها؟ · Qui l'utiliserait ?"
+      description: "Country, school level, subjects. Links to official textbooks or curricula help with vocabulary."
+    validations:
+      required: false
+
+  - type: textarea
+    id: voices
+    attributes:
+      label: "Voices you know of · أصوات تعرفها · Voix que vous connaissez"
+      description: "Text-to-speech voices for this language (Microsoft Edge/Azure, Google, ElevenLabs, open models…) and their licences if you know them."
+    validations:
+      required: false
+
+  - type: checkboxes
+    id: help
+    attributes:
+      label: "Helping · المساعدة · Aider"
+      options:
+        - label: "I can translate the interface (about 90 player strings and 320 studio strings)."
+          required: false
+        - label: "I can review lessons generated in this language."
+          required: false
