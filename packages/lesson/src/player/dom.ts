@@ -1,4 +1,6 @@
 // Small DOM helpers for SVG and HTML, text measurement and rich text with inline math.
+
+import { MARK, MARK_VARIANTS } from '@warqa/brand';
 import { prettyMinus } from '@warqa/i18n';
 import { inlineRuns } from '../core/text.js';
 import { FONT_MATH, FONT_UI } from './theme.js';
@@ -14,6 +16,24 @@ export function svg<K extends keyof SVGElementTagNameMap>(
   for (const [k, v] of Object.entries(attrs)) if (v !== undefined) e.setAttribute(k, String(v));
   parent?.appendChild(e);
   return e;
+}
+
+/**
+ * Warqa's mark (the folded sheet) as an SVG element: the sheet takes the text colour around it, the fold is
+ * the highlighter yellow. It never mirrors.
+ */
+export function markIcon(height: number): SVGSVGElement {
+  const m = svg('svg', {
+    class: 'wq-mark',
+    viewBox: MARK.viewBox,
+    width: +((height * MARK.width) / MARK.height).toFixed(2),
+    height,
+    'aria-hidden': 'true',
+    focusable: 'false',
+  });
+  svg('path', { class: 'wq-mark-sheet', d: MARK.sheet, fill: 'currentColor' }, m);
+  svg('path', { class: 'wq-mark-fold', d: MARK.fold, fill: MARK_VARIANTS.ink.fold }, m);
+  return m;
 }
 
 type Child = Node | string | null | undefined | false;

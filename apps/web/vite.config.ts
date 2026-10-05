@@ -7,6 +7,7 @@ import { createRequire } from 'node:module';
 import { dirname, join, relative, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import react from '@vitejs/plugin-react';
+import { faviconSvg, webManifest } from '@warqa/brand';
 import { type Zippable, zipSync } from 'fflate';
 import { defineConfig, type Plugin } from 'vite';
 
@@ -61,10 +62,30 @@ function staticFiles(): Map<string, () => Uint8Array> {
         : readFileSync(join(example, f));
     return zipSync(z, { level: 6 });
   });
+  // the app's icons and install manifest (@warqa/brand)
+  const icons = join(dirname(require.resolve('@warqa/brand/package.json')), 'dist', 'icons');
+  for (const f of readdirSync(icons)) files.set(`icons/${f}`, () => readFileSync(join(icons, f)));
+  files.set('favicon.svg', () => new TextEncoder().encode(faviconSvg()));
+  files.set('manifest.webmanifest', () =>
+    new TextEncoder().encode(
+      JSON.stringify(
+        webManifest({
+          name: 'Warqa',
+          shortName: 'Warqa',
+          description: 'Turn a PDF into animated, narrated, interactive lessons, in your browser.',
+          startUrl: base,
+          icons: `${base}icons/`,
+        }),
+      ),
+    ),
+  );
   return files;
 }
 
 const TYPES: Record<string, string> = {
+  svg: 'image/svg+xml',
+  png: 'image/png',
+  webmanifest: 'application/manifest+json',
   js: 'text/javascript',
   css: 'text/css',
   json: 'application/json',

@@ -2,7 +2,7 @@
 // itself (the same React app as the local studio) with the web additions.
 import { type ReactNode, useEffect, useMemo, useState, useSyncExternalStore } from 'react';
 import { App } from '../../../studio/src/client/App';
-import { Button, Sheet } from '../../../studio/src/client/components/ui';
+import { Button, Mark } from '../../../studio/src/client/components/ui';
 import { getLang, I18nContext, makeI18n, subscribeLang } from '../../../studio/src/client/i18n';
 import { useLocation } from '../../../studio/src/client/router';
 import type { Bridge } from '../bridge/client';
@@ -61,7 +61,10 @@ function Boot({ bridge }: { bridge: Bridge }) {
     <main id="main" className="boot">
       <div className="boot-card">
         <span className="brand">
-          <Sheet size={40} />
+          <Mark size={40} />
+          <span className="brand-latin" lang="en">
+            Warqa
+          </span>
           <span className="brand-ar" lang="ar">
             ورقة
           </span>

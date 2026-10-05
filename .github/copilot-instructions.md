@@ -6,7 +6,7 @@ interface text, write a lesson by hand, review a change — are in `.agents/skil
 
 The essentials:
 
-- Packages build into `dist/` and import each other's builds: rebuild `@warqa/lesson` / `@warqa/i18n` before
+- Packages build into `dist/` and import each other's builds: rebuild `@warqa/brand` / `@warqa/lesson` / `@warqa/i18n` before
   testing what depends on them (`npx turbo run build --filter=@warqa/lesson`).
 - Every interface string goes in every language: the player has `en`, `fr`, `ar` and `ary`
   (`packages/i18n/src/catalog`), and the studio has `en`, `fr` and `ar` (`apps/studio/src/client/messages.ts`).

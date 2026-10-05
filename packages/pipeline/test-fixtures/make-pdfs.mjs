@@ -15,8 +15,7 @@ const fonts = join(here, '../../lesson/dist/bundle/fonts');
 const fontUrl = (f) => `data:font/woff2;base64,${readFileSync(join(fonts, f)).toString('base64')}`;
 
 const css = `
-@font-face { font-family: 'Readex'; font-weight: 400; src: url('${fontUrl('readex-pro-arabic-400-normal.woff2')}') format('woff2'); }
-@font-face { font-family: 'Readex'; font-weight: 700; src: url('${fontUrl('readex-pro-arabic-700-normal.woff2')}') format('woff2'); }
+@font-face { font-family: 'Readex'; font-weight: 160 700; src: url('${fontUrl('readex-pro-arabic-full-normal.woff2')}') format('woff2'); }
 @font-face { font-family: 'Naskh'; font-weight: 400; src: url('${fontUrl('noto-naskh-arabic-arabic-400-normal.woff2')}') format('woff2'); }
 @font-face { font-family: 'Stix'; font-weight: 400; src: url('${fontUrl('stix-two-text-latin-400-normal.woff2')}') format('woff2'); }
 @font-face { font-family: 'Stix'; font-weight: 700; src: url('${fontUrl('stix-two-text-latin-600-normal.woff2')}') format('woff2'); }

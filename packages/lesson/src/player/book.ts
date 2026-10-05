@@ -1,6 +1,6 @@
 // The book's cover and contents page (index.html of an exported book).
 import { dirOf, formatNumber, LANG_INFO, langInfo, translator } from '@warqa/i18n';
-import { h, rich } from './dom.js';
+import { h, markIcon, rich } from './dom.js';
 
 export interface BookPageData {
   id: string;
@@ -93,7 +93,12 @@ export function renderBook(host: HTMLElement, data: BookPageData, initialLang?: 
         h(
           'header',
           { class: 'wq-book-cover', id: 'cover' },
-          h('div', { class: 'wq-book-top' }, h('span', { class: 'wq-book-brand' }, '∞ ', t('book.madeWith')), langSel),
+          h(
+            'div',
+            { class: 'wq-book-top' },
+            h('span', { class: 'wq-book-brand' }, markIcon(18), t('book.madeWith')),
+            langSel,
+          ),
           h('h1', {}, rich(title)),
           data.subtitle ? h('p', { class: 'wq-book-sub' }, rich(pick(data.subtitle, lang))) : null,
           data.author ? h('p', { class: 'wq-book-author' }, data.author) : null,

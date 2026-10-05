@@ -2,7 +2,7 @@
 // the PDF, the book's languages and a spending limit; then the book is created and its PDF is read.
 import { type DragEvent, type ReactNode, useEffect, useId, useState } from 'react';
 import { api, errorText } from '../../../studio/src/client/api';
-import { Button, Field, Icon, Notice, Sheet } from '../../../studio/src/client/components/ui';
+import { Button, Field, Icon, Mark, Notice } from '../../../studio/src/client/components/ui';
 import { BOOK_LANGS, setLang, UI_LANGS, type UiLang, useI18n } from '../../../studio/src/client/i18n';
 import { navigate } from '../../../studio/src/client/router';
 import { FAKE_PROVIDER, type KeyCheck, PROVIDERS, type WebProvider } from '../providers';
@@ -129,7 +129,7 @@ function KeyStep({
                 <li>
                   {w('ob.howto.1', { site: '\u0000' }).split('\u0000')[0]}
                   <a href={provider.keyUrl} target="_blank" rel="noreferrer" dir="ltr">
-                    {site} <Icon name="external" size={13} />
+                    {site} <Icon name="open" size={13} />
                   </a>
                   {w('ob.howto.1', { site: '\u0000' }).split('\u0000')[1]}
                 </li>
@@ -444,7 +444,10 @@ export function Onboarding({ fake, onDone }: { fake: boolean; onDone: () => void
     <div className="welcome">
       <header className="welcome-head">
         <span className="brand">
-          <Sheet />
+          <Mark />
+          <span className="brand-latin" lang="en">
+            Warqa
+          </span>
           <span className="brand-ar" lang="ar">
             ورقة
           </span>

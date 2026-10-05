@@ -1,92 +1,46 @@
-/* Warqa studio — "the notebook and the board".
-   Pages are sheets of exercise-book paper with a double amber margin rule at the inline start (it moves to
-   the right in Arabic); each page threads its navigation onto that margin (steps, beats, sections). The one
-   dark element is the activity board: a small chalkboard, borrowed from the player.
-   Fonts come from the player bundle (/player/player.css): Readex Pro (UI, Arabic + Latin),
-   STIX Two Text + Noto Naskh Arabic (display), all under the SIL OFL. Logical properties throughout. */
+/* Warqa studio. Interim look (redesign phase 1): the screens keep their layout and their variable names, which
+   now point at the "Cahier" tokens of @warqa/brand (tokens.css, light and dark, and fonts.css, both loaded by
+   main.tsx). Pages are notebook sheets with the red margin line at the inline start (on the right in Arabic);
+   each page threads its navigation onto that line (steps, beats, sections). The one dark element is the
+   activity board, in the Board colours. Phase 3 moves the screens onto the --wq-* tokens themselves.
+   Logical properties throughout. */
 
 :root {
-  --paper: #edf1ec;
-  --sheet: #fbfcfa;
-  --field: #ffffff;
-  --ink: #1d2b27;
-  --ink-2: #475a53;
-  --ink-3: #5f726a;
-  --rule: #d6ded8;
-  --rule-strong: #b3c1b9;
-  --amber: #f0b45a;
-  --amber-rule: #e8a648;
-  --amber-ink: #8a5208;
-  --amber-tint: #f0b45a2e;
-  --good: #2b7353;
-  --bad: #b03a28;
-  --warn: #8a5208;
-  --focus: #c47f12;
-  --on-amber: #1d2b27;
-  --board: #1d2b27;
-  --board-hi: #26392f;
-  --board-edge: #00000000;
-  --chalk: #ece8dc;
-  --chalk-dim: #a9b8b0;
-  --chalk-faint: #5d7068;
-  --mint: #8fd6b0;
-  --coral: #f08c7a;
-  --shadow: 0 1px 0 #1d2b270a, 0 10px 28px -18px #1d2b2766;
-  --font-ui: "Readex Pro", "Noto Naskh Arabic", "Segoe UI", system-ui, sans-serif;
-  --font-display: "STIX Two Text", "Noto Naskh Arabic", Georgia, "Times New Roman", serif;
-  --font-mono: ui-monospace, "SF Mono", "Cascadia Code", Menlo, Consolas, monospace;
+  --paper: var(--wq-ground);
+  --sheet: var(--wq-sheet);
+  --field: var(--wq-raised);
+  --ink: var(--wq-text);
+  --ink-2: var(--wq-text-2);
+  --ink-3: var(--wq-text-3);
+  --rule: var(--wq-line);
+  --rule-strong: var(--wq-control-border);
+  /* the old amber accent: primary actions, links and the selected thing are ink now */
+  --amber: var(--wq-ink);
+  --amber-rule: var(--wq-ink);
+  --amber-ink: var(--wq-ink);
+  --amber-tint: var(--wq-ink-tint);
+  --on-amber: var(--wq-on-ink);
+  --good: var(--wq-good);
+  --bad: var(--wq-pen);
+  --warn: var(--wq-fluo-text);
+  --focus: var(--wq-ink);
+  --board: var(--wq-board-sheet);
+  --board-hi: var(--wq-board-raised);
+  --board-edge: var(--wq-board-line);
+  --chalk: var(--wq-board-text);
+  --chalk-dim: var(--wq-board-text-2);
+  --chalk-faint: var(--wq-board-text-3);
+  --mint: var(--wq-board-good);
+  --coral: var(--wq-board-pen);
+  --shadow: var(--wq-shadow);
+  --font-ui: var(--wq-font-ui);
+  /* display type is Readex Pro at full width (see .display) */
+  --font-display: var(--wq-font-ui);
+  --font-mono: var(--wq-font-mono);
   --margin: 40px;
   --gap: 30px;
   --dot: 24px;
   --top: 60px;
-  color-scheme: light;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) {
-    --paper: #101916;
-    --sheet: #16211e;
-    --field: #1b2824;
-    --ink: #ece8dc;
-    --ink-2: #b6c3bc;
-    --ink-3: #93a59c;
-    --rule: #25332e;
-    --rule-strong: #3a4d45;
-    --amber-rule: #b98436;
-    --amber-ink: #f0b45a;
-    --amber-tint: #f0b45a24;
-    --good: #8fd6b0;
-    --bad: #f39a89;
-    --warn: #f0b45a;
-    --focus: #f0b45a;
-    --board: #1d2b27;
-    --board-hi: #24372f;
-    --board-edge: #2f443c;
-    --shadow: 0 1px 0 #0000001f, 0 12px 30px -20px #000000cc;
-    color-scheme: dark;
-  }
-}
-:root[data-theme="dark"] {
-  --paper: #101916;
-  --sheet: #16211e;
-  --field: #1b2824;
-  --ink: #ece8dc;
-  --ink-2: #b6c3bc;
-  --ink-3: #93a59c;
-  --rule: #25332e;
-  --rule-strong: #3a4d45;
-  --amber-rule: #b98436;
-  --amber-ink: #f0b45a;
-  --amber-tint: #f0b45a24;
-  --good: #8fd6b0;
-  --bad: #f39a89;
-  --warn: #f0b45a;
-  --focus: #f0b45a;
-  --board: #1d2b27;
-  --board-hi: #24372f;
-  --board-edge: #2f443c;
-  --shadow: 0 1px 0 #0000001f, 0 12px 30px -20px #000000cc;
-  color-scheme: dark;
 }
 
 /* ---------- base ---------- */
@@ -149,7 +103,7 @@ abbr {
   text-decoration: none;
 }
 :focus-visible {
-  outline: 2.5px solid var(--focus);
+  outline: 2px solid var(--focus);
   outline-offset: 2px;
 }
 ::selection {
@@ -157,7 +111,8 @@ abbr {
 }
 .display {
   font-family: var(--font-display);
-  font-weight: 600;
+  font-variation-settings: "HEXP" 100;
+  font-weight: 650;
   font-size: clamp(30px, 4.2vw, 46px);
   letter-spacing: -0.01em;
   line-height: 1.12;
@@ -215,6 +170,10 @@ abbr {
 .icon {
   flex: none;
 }
+/* back and next point the way the page reads; play and the mark never mirror */
+:root[dir="rtl"] .icon-mirror {
+  transform: scaleX(-1);
+}
 
 /* ---------- top bar ---------- */
 
@@ -234,15 +193,21 @@ abbr {
 .brand {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   text-decoration: none;
   color: var(--ink);
 }
-.brand-ar {
-  font-family: "Noto Naskh Arabic", var(--font-display);
+.brand-latin {
+  font-family: var(--font-display);
+  font-variation-settings: "HEXP" 100;
   font-weight: 600;
-  font-size: 24px;
+  font-size: 20px;
   line-height: 1;
+}
+.brand-ar {
+  font-size: 16px;
+  line-height: 1;
+  color: var(--ink-2);
 }
 .brand-studio {
   font-size: 12.5px;
@@ -255,26 +220,14 @@ abbr {
   letter-spacing: 0;
   font-size: 14px;
 }
-.sheet-mark .sheet-body {
-  fill: var(--sheet);
-  stroke: var(--ink);
-  stroke-width: 1.6;
-  stroke-linejoin: round;
+.brand-mark {
+  flex: none;
 }
-.sheet-mark .sheet-fold {
-  fill: var(--amber);
-  stroke: var(--ink);
-  stroke-width: 1.6;
-  stroke-linejoin: round;
+.brand-mark .wq-mark-sheet {
+  fill: var(--wq-mark);
 }
-.sheet-mark .sheet-lines {
-  stroke: var(--ink-3);
-  stroke-width: 1.3;
-  stroke-linecap: round;
-  fill: none;
-}
-:root[dir="rtl"] .sheet-mark {
-  transform: scaleX(-1);
+.brand-mark .wq-mark-fold {
+  fill: var(--wq-fluo);
 }
 .topnav {
   display: flex;
@@ -378,10 +331,10 @@ abbr {
   inset-block: 0;
   inset-inline-start: var(--margin);
   inline-size: 6px;
-  border-inline: 1.5px solid var(--amber-rule);
+  background: linear-gradient(var(--wq-margin), var(--wq-margin)) no-repeat center / 1.5px 100%;
   pointer-events: none;
 }
-/* things threaded onto the margin: their dot centre sits on the double rule */
+/* things threaded onto the margin: their dot centre sits on the margin line */
 .on-margin,
 .stepper,
 .beat-list,
@@ -432,6 +385,7 @@ abbr {
 }
 .sheet h2 {
   font-family: var(--font-display);
+  font-variation-settings: "HEXP" 60;
   font-weight: 600;
   font-size: 23px;
 }
@@ -493,14 +447,13 @@ abbr {
   cursor: progress;
 }
 .btn-primary {
-  background: var(--amber);
-  border-color: #d99a3c;
-  color: var(--on-amber);
-  font-weight: 600;
+  background: var(--wq-ink);
+  border-color: var(--wq-ink);
+  color: var(--wq-on-ink);
 }
 .btn-primary:hover:not(:disabled) {
-  background: #f5c271;
-  border-color: #c98a2e;
+  background: var(--wq-ink-hover);
+  border-color: var(--wq-ink-hover);
 }
 .btn-quiet {
   background: transparent;
@@ -568,7 +521,7 @@ textarea {
   inline-size: 100%;
   min-block-size: 38px;
   padding: 7px 10px;
-  border: 1px solid var(--rule-strong);
+  border: 1px solid var(--wq-input-border);
   border-radius: 8px;
   background: var(--field);
   color: var(--ink);
@@ -594,7 +547,7 @@ textarea.code {
 input:focus-visible,
 select:focus-visible,
 textarea:focus-visible {
-  outline: 2.5px solid var(--focus);
+  outline: 2px solid var(--focus);
   outline-offset: 0;
   border-color: transparent;
 }
@@ -606,7 +559,7 @@ input[type="radio"] {
   inline-size: 18px;
   block-size: 18px;
   margin: 0;
-  accent-color: var(--ink);
+  accent-color: var(--wq-ink);
   flex: none;
 }
 .checks {
@@ -641,7 +594,7 @@ input[type="radio"] {
 }
 .dirty {
   font-size: 13px;
-  color: var(--amber-ink);
+  color: var(--warn);
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -651,7 +604,7 @@ input[type="radio"] {
   inline-size: 7px;
   block-size: 7px;
   border-radius: 50%;
-  background: var(--amber);
+  background: var(--warn);
 }
 .toast {
   display: inline-flex;
@@ -685,12 +638,15 @@ input[type="radio"] {
   flex: 1;
 }
 .notice-warn {
-  border-color: color-mix(in srgb, var(--amber) 70%, transparent);
-  background: var(--amber-tint);
+  border-color: color-mix(in srgb, var(--wq-fluo-text) 30%, transparent);
+  background: var(--wq-fluo-tint);
+}
+.notice-warn .icon {
+  color: var(--wq-fluo-text);
 }
 .notice-error {
-  border-color: color-mix(in srgb, var(--bad) 60%, transparent);
-  background: color-mix(in srgb, var(--bad) 9%, var(--sheet));
+  border-color: color-mix(in srgb, var(--wq-pen) 35%, transparent);
+  background: var(--wq-pen-tint);
 }
 .notice-error .icon {
   color: var(--bad);
@@ -710,9 +666,9 @@ input[type="radio"] {
   white-space: nowrap;
 }
 .pill-running {
-  background: var(--amber);
-  border-color: var(--amber);
-  color: var(--on-amber);
+  background: var(--wq-fluo-tint);
+  border-color: var(--wq-fluo-tint);
+  color: var(--wq-fluo-text);
 }
 .pill-done {
   border-color: color-mix(in srgb, var(--good) 60%, transparent);
@@ -756,21 +712,21 @@ input[type="radio"] {
 }
 .badge-error {
   border-color: transparent;
-  background: var(--bad);
-  color: var(--sheet);
+  background: var(--wq-pen-tint);
+  color: var(--wq-pen);
 }
 .badge-warn {
   border-color: transparent;
-  background: var(--amber);
-  color: var(--on-amber);
+  background: var(--wq-fluo-tint);
+  color: var(--wq-fluo-text);
 }
 .tier-A {
   border-color: color-mix(in srgb, var(--good) 60%, transparent);
   color: var(--good);
 }
 .tier-B {
-  border-color: var(--amber-rule);
-  color: var(--amber-ink);
+  border-color: color-mix(in srgb, var(--warn) 45%, transparent);
+  color: var(--warn);
 }
 .table-wrap {
   overflow-x: auto;
@@ -914,6 +870,7 @@ input[type="radio"] {
 .book-title {
   display: block;
   font-family: var(--font-display);
+  font-variation-settings: "HEXP" 60;
   font-size: 23px;
   font-weight: 600;
   line-height: 1.22;
@@ -947,8 +904,8 @@ input[type="radio"] {
   border: 1.5px solid var(--rule-strong);
 }
 .ticks i.on {
-  background: var(--ink);
-  border-color: var(--ink);
+  background: var(--wq-ink);
+  border-color: var(--wq-ink);
 }
 .book-next {
   margin: 0;
@@ -1122,10 +1079,10 @@ input[type="radio"] {
   opacity: 0.75;
 }
 .station.is-next .station-dot {
-  background: var(--amber);
-  border-color: var(--amber);
-  color: var(--on-amber);
-  box-shadow: 0 0 0 5px var(--amber-tint);
+  background: var(--wq-fluo);
+  border-color: var(--wq-fluo);
+  color: var(--wq-on-fluo);
+  box-shadow: 0 0 0 5px var(--wq-fluo-tint);
 }
 .station-text {
   display: grid;
@@ -1360,7 +1317,7 @@ input[type="radio"] {
   overflow: auto;
   padding: 16px 18px 18px;
   border-radius: 14px;
-  background: radial-gradient(130% 90% at 50% 0%, var(--board-hi) 0%, var(--board) 58%, #18241f 100%);
+  background: radial-gradient(130% 90% at 50% 0%, var(--board-hi) 0%, var(--board) 58%, var(--wq-board-ground) 100%);
   color: var(--chalk);
   box-shadow:
     inset 0 0 0 1px var(--board-edge),
@@ -1368,7 +1325,7 @@ input[type="radio"] {
   font-size: 14px;
 }
 .board :focus-visible {
-  outline-color: var(--amber);
+  outline-color: var(--wq-board-ink);
 }
 .board-head {
   display: flex;
@@ -1377,29 +1334,36 @@ input[type="radio"] {
   gap: 10px;
   padding-block-end: 10px;
   margin-block-end: 10px;
-  border-block-end: 1px dashed #ece8dc33;
+  border-block-end: 1px dashed color-mix(in srgb, var(--chalk) 20%, transparent);
 }
 .board h2 {
   font-family: var(--font-display);
+  font-variation-settings: "HEXP" 60;
   font-size: 21px;
   font-weight: 600;
   color: var(--chalk);
+}
+/* Arabic section and card titles keep their natural width: the canvas widens only page titles in Arabic */
+.sheet h2:is(:lang(ar), :lang(ary)),
+.book-title:is(:lang(ar), :lang(ary)),
+.board h2:is(:lang(ar), :lang(ary)) {
+  font-variation-settings: normal;
 }
 .board .pill {
   border-color: var(--chalk-faint);
   color: var(--chalk-dim);
 }
 .board .pill-running {
-  background: var(--amber);
-  border-color: var(--amber);
-  color: var(--on-amber);
+  background: var(--wq-board-fluo);
+  border-color: var(--wq-board-fluo);
+  color: var(--wq-board-on-fluo);
 }
 .board .pill-done {
-  border-color: #8fd6b088;
+  border-color: color-mix(in srgb, var(--mint) 55%, transparent);
   color: var(--mint);
 }
 .board .pill-error {
-  border-color: #f08c7a88;
+  border-color: color-mix(in srgb, var(--coral) 55%, transparent);
   color: var(--coral);
 }
 .board-idle,
@@ -1472,7 +1436,7 @@ input[type="radio"] {
 .job-chapter {
   font-family: var(--font-mono);
   font-size: 12px;
-  color: var(--amber);
+  color: var(--wq-board-ink);
   margin-inline-end: 8px;
 }
 .job-row-detail {
@@ -1492,13 +1456,13 @@ input[type="radio"] {
   flex: 1;
   block-size: 6px;
   border-radius: 3px;
-  background: #ece8dc22;
+  background: color-mix(in srgb, var(--chalk) 13%, transparent);
   overflow: hidden;
 }
 .bar span {
   display: block;
   block-size: 100%;
-  background: var(--amber);
+  background: var(--wq-board-ink);
   border-radius: 3px;
   transition: inline-size 0.3s ease;
 }
@@ -1507,7 +1471,7 @@ input[type="radio"] {
   inline-size: 8px;
   block-size: 8px;
   border-radius: 50%;
-  background: var(--amber);
+  background: var(--wq-board-fluo);
   animation: pulse 1.2s ease-in-out infinite;
 }
 @keyframes pulse {
@@ -1526,13 +1490,13 @@ input[type="radio"] {
   gap: 6px;
   align-items: center;
   margin-block-start: 10px;
-  color: var(--amber);
+  color: var(--wq-board-ink);
   font-weight: 600;
 }
 .board-log,
 .board-earlier {
   margin-block-start: 12px;
-  border-block-start: 1px dashed #ece8dc33;
+  border-block-start: 1px dashed color-mix(in srgb, var(--chalk) 20%, transparent);
   padding-block-start: 10px;
 }
 .board summary {
@@ -1553,7 +1517,7 @@ input[type="radio"] {
   overflow-wrap: anywhere;
 }
 .log-warn {
-  color: var(--amber);
+  color: var(--wq-board-fluo);
 }
 .log-error {
   color: var(--coral);
@@ -1679,9 +1643,9 @@ input[type="radio"] {
   margin-block-start: 3px;
 }
 .beat-list li.is-sel .beat-n {
-  background: var(--amber);
-  border-color: var(--amber);
-  color: var(--on-amber);
+  background: var(--wq-fluo);
+  border-color: var(--wq-fluo);
+  color: var(--wq-on-fluo);
 }
 .beat-text {
   display: grid;
@@ -1745,7 +1709,7 @@ input[type="radio"] {
 }
 .preview-stale {
   font-size: 13px;
-  color: var(--amber-ink);
+  color: var(--warn);
   margin: 0 0 6px;
 }
 .preview-host {
@@ -1754,7 +1718,7 @@ input[type="radio"] {
   aspect-ratio: 16 / 10;
   border-radius: 12px;
   overflow: hidden;
-  background: #121b18;
+  background: var(--wq-board-ground);
   box-shadow: var(--shadow);
 }
 .inspector .small-title code {
@@ -1763,9 +1727,9 @@ input[type="radio"] {
 }
 .inspector .small-title .beat-n {
   margin: 0;
-  background: var(--amber);
-  border-color: var(--amber);
-  color: var(--on-amber);
+  background: var(--wq-fluo);
+  border-color: var(--wq-fluo);
+  color: var(--wq-on-fluo);
 }
 .marked {
   padding: 10px 14px;
@@ -1783,8 +1747,8 @@ input[type="radio"] {
   padding: 3px 6px;
   margin-inline: 2px;
   border-radius: 5px;
-  background: var(--amber);
-  color: var(--on-amber);
+  background: var(--wq-fluo-tint);
+  color: var(--wq-text);
   vertical-align: 1px;
   unicode-bidi: isolate;
 }
@@ -1900,7 +1864,7 @@ details > summary {
   margin: 4px 0 0;
 }
 .tr-cell.is-missing .tr-problem {
-  color: var(--amber-ink);
+  color: var(--warn);
 }
 
 /* ---------- settings ---------- */
@@ -1936,7 +1900,7 @@ details > summary {
   flex: none;
   inline-size: var(--dot);
   block-size: 10px;
-  background: radial-gradient(circle, var(--paper) 0 3px, var(--amber-rule) 3.5px 5px, transparent 5.5px);
+  background: radial-gradient(circle, var(--paper) 0 3px, var(--wq-margin) 3.5px 5px, transparent 5.5px);
   position: relative;
   z-index: 1;
 }
@@ -2135,8 +2099,16 @@ details > summary {
     gap: 8px;
     padding-inline: 12px;
   }
-  .brand-studio {
+  /* one wordmark on phones, in the interface's script */
+  .brand-studio,
+  :root:not(:lang(ar)) .topbar .brand-ar,
+  :root:lang(ar) .topbar .brand-latin {
     display: none;
+  }
+  :root:lang(ar) .topbar .brand-ar {
+    font-size: 20px;
+    font-weight: 600;
+    color: var(--ink);
   }
   .topnav a {
     padding: 6px 7px;
@@ -2172,9 +2144,7 @@ details > summary {
     overflow-x: auto;
     scroll-snap-type: x mandatory;
     padding-block-end: 4px;
-    background:
-      linear-gradient(var(--amber-rule), var(--amber-rule)) no-repeat 0 14px / 100% 1.5px,
-      linear-gradient(var(--amber-rule), var(--amber-rule)) no-repeat 0 19px / 100% 1.5px;
+    background: linear-gradient(var(--wq-margin), var(--wq-margin)) no-repeat 0 16.5px / 100% 1.5px;
   }
   .stepper li {
     flex: 1 1 0;
@@ -2263,25 +2233,6 @@ details > summary {
   .spinner {
     animation: spin 2.4s linear infinite !important;
   }
-}
-
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) input[type="checkbox"],
-  :root:not([data-theme="light"]) input[type="radio"] {
-    accent-color: var(--amber);
-  }
-  :root:not([data-theme="light"]) .ticks i.on {
-    background: var(--amber);
-    border-color: var(--amber);
-  }
-}
-:root[data-theme="dark"] input[type="checkbox"],
-:root[data-theme="dark"] input[type="radio"] {
-  accent-color: var(--amber);
-}
-:root[data-theme="dark"] .ticks i.on {
-  background: var(--amber);
-  border-color: var(--amber);
 }
 
 /* grid children never grow past their track (long <select> options, code, URLs) */
@@ -2462,7 +2413,7 @@ select {
 .state-stale {
   border-color: transparent;
   background: var(--amber-tint);
-  color: var(--amber-ink);
+  color: var(--warn);
 }
 .state-missing {
   border-color: transparent;
@@ -2587,6 +2538,11 @@ select {
   .topbar {
     gap: 4px;
     padding-inline: 10px;
+  }
+  /* the smallest phones keep the mark alone (the brand link keeps its accessible name) */
+  .topbar .brand-latin,
+  .topbar .brand-ar {
+    display: none;
   }
   .topnav {
     gap: 0;

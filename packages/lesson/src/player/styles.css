@@ -769,9 +769,8 @@
   color: var(--dim);
 }
 .wq-mascot {
-  font-size: 120px;
-  line-height: 1;
-  color: var(--task);
+  line-height: 0;
+  color: var(--chalk);
   animation: wq-hop 1.8s ease-in-out infinite;
 }
 @keyframes wq-hop {
@@ -1151,6 +1150,11 @@
   align-items: center;
   color: #9aaba3;
   font-size: 14px;
+}
+.wq-book-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
 }
 .wq-book-cover h1 {
   margin: 0;

@@ -18,9 +18,25 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   reads scanned pages with the vision model only for the chapter being made (a scanned book's first pages
   before its plan), and keeps what is finished when stopped. Books record it in an optional
   `learn: { level }` field of `warqa.json`.
+- **`@warqa/brand`**, the design system package: colour, type, space and motion tokens (TypeScript, and CSS
+  variables for light and dark), the bundled fonts, the mark and the icons.
 
 ### Changed
 
+- **A new look, first step (redesign phase 1, "Cahier", a Moroccan school notebook).** The studio, the web
+  app and the launcher page now use royal-blue ink on cool paper, a single red margin line (on the right in
+  Arabic), navy in dark mode, and the highlighter yellow on the current step and the selected beat. Screens
+  keep their layout for now.
+  - New logo: a sheet with its top-left corner folded down, showing a yellow underside. It never mirrors.
+    It replaces the ∞ in exported books (the finish card, "Made with Warqa"), the favicons and the app
+    icons. The studio and the web app can be installed (manifest and icons).
+  - Fonts: Readex Pro is now the variable font with its width axis (wide titles), joined by Playpen Sans
+    Arabic (for the teacher's red-pen notes, later) and Geist Mono (numbers, money, times). An exported
+    book's fonts grow from 362 KB to 467 KB.
+  - One set of icons (a 24 grid, a 1.75 stroke); back and next point the other way in Arabic.
+  - Exported books: new icons (including a maskable icon and an Apple touch icon) and the brand's colours
+    in the manifest and `theme-color`. The lesson player itself keeps its chalkboard look until the next
+    phase.
 - Cost estimates no longer ask for a translator model when a book has a single language.
 
 ### Fixed

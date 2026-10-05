@@ -328,7 +328,7 @@ function PlanStep({ p, run, live, reload }: StepProps) {
                   <td>
                     <Button
                       variant="quiet"
-                      icon="x"
+                      icon="close"
                       aria-label={t('plan.removeTerm')}
                       onClick={() => edit((d) => void d.glossary.splice(i, 1))}
                     />
@@ -467,7 +467,7 @@ function MakeStep({ p, status, run, live }: StepProps) {
                     className="btn btn-default"
                     to={`/project/${encodeURIComponent(p.id)}/lesson/${encodeURIComponent(r.id)}`}
                   >
-                    <Icon name="gear" />
+                    <Icon name="settings" />
                     <span>{t('make.edit')}</span>
                   </Link>
                 )}
@@ -605,7 +605,7 @@ function ExportStep({ p, status, run, live }: StepProps) {
             target="_blank"
             rel="noreferrer"
           >
-            <Icon name="external" />
+            <Icon name="open" />
             <span>{t('export.open')}</span>
           </a>
         )}
@@ -1031,7 +1031,7 @@ export function ProjectPage({ id }: { id: string }) {
             </div>
           </dl>
           <Link className="btn btn-default" to={`/project/${encodeURIComponent(id)}/settings`}>
-            <Icon name="gear" />
+            <Icon name="settings" />
             <span>{t('common.settings')}</span>
           </Link>
           {projectActions?.(id)}

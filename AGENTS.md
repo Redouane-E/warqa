@@ -18,6 +18,8 @@ also reads `CLAUDE.md`, which adds its skills and hooks.)
 
 ## Map
 
+- `packages/brand`: the design system: colour, type, space and motion tokens (`src/tokens.ts`, from which
+  the build writes `dist/tokens.css`), the bundled fonts (`dist/fonts.css`), the mark and the icons.
 - `packages/i18n`: player UI catalogs (`src/catalog/{en,fr,ar,ary}.ts`), numbers, Arabic text helpers.
 - `packages/lesson`: the lesson format (Zod), compiler, validators, components (`src/components`), the player
   (`src/player`, browser only) and component packs (`src/packs.ts`). `build.mjs` bundles the player into
@@ -48,12 +50,13 @@ Run one package: `pnpm --filter @warqa/<name> test` (or `npx vitest run <file>` 
 
 ## Gotchas
 
-- **Build order matters.** Packages import each other's `dist`, not `src`. After changing `@warqa/lesson` or
-  `@warqa/i18n`, rebuild them (`npx turbo run build --filter=@warqa/lesson`) before type-checking or testing
-  the pipeline, the apps or e2e. The CLI, the studio and e2e run built code. Player changes need the
+- **Build order matters.** Packages import each other's `dist`, not `src`. After changing `@warqa/brand`,
+  `@warqa/lesson` or `@warqa/i18n`, rebuild them (`npx turbo run build --filter=@warqa/lesson`) before
+  type-checking or testing the pipeline, the apps or e2e. The CLI, the studio and e2e run built code. Player changes need the
   bundle rebuilt (`pnpm --filter @warqa/lesson build`) before an export shows them.
 - **Generated files:** `docs/en/components.md` (from component definitions; CI fails if stale),
-  `packages/lesson/dist/bundle/*`, lockfiles, and books' `cache/`, `dist/`, `qa/`. Edit the source, regenerate.
+  `packages/lesson/dist/bundle/*`, `packages/brand/dist/*` (tokens.css comes from `src/tokens.ts`),
+  lockfiles, and books' `cache/`, `dist/`, `qa/`. Edit the source, regenerate.
 - **Every UI string in every language:** the player catalogs `en`, `fr`, `ar`, `ary` must all have every key
   (a test enforces it); the studio's `messages.ts` has `en`, `fr`, `ar`. Write real Arabic, French and
   Darija, not placeholders.
@@ -103,7 +106,7 @@ Cursor, Gemini CLI, Copilot and others discover them there; Claude Code finds th
 | `ui-strings` | add interface text in every language |
 | `author-lesson` | write or fix a lesson by hand without spending model credits |
 
-Folders with their own rules have a nested `AGENTS.md`: `packages/lesson`, `packages/i18n`,
+Folders with their own rules have a nested `AGENTS.md`: `packages/brand`, `packages/lesson`, `packages/i18n`,
 `packages/pipeline`, `apps`, `workers/py`, `examples`. Read it when you work there.
 
 ## Agent setup in this repository

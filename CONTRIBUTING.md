@@ -69,6 +69,7 @@ Ollama. Tests never need a key: they use a fake model.
 ## Repository map
 
 ```
+packages/brand      the design system: tokens (TypeScript and CSS), bundled fonts, the mark and the icons
 packages/i18n       UI catalogs for the player (ar/ary/fr/en), number parsing, Arabic normalization, bidi helpers
 packages/lesson     lesson format (Zod), compiler, validators, grading, components, and the player
 packages/pipeline   PDF ingest, model layer, prompts, stages, translation memory, maps, math, speech, QA, panels, exports
@@ -219,9 +220,9 @@ Never log keys, never write them into book projects or exports, and keep error m
 You may use Codex, Claude Code, Cursor, Copilot, Gemini CLI or any other assistant. The repository is set up
 for them:
 
-- **`AGENTS.md`** (root and nested in `packages/lesson`, `packages/i18n`, `packages/pipeline`, `apps`,
-  `workers/py` and `examples`) is the guide every agent reads. It covers commands, build order, generated
-  files, languages, right to left, keys and how to check work.
+- **`AGENTS.md`** (root and nested in `packages/brand`, `packages/lesson`, `packages/i18n`,
+  `packages/pipeline`, `apps`, `workers/py` and `examples`) is the guide every agent reads. It covers
+  commands, build order, generated files, languages, right to left, keys and how to check work.
 - **`.agents/skills/`** holds step-by-step procedures in the open Agent Skills format: `verify`,
   `visual-qa`, `review-change`, `add-component`, `ui-strings` and `author-lesson`. They are readable by people
   too.

@@ -10,7 +10,7 @@ import {
 } from 'react';
 import type { StatusInfo } from '../shared/types';
 import { api } from './api';
-import { Icon, Sheet } from './components/ui';
+import { Icon, Mark } from './components/ui';
 import { ExtrasContext, type StudioExtras } from './extras';
 import { getLang, I18nContext, makeI18n, setLang, subscribeLang, UI_LANGS, type UiLang, useI18n } from './i18n';
 import { HomePage } from './pages/Home';
@@ -59,7 +59,10 @@ function TopBar({ theme, onTheme }: { theme: Theme; onTheme: (t: Theme) => void 
         {t('nav.skip')}
       </a>
       <Link to="/" className="brand" aria-label={t('app.name')}>
-        <Sheet />
+        <Mark />
+        <span className="brand-latin" lang="en">
+          Warqa
+        </span>
         <span className="brand-ar" lang="ar">
           ورقة
         </span>
@@ -97,7 +100,7 @@ function TopBar({ theme, onTheme }: { theme: Theme; onTheme: (t: Theme) => void 
           aria-label={t(`theme.${theme}`)}
           title={t(`theme.${theme}`)}
         >
-          <Icon name={theme === 'auto' ? 'auto' : theme === 'light' ? 'sun' : 'moon'} />
+          <Icon name={theme === 'auto' ? 'auto-theme' : theme === 'light' ? 'sheet-theme' : 'board-theme'} />
         </button>
       </div>
     </header>

@@ -14,6 +14,7 @@
   },
   "dependencies": {
     "@hono/node-server": "^2.1.3",
+    "@warqa/brand": "workspace:*",
     "@warqa/i18n": "workspace:*",
     "@warqa/lesson": "workspace:*",
     "@warqa/pipeline": "workspace:*",

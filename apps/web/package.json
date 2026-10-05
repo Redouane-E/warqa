@@ -16,6 +16,7 @@
   },
   "dependencies": {
     "@noble/hashes": "^2.0.1",
+    "@warqa/brand": "workspace:*",
     "@warqa/i18n": "workspace:*",
     "@warqa/lesson": "workspace:*",
     "@warqa/pipeline": "workspace:*",

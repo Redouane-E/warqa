@@ -71,6 +71,9 @@ importers:
       '@hono/node-server':
         specifier: ^2.1.3
         version: 2.1.3(hono@4.13.12)
+      '@warqa/brand':
+        specifier: workspace:*
+        version: link:../../packages/brand
       '@warqa/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
@@ -114,6 +117,9 @@ importers:
       '@noble/hashes':
         specifier: ^2.0.1
         version: 2.4.0
+      '@warqa/brand':
+        specifier: workspace:*
+        version: link:../../packages/brand
       '@warqa/i18n':
         specifier: workspace:*
         version: link:../../packages/i18n
@@ -204,10 +210,34 @@ importers:
         specifier: ^4.23.15
         version: 4.23.15
 
+  packages/brand:
+    devDependencies:
+      '@fontsource-variable/readex-pro':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/geist-mono':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/noto-naskh-arabic':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/playpen-sans-arabic':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@fontsource/stix-two-text':
+        specifier: ^5.3.0
+        version: 5.3.0
+      '@napi-rs/canvas':
+        specifier: ^1.0.10
+        version: 1.0.10
+
   packages/i18n: {}
 
   packages/lesson:
     dependencies:
+      '@warqa/brand':
+        specifier: workspace:*
+        version: link:../brand
       '@warqa/i18n':
         specifier: workspace:*
         version: link:../i18n
@@ -215,15 +245,6 @@ importers:
         specifier: ^4.6.5
         version: 4.6.5
     devDependencies:
-      '@fontsource/noto-naskh-arabic':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/readex-pro':
-        specifier: ^5.3.0
-        version: 5.3.0
-      '@fontsource/stix-two-text':
-        specifier: ^5.3.0
-        version: 5.3.0
       '@types/topojson-client':
         specifier: ^3.1.5
         version: 3.1.5
@@ -278,6 +299,9 @@ importers:
       '@openrouter/ai-sdk-provider':
         specifier: ^3.1.0
         version: 3.1.0(ai@7.0.127(zod@4.6.5))(zod@4.6.5)
+      '@warqa/brand':
+        specifier: workspace:*
+        version: link:../brand
       '@warqa/i18n':
         specifier: workspace:*
         version: link:../i18n
@@ -591,11 +615,17 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@fontsource-variable/readex-pro@5.3.0':
+    resolution: {integrity: sha512-ebrEcz8sjzQk92x6K3WtYzOgEKTIDe5D+iPqef0YYvPdqCfxzVkRgpsog5POX4sWa7e4wccCQ1IhmMuRka2hZg==}
+
+  '@fontsource/geist-mono@5.3.0':
+    resolution: {integrity: sha512-UtJ1BBBCVpMYdIcW7nEB45UAoAw5M53ZXs2t0ciPW+IokuAAIc56M8+kW5tXbRJCTpDw4XTtU7proT6NdQAHTg==}
+
   '@fontsource/noto-naskh-arabic@5.3.0':
     resolution: {integrity: sha512-S/GDgQ6mh/PKo4mz5+eXNYbEarvpI7yh6eCdOz8tTVbeM7+OUiacIEscaYEibr/+egDtGbO2ZB00sjy1bJC1kQ==}
 
-  '@fontsource/readex-pro@5.3.0':
-    resolution: {integrity: sha512-llvAZL81cEA7kgp9AnhgMRUVsZqb2i5njgLN0uQCNa0+jI8jjscZPOVyiqnUUGvzwmCFhsHw2OBQeF4MyygCXA==}
+  '@fontsource/playpen-sans-arabic@5.3.0':
+    resolution: {integrity: sha512-Kw9hWVZF6Y+n8Tu3If6G9LTazieRXIOA+AlwhC1qqUwUdQNddHcaFYa7o0+b2XS/GjCnlJ7QP5yvly2Df1prVQ==}
 
   '@fontsource/stix-two-text@5.3.0':
     resolution: {integrity: sha512-/eVTBPvodwIlsUTImyGjNVG4wqi2SDi6nV0WmE0+ScfbCegC8zMkm6BER8dy8f900xgP1RkNx0HxjbixT/ISOg==}
@@ -1942,9 +1972,13 @@ snapshots:
   '@esbuild/win32-x64@0.28.2':
     optional: true
 
+  '@fontsource-variable/readex-pro@5.3.0': {}
+
+  '@fontsource/geist-mono@5.3.0': {}
+
   '@fontsource/noto-naskh-arabic@5.3.0': {}
 
-  '@fontsource/readex-pro@5.3.0': {}
+  '@fontsource/playpen-sans-arabic@5.3.0': {}
 
   '@fontsource/stix-two-text@5.3.0': {}
 

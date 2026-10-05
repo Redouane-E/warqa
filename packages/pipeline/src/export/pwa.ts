@@ -3,37 +3,28 @@
 import { createHash } from 'node:crypto';
 import { readFileSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { createCanvas } from '@napi-rs/canvas';
+import { createCanvas, Path2D } from '@napi-rs/canvas';
+import { drawAppIcon, THEME_COLOR } from '@warqa/brand';
 import { listFiles } from './site.js';
 
-/** A lemniscate (∞) on the chalkboard green, drawn without fonts. */
-function icon(size: number): Uint8Array | null {
+/** Warqa's app icon (the folded sheet on ink), drawn without fonts; null where no canvas is available. */
+function icon(size: number, maskable = false): Uint8Array | null {
   try {
     const c = createCanvas(size, size);
-    const g = c.getContext('2d');
-    g.fillStyle = '#1d2b27';
-    g.beginPath();
-    g.roundRect(0, 0, size, size, size * 0.18);
-    g.fill();
-    g.strokeStyle = '#f0b45a';
-    g.lineWidth = size * 0.07;
-    g.lineCap = 'round';
-    g.beginPath();
-    const a = size * 0.3;
-    for (let k = 0; k <= 200; k++) {
-      const t = (k / 200) * Math.PI * 2;
-      const d = 1 + Math.sin(t) ** 2;
-      const x = size / 2 + (a * Math.cos(t)) / d;
-      const y = size / 2 + (a * Math.sin(t) * Math.cos(t)) / d;
-      if (k) g.lineTo(x, y);
-      else g.moveTo(x, y);
-    }
-    g.stroke();
+    drawAppIcon(c.getContext('2d'), size, (d) => new Path2D(d), { maskable });
     return new Uint8Array(c.toBuffer('image/png'));
   } catch {
     return null;
   }
 }
+
+/** Icons of an installed book: [file, size, maskable (full bleed, the mark inside the safe circle)]. */
+const ICONS: [string, number, boolean][] = [
+  ['icon-192.png', 192, false],
+  ['icon-512.png', 512, false],
+  ['icon-maskable-512.png', 512, true],
+  ['apple-touch-icon.png', 180, true],
+];
 
 const SW = (version: string, files: string[]) => `// Warqa offline cache (generated)
 const CACHE = 'warqa-${version}';
@@ -70,10 +61,11 @@ export function addPwa(
   out: string,
   book: { title: string; lang: string; dir: 'ltr' | 'rtl'; description?: string },
 ): void {
-  for (const s of [192, 512]) {
-    const png = icon(s);
-    if (png) writeFileSync(join(out, `icon-${s}.png`), png);
-  }
+  const made = ICONS.filter(([file, size, maskable]) => {
+    const png = icon(size, maskable);
+    if (png) writeFileSync(join(out, file), png);
+    return !!png;
+  });
   const manifest = {
     name: book.title,
     short_name: book.title.slice(0, 24),
@@ -83,16 +75,19 @@ export function addPwa(
     start_url: './index.html',
     scope: './',
     display: 'standalone',
-    background_color: '#121b18',
-    theme_color: '#1d2b27',
-    icons: [192, 512].map((s) => ({
-      src: `icon-${s}.png`,
-      sizes: `${s}x${s}`,
-      type: 'image/png',
-      purpose: 'any maskable',
-    })),
+    background_color: THEME_COLOR[0],
+    theme_color: THEME_COLOR[0],
+    icons: made
+      .filter(([file]) => file.startsWith('icon-'))
+      .map(([file, size, maskable]) => ({
+        src: file,
+        sizes: `${size}x${size}`,
+        type: 'image/png',
+        purpose: maskable ? 'maskable' : 'any',
+      })),
   };
   writeFileSync(join(out, 'manifest.webmanifest'), JSON.stringify(manifest, null, 2));
+  const apple = made.some(([file]) => file === 'apple-touch-icon.png');
   const files = listFiles(out).filter((f) => !f.endsWith('.map') && f !== 'sw.js');
   const version = createHash('sha1').update(files.join('|')).update(String(files.length)).digest('hex').slice(0, 10);
   writeFileSync(join(out, 'sw.js'), SW(version, files));
@@ -108,7 +103,7 @@ export function addPwa(
       html
         .replace(
           '</head>',
-          `<link rel="manifest" href="${base}manifest.webmanifest">\n<meta name="theme-color" content="#1d2b27">\n<link rel="apple-touch-icon" href="${base}icon-192.png">\n</head>`,
+          `<link rel="manifest" href="${base}manifest.webmanifest">\n<meta name="theme-color" content="${THEME_COLOR[0]}" media="(prefers-color-scheme: light)">\n<meta name="theme-color" content="${THEME_COLOR[1]}" media="(prefers-color-scheme: dark)">\n${apple ? `<link rel="apple-touch-icon" href="${base}apple-touch-icon.png">\n` : ''}</head>`,
         )
         .replace('</body>', `${REGISTER.replace('{{BASE}}', base)}\n</body>`),
     );

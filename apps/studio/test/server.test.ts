@@ -258,6 +258,25 @@ describe('files', () => {
     expect(await res.text()).toContain('Warqa');
     expect((await app.request('/player/..%2fpackage.json')).status).toBe(403);
   });
+
+  it('serves the icons and the install manifest', async () => {
+    for (const path of ['/favicon.svg', '/favicon.ico']) {
+      const res = await app.request(path);
+      expect(res.headers.get('content-type')).toBe('image/svg+xml');
+      expect(await res.text()).toContain('M20 4L4 20h16z'); // the folded corner
+    }
+    const icon = await app.request('/icons/icon-192.png');
+    expect(icon.status).toBe(200);
+    expect(icon.headers.get('content-type')).toBe('image/png');
+    expect((await app.request('/icons/..%2fpackage.json')).status).toBe(403);
+    expect((await app.request('/icons/nope.png')).status).toBe(404);
+    const manifest = await app.request('/manifest.webmanifest');
+    expect(manifest.headers.get('content-type')).toBe('application/manifest+json');
+    const m = (await manifest.json()) as { start_url: string; theme_color: string; icons: { src: string; purpose: string }[] };
+    expect(m).toMatchObject({ start_url: '/', theme_color: '#F4F6FA' });
+    expect(m.icons.map((i) => i.src)).toContain('/icons/icon-maskable-512.png');
+    for (const i of m.icons) expect((await app.request(i.src)).status, i.src).toBe(200);
+  });
 });
 
 describe('jobs', () => {

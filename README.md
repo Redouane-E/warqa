@@ -128,6 +128,7 @@ Other entry points:
 ## Repository
 
 ```
+packages/brand      the design system: tokens, bundled fonts, the mark and the icons
 packages/i18n       UI catalogs (ar/ary/fr/en), number parsing, Arabic normalization, bidi helpers
 packages/lesson     lesson format (Zod), compiler, validators, grading, components, packs, and the player
 packages/pipeline   PDF ingest, model layer, stages, translation memory, maps, math, speech, QA, panels, exports

@@ -7,6 +7,7 @@ description: Run the checks that matter for the current change in the Warqa mono
 
 1. See what changed: `git status --short` and `git diff --stat` (plus `git diff --stat master...HEAD` on a
    branch). Map files to packages:
+   - `packages/brand/**` → brand, then everything that depends on it (lesson, pipeline, apps, e2e)
    - `packages/i18n/**` → i18n, then everything that depends on it
    - `packages/lesson/**` → lesson, pipeline, apps, e2e
    - `packages/pipeline/**` → pipeline, cli, studio, web, mcp

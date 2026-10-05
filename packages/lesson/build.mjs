@@ -1,5 +1,5 @@
 // Build the standalone player bundle: dist/bundle/{player.js, player.css, fonts/*}.
-import { copyFileSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -8,7 +8,7 @@ import * as esbuild from 'esbuild';
 const here = dirname(fileURLToPath(import.meta.url));
 const out = join(here, 'dist/bundle');
 const require = createRequire(import.meta.url);
-mkdirSync(join(out, 'fonts'), { recursive: true });
+mkdirSync(out, { recursive: true });
 
 await esbuild.build({
   entryPoints: [join(here, 'src/player/boot.ts')],
@@ -23,37 +23,13 @@ await esbuild.build({
   logLevel: 'warning',
 });
 
-// Fonts: only the subsets and weights the player uses, rewritten to local files (works offline and from file://).
-const FONTS = [
-  ['readex-pro', ['arabic', 'latin', 'latin-ext'], [400, 500, 600, 700]],
-  ['stix-two-text', ['latin', 'latin-ext'], [400, 600]],
-  ['noto-naskh-arabic', ['arabic'], [400, 600]],
-];
-let css = '/* Fonts: SIL Open Font License 1.1 (see fonts/OFL.txt) */\n';
-for (const [name, subsets, weights] of FONTS) {
-  const pkg = dirname(require.resolve(`@fontsource/${name}/package.json`));
-  for (const subset of subsets) {
-    for (const w of weights) {
-      let block;
-      try {
-        block = readFileSync(join(pkg, `${subset}-${w}.css`), 'utf8');
-      } catch {
-        continue;
-      }
-      block = block.replace(
-        /url\(\.\/files\/([^)]+?)\.woff2\) format\('woff2'\),\s*url\([^)]+\.woff\) format\('woff'\)/g,
-        (_, f) => {
-          copyFileSync(join(pkg, 'files', `${f}.woff2`), join(out, 'fonts', `${f}.woff2`));
-          return `url(fonts/${f}.woff2) format('woff2')`;
-        },
-      );
-      css += block.replace(/\/\*[\s\S]*?\*\//g, '').trim() + '\n';
-    }
-  }
-  try {
-    copyFileSync(join(pkg, 'LICENSE'), join(out, 'fonts', `${name}-OFL.txt`));
-  } catch {}
-}
+// Fonts come from @warqa/brand (only the subsets and weights its budget allows), as local files next to the
+// player: books work offline and from file://. The folder is emptied first so no older font lingers in exports.
+const brand = join(dirname(require.resolve('@warqa/brand/package.json')), 'dist');
+rmSync(join(out, 'fonts'), { recursive: true, force: true });
+mkdirSync(join(out, 'fonts'), { recursive: true });
+for (const f of readdirSync(join(brand, 'fonts'))) copyFileSync(join(brand, 'fonts', f), join(out, 'fonts', f));
+let css = `${readFileSync(join(brand, 'fonts.css'), 'utf8')}\n`;
 css += readFileSync(join(here, 'src/player/styles.css'), 'utf8');
 const min = await esbuild.transform(css, { loader: 'css', minify: true });
 writeFileSync(join(out, 'player.css'), min.code);

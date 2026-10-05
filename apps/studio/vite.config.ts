@@ -21,6 +21,9 @@ export default defineConfig({
       '/api': { target: api, changeOrigin: false },
       '/player': { target: api },
       '/books': { target: api },
+      '/icons': { target: api },
+      '/favicon.svg': { target: api },
+      '/manifest.webmanifest': { target: api },
     },
   },
 });

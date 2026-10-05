@@ -146,7 +146,7 @@ function Preview({
         </label>
         <Button
           variant="quiet"
-          icon="refresh"
+          icon="regenerate"
           aria-label={t('editor.reload')}
           title={t('editor.reload')}
           onClick={onReload}
@@ -366,7 +366,7 @@ function Regenerate({
       </Field>
       <div className="actions">
         <Button
-          icon="refresh"
+          icon="regenerate"
           busy={!!jobId}
           disabled={disabled}
           onClick={async () => {

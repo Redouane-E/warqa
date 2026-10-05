@@ -1,5 +1,7 @@
 // Warqa in the browser. The studio's server and pipeline run in a Web Worker; the studio's React app runs here,
 // its /api calls answered by that worker. Nothing is sent to a Warqa server (there is none).
+import '@warqa/brand/tokens.css';
+import '@warqa/brand/fonts.css';
 import '../../studio/src/client/styles.css';
 import './ui/web.css';
 import { StrictMode } from 'react';
@@ -11,7 +13,7 @@ import { WEB_CATALOGS } from './ui/messages';
 import { testMode } from './ui/prefs';
 import { WebApp } from './ui/WebApp';
 
-// the player's stylesheet also declares the interface fonts (Readex Pro, Noto Naskh Arabic, STIX Two)
+// the player's stylesheet, for previews and the books opened here (the interface fonts come from @warqa/brand)
 document.head.append(
   Object.assign(document.createElement('link'), { rel: 'stylesheet', href: withBase('/player/player.css') }),
 );

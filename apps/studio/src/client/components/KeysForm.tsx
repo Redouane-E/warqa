@@ -123,7 +123,7 @@ export function KeysForm() {
                 )}
                 {g.docs && (
                   <a className="small" href={g.docs} target="_blank" rel="noreferrer">
-                    {t('settings.getKey')} <Icon name="external" size={13} />
+                    {t('settings.getKey')} <Icon name="open" size={13} />
                   </a>
                 )}
               </div>
@@ -164,7 +164,7 @@ export function KeysForm() {
                     {k.set && k.source === 'studio' && !gone && (
                       <Button
                         variant="quiet"
-                        icon="x"
+                        icon="close"
                         aria-label={t('settings.keyRemove', { name: k.name })}
                         title={t('settings.keyRemove', { name: k.name })}
                         onClick={() => setRemoved((r) => new Set(r).add(k.name))}
@@ -182,7 +182,7 @@ export function KeysForm() {
           {t('settings.keySave')}
         </Button>
         {inBrowser && !!stored.length && (
-          <Button variant="quiet" icon="x" disabled={busy} onClick={() => void forgetAll()}>
+          <Button variant="quiet" icon="close" disabled={busy} onClick={() => void forgetAll()}>
             {t('cap.forget')}
           </Button>
         )}

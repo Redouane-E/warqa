@@ -64,4 +64,7 @@ export function createCanvas(width: number, height: number) {
   });
 }
 
-export default { createCanvas };
+/** The browser's own Path2D (the book icons are drawn from SVG path data). */
+export const Path2D = globalThis.Path2D;
+
+export default { createCanvas, Path2D };

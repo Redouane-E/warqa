@@ -141,7 +141,7 @@ function NewBook({ onCancel }: { onCancel?: () => void }) {
     <form className="sheet new-book" onSubmit={submit} aria-labelledby="new-book-title">
       <div className="sheet-head">
         <h2 id="new-book-title">{t('new.title')}</h2>
-        {onCancel && <Button variant="quiet" icon="x" aria-label={t('common.close')} onClick={onCancel} />}
+        {onCancel && <Button variant="quiet" icon="close" aria-label={t('common.close')} onClick={onCancel} />}
       </div>
       <label
         className={`drop ${drag ? 'is-over' : ''} ${file ? 'has-file' : ''}`}

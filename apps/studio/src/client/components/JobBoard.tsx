@@ -120,7 +120,7 @@ function RowView({ r, live }: { r: Row; live: boolean }) {
         {state === 'done' ? (
           <Icon name="check" size={16} />
         ) : state === 'error' ? (
-          <Icon name="x" size={16} />
+          <Icon name="close" size={16} />
         ) : state === 'skip' ? (
           '·'
         ) : state === 'running' ? (
@@ -248,7 +248,7 @@ export function JobBoard({
       )}
       {status === 'done' && result?.url && (
         <a className="board-link" href={result.url} target="_blank" rel="noreferrer">
-          <Icon name="external" size={16} /> {t('export.open')}
+          <Icon name="open" size={16} /> {t('export.open')}
         </a>
       )}
       {!!lines.length && (

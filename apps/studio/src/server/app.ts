@@ -2,6 +2,7 @@
 import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
+import { faviconSvg, webManifest } from '@warqa/brand';
 import {
   checkStrings,
   collectStrings,
@@ -17,7 +18,7 @@ import {
   validateLesson,
 } from '@warqa/lesson';
 import * as P from '@warqa/pipeline';
-import { Hono } from 'hono';
+import { type Context, Hono } from 'hono';
 import { bodyLimit } from 'hono/body-limit';
 import { streamSSE } from 'hono/streaming';
 import * as z from 'zod';
@@ -94,6 +95,11 @@ function studioVersion(): string {
 function playerDir(): string {
   const pkg = dirname(require.resolve('@warqa/lesson/package.json'));
   return join(pkg, 'dist', 'bundle');
+}
+
+/** The app icons @warqa/brand builds (PNG and SVG). */
+function brandIconsDir(): string {
+  return join(dirname(require.resolve('@warqa/brand/package.json')), 'dist', 'icons');
 }
 
 const isLoopback = (h: string) => ['127.0.0.1', 'localhost', '::1', '[::1]'].includes(h);
@@ -1102,12 +1108,31 @@ export function createApp(opts: AppOptions) {
     return sendFile(c.req.raw, abs);
   });
 
-  // exported books and the studio share this icon: the sheet with its amber fold
-  app.get('/favicon.ico', (c) =>
+  /* ---------- the studio's icons and install manifest (the web app serves its own as static files) ---------- */
+
+  // exported books opened from the studio share the favicon: Warqa's mark
+  const favicon = (c: Context) =>
+    c.body(faviconSvg(), 200, { 'content-type': 'image/svg+xml', 'cache-control': 'public, max-age=86400' });
+  app.get('/favicon.ico', favicon);
+  app.get('/favicon.svg', favicon);
+  app.on(['GET', 'HEAD'], '/icons/*', (c) => {
+    const abs = safeJoin(brandIconsDir(), filePath(c, '/icons/'));
+    if (!abs) throw new ApiError(403, 'this path is not allowed');
+    return sendFile(c.req.raw, abs, { cache: 'public, max-age=86400' });
+  });
+  app.get('/manifest.webmanifest', (c) =>
     c.body(
-      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 26 26"><path d="M5 3.5h11l5 5v14H5z" fill="#1d2b27"/><path d="M16 3.5v5h5" fill="#f0b45a"/></svg>`,
+      JSON.stringify(
+        webManifest({
+          name: 'Warqa studio',
+          shortName: 'Warqa',
+          description: 'Turn a PDF into animated, narrated, interactive lessons.',
+          startUrl: '/',
+          icons: '/icons/',
+        }),
+      ),
       200,
-      { 'content-type': 'image/svg+xml', 'cache-control': 'public, max-age=86400' },
+      { 'content-type': 'application/manifest+json', 'cache-control': 'no-cache' },
     ),
   );
 

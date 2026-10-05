@@ -1,5 +1,5 @@
-/* Web app additions, on the studio's tokens (apps/studio/src/client/styles.css). Logical properties throughout,
-   so the Arabic interface mirrors. */
+/* Web app additions, on the studio's variables (apps/studio/src/client/styles.css), which point at the
+   @warqa/brand tokens. Logical properties throughout, so the Arabic interface mirrors. */
 
 .link-btn {
   appearance: none;
@@ -71,7 +71,7 @@
   margin-block-start: 3px;
 }
 .web-warning-soft {
-  background: color-mix(in srgb, var(--amber) 14%, var(--paper));
+  background: var(--wq-fluo-tint);
 }
 .web-action-error {
   flex-basis: 100%;
@@ -85,7 +85,8 @@
   color: var(--ink);
 }
 .web-dialog::backdrop {
-  background: #0b1210a6;
+  /* a paper veil, not a dark one (the fallback: older browsers give ::backdrop no custom properties) */
+  background: color-mix(in srgb, var(--wq-ground, #f4f6fa) 80%, transparent);
 }
 .web-dialog h2 {
   margin: 0;
@@ -367,11 +368,6 @@
     flex: 1 1 auto;
     justify-content: center;
   }
-}
-
-/* "back" points the way the page reads */
-:root[dir="rtl"] .welcome-actions .icon {
-  transform: scaleX(-1);
 }
 
 /* long badges (French and Arabic prices, "unknown model") wrap on phones instead of widening the page */

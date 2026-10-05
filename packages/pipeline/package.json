@@ -32,6 +32,7 @@
     "@mathjax/src": "^4.1.3",
     "@napi-rs/canvas": "^1.0.10",
     "@openrouter/ai-sdk-provider": "^3.1.0",
+    "@warqa/brand": "workspace:*",
     "@warqa/i18n": "workspace:*",
     "@warqa/lesson": "workspace:*",
     "ai": "^7.0.127",

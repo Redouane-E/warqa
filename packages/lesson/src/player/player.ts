@@ -19,7 +19,7 @@ import { narrationText, spokenText, wordAt } from '../core/timing.js';
 import type { Segment } from '../core/types.js';
 import { key as segKey } from '../core/types.js';
 import { type Lesson, type LessonInput, parseLesson, type Strings, type Timings } from '../schema/lesson.js';
-import { h, svg } from './dom.js';
+import { h, markIcon, svg } from './dom.js';
 import { type PanelConfig, RatingPanel } from './panel.js';
 import { type CardController, openCard, type Score } from './quiz.js';
 import { type CardPlace, SceneRenderer } from './scene.js';
@@ -823,7 +823,7 @@ export class Player {
     const card = h(
       'section',
       { class: 'wq-card wq-card-screen wq-finish', role: 'region', 'aria-label': t('finish.titleNoChapter') },
-      h('div', { class: 'wq-mascot', 'aria-hidden': 'true' }, '∞'),
+      h('div', { class: 'wq-mascot', 'aria-hidden': 'true' }, markIcon(120)),
       h('h2', {}, lesson.number !== undefined ? t('finish.title', { n: lesson.number }) : t('finish.titleNoChapter')),
       h('p', { class: 'wq-finish-sub' }, lesson.title),
       total

@@ -51,7 +51,7 @@ function PrivacyDialog({ open, onClose }: { open: boolean; onClose: () => void }
     <dialog ref={ref} className="web-dialog sheet" aria-labelledby="privacy-title" onClose={onClose}>
       <div className="sheet-head">
         <h2 id="privacy-title">{w('privacy.title')}</h2>
-        <Button variant="quiet" icon="x" aria-label={t('common.close')} onClick={onClose} />
+        <Button variant="quiet" icon="close" aria-label={t('common.close')} onClick={onClose} />
       </div>
       <p>{w('privacy.p1')}</p>
       <p>{w('privacy.p2')}</p>
@@ -60,7 +60,7 @@ function PrivacyDialog({ open, onClose }: { open: boolean; onClose: () => void }
       {done && <Notice tone="good">{done}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="actions">
-        <Button variant="danger" icon="x" busy={busy} onClick={() => void wipe()}>
+        <Button variant="danger" icon="close" busy={busy} onClick={() => void wipe()}>
           {w('privacy.wipe')}
         </Button>
         {done && (
@@ -106,7 +106,7 @@ export function Banner({ bridge, serviceWorker }: { bridge: Bridge; serviceWorke
           </button>
           {__WARQA_REPO__ && (
             <a href={`${__WARQA_REPO__}#readme`} target="_blank" rel="noreferrer">
-              {w('banner.desktop')} <Icon name="external" size={13} />
+              {w('banner.desktop')} <Icon name="open" size={13} />
             </a>
           )}
         </span>
@@ -231,7 +231,7 @@ export function ProjectActions({ id }: { id: string }) {
       </Button>
       <Button
         variant="quiet"
-        icon="x"
+        icon="close"
         busy={busy === 'delete'}
         disabled={!!busy}
         title={w('project.deleteHint')}

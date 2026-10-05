@@ -16,10 +16,8 @@ const font = (f) => `data:font/woff2;base64,${readFileSync(join(fonts, f)).toStr
 const svg = (f) => `data:image/svg+xml;base64,${readFileSync(join(root, 'examples/fox.warqa/assets', f)).toString('base64')}`;
 
 const css = `
-@font-face { font-family: 'Readex'; font-weight: 400; src: url('${font('readex-pro-arabic-400-normal.woff2')}') format('woff2'); }
-@font-face { font-family: 'Readex'; font-weight: 700; src: url('${font('readex-pro-arabic-700-normal.woff2')}') format('woff2'); }
-@font-face { font-family: 'ReadexL'; font-weight: 400; src: url('${font('readex-pro-latin-400-normal.woff2')}') format('woff2'); }
-@font-face { font-family: 'ReadexL'; font-weight: 700; src: url('${font('readex-pro-latin-700-normal.woff2')}') format('woff2'); }
+@font-face { font-family: 'Readex'; font-weight: 160 700; src: url('${font('readex-pro-arabic-full-normal.woff2')}') format('woff2'); }
+@font-face { font-family: 'ReadexL'; font-weight: 160 700; src: url('${font('readex-pro-latin-full-normal.woff2')}') format('woff2'); }
 @font-face { font-family: 'Stix'; font-weight: 400; src: url('${font('stix-two-text-latin-400-normal.woff2')}') format('woff2'); }
 @font-face { font-family: 'Stix'; font-weight: 700; src: url('${font('stix-two-text-latin-600-normal.woff2')}') format('woff2'); }
 @page { size: A4; margin: 20mm 18mm; }

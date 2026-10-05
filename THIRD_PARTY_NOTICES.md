@@ -35,7 +35,9 @@ SOFTWARE.
 
 ## Fonts — SIL Open Font License 1.1
 
-Readex Pro, Noto Naskh Arabic and STIX Two Text are bundled from the `@fontsource/*` packages.
+Readex Pro (variable, with its HEXP width axis), Playpen Sans Arabic, Geist Mono, Noto Naskh Arabic and STIX
+Two Text are bundled from the `@fontsource/*` and `@fontsource-variable/*` packages by `packages/brand`; each
+font's licence is copied next to it (`fonts/*-OFL.txt` in the player bundle and in every exported book).
 
 ## MathJax — Apache License 2.0
 
