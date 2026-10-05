@@ -11,7 +11,7 @@ import { BudgetError, extractJson, type FakeModel, Llm } from '../models/llm.js'
 import { Project } from '../project/index.js';
 import { improveLesson } from '../qa/judge.js';
 import type { TtsProvider } from '../tts/types.js';
-import { buildChapter, ensurePlan, estimateBuild, type ProgressEvent } from './build.js';
+import { buildChapter, ensurePlan, estimateBuild, estimateChapters, type ProgressEvent } from './build.js';
 import { adjustLevel, documentLang, estimateLearn, learnFromPdf, readTextLayer, startLearning } from './learn.js';
 import { liteToBeat } from './write.js';
 
@@ -360,6 +360,8 @@ describe('learning on your own (the one go)', () => {
     expect(project.book.sourceLang).toBe('fr');
     const est = estimateLearn(project);
     expect(est).toMatchObject({ pages: 4, visionPages: 0, limit: 1, spent: 0 });
+    // before a plan there are no chapters to price, only the plan
+    expect(estimateChapters(project)).toMatchObject({ chapters: {}, spread: 2.2 });
     expect(est.usd.p50).toBeGreaterThan(0);
     expect(est.seconds).toBeGreaterThan(60);
 
@@ -394,6 +396,11 @@ describe('learning on your own (the one go)', () => {
 
     // the estimate and the run agree on the chapter: the next one not made yet
     expect(estimateLearn(project).chapter).toBe('ch02');
+    // each chapter of the plan has its own cost, so the plan screen adds up the ticked ones
+    const each = estimateChapters(project);
+    expect(Object.keys(each.chapters).length).toBeGreaterThan(1);
+    expect(Object.values(each.chapters).every((usd) => usd > 0)).toBe(true);
+    expect(each.plan).toBeGreaterThan(0);
     expect(adjustLevel(project, 'too-easy')).toBe('some');
     const next = recording(project);
     expect((await learnFromPdf(project, { llm: next.llm })).chapter).toBe('ch02');

@@ -193,12 +193,21 @@ export interface BookPlan {
   conventions: { notation: string; colors: string; tone: string };
 }
 
+export type ReadMethod = 'text' | 'ocr-vision' | 'ocr-worker' | 'none';
+
 export interface DocSummary {
   pages: number;
   lang: string;
   blocks: number;
   title?: string;
   methods: Record<string, number>;
+  /** Each page read and how (pages not listed were not read: a page range, or a learner's later chapters).
+   *  quality "ocr": the text layer was broken (Arabic), so the page was read again from its image. */
+  read: { n: number; method: ReadMethod; quality?: string }[];
+  /** The languages of a good share of the pages read, the main one first. */
+  langs: string[];
+  /** When the PDF was last read (ms). */
+  readAt?: number;
   sections: { id: string; title: string; start: number; end: number; unit?: string }[];
 }
 
@@ -257,6 +266,10 @@ export interface ProjectSummary {
 
 export interface ProjectDetail extends ProjectSummary {
   book: BookInfo;
+  /** The PDF's size in bytes. */
+  pdfBytes?: number;
+  /** When plan.json last changed (ms): "Drafted 3 minutes ago". */
+  planUpdated?: number;
   config: ProjectConfig;
   plan: BookPlan | null;
   lessons: LessonSummary[];
@@ -309,6 +322,14 @@ export interface EstimateInfo {
   p90: number;
   lines: string[];
   error?: string;
+  /** Drafting the plan (once there is a document). */
+  plan?: number;
+  /** Making each chapter of the plan (ticked or not), so the plan screen adds up the ticked ones live. */
+  chapters?: Record<string, number>;
+  /** The high end of a range is `spread` times the estimate. */
+  spread?: number;
+  /** Reading one page from its image with the vision model (absent: no vision model). */
+  visionPage?: number;
 }
 
 /** The learner's summary ("About 3 minutes · about $0.03 · your limit $1.00"): GET estimate?learn=1. */

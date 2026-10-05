@@ -94,28 +94,46 @@ export const RUNNERS: Record<JobType, Runner> = {
       ctx.log('no vision model configured: scanned pages will be skipped (add a key in Settings)', 'warn');
     }
     const a = ctx.args;
-    const pages =
-      typeof a.pages === 'string' && /^\d+-\d+$/.test(a.pages)
-        ? (a.pages.split('-').map(Number) as [number, number])
-        : undefined;
+    // "3-8, 31-38": only these pages are read again; the pages read before stay
+    let doc = typeof a.pages === 'string' && a.pages.trim() ? P.loadDocument(p) : undefined;
+    // ranges past the PDF's last page (when known) are cut there; one that starts past it is an error from ingest
+    const ranges = (typeof a.pages === 'string' && a.pages.trim() ? P.parsePageRanges(a.pages) : [])
+      .map(([from, to]): [number, number] => [from, doc ? Math.min(to, doc.source.pages) : to])
+      .filter(([from, to]) => from <= to || !doc);
+    if (doc && typeof a.pages === 'string' && a.pages.trim() && !ranges.length)
+      throw new Error(`This PDF has ${doc.source.pages} pages: those pages are past the end.`);
+    const total = ranges.reduce((n, [from, to]) => n + to - from + 1, 0);
+    let before = 0;
     ctx.progress({ stage: 'read', status: 'start', detail: pdf.split('/').pop() ?? '' });
-    const doc = await P.ingestPdf(pdf, {
-      ocr: a.ocr === 'never' || a.ocr === 'always' ? a.ocr : 'auto',
-      ...(vision ? { vision } : {}),
-      ...(p.config.worker ? { worker: p.config.worker } : {}),
-      ...(pages ? { pages } : {}),
-      ...(typeof a.level === 'number' ? { level: a.level } : {}),
-      onProgress: (e) => {
-        ctx.progress({
-          stage: 'read',
-          status: 'beat',
-          detail: `page ${e.page} · ${e.method}`,
-          index: e.page - 1,
-          total: e.total,
-        });
-        if (e.error) ctx.log(`page ${e.page}: ${e.error}`, 'warn');
-      },
-    });
+    for (const range of ranges.length ? ranges : [undefined]) {
+      const part = await P.ingestPdf(pdf, {
+        ocr: a.ocr === 'never' || a.ocr === 'always' ? a.ocr : 'auto',
+        ...(vision ? { vision } : {}),
+        ...(p.config.worker ? { worker: p.config.worker } : {}),
+        ...(range ? { pages: range } : {}),
+        ...(typeof a.level === 'number' ? { level: a.level } : {}),
+        ...(doc ? { lang: doc.lang } : {}),
+        onProgress: (e) => {
+          // counted across every range (page 31 of "31-38" is 1 of 8)
+          ctx.progress({
+            stage: 'read',
+            status: 'beat',
+            detail: `page ${e.page} · ${e.method}`,
+            index: before + (range ? e.page - range[0] : e.page - 1),
+            // one range: what ingest really reads (cut at the PDF's end); several: their sum
+            total: ranges.length > 1 ? total : e.total,
+          });
+          if (e.error) ctx.log(`page ${e.page}: ${e.error}`, 'warn');
+        },
+      });
+      // the same PDF: merge what was read again; another PDF in source/ (its fingerprint differs): start afresh
+      doc =
+        doc && doc.source.sha1 === part.source.sha1
+          ? P.mergeRead(doc, part, typeof a.level === 'number' ? { level: a.level } : {})
+          : part;
+      if (range) before += range[1] - range[0] + 1;
+    }
+    if (!doc) throw new Error('Nothing was read.');
     p.writeJson('source/document.json', doc);
     const s = docSummary(p);
     ctx.progress({

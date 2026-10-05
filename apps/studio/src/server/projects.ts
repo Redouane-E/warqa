@@ -167,6 +167,9 @@ export function docSummary(p: P.Project): DocSummary | null {
     blocks: doc.blocks.length,
     ...(doc.source.title ? { title: doc.source.title } : {}),
     methods,
+    read: doc.pages.map((pg) => ({ n: pg.n, method: pg.method, ...(pg.quality ? { quality: pg.quality } : {}) })),
+    langs: mainLangs(doc),
+    readAt: mtime(p.path('source', 'document.json')),
     sections: doc.sections.map((s) => ({
       id: s.id,
       title: s.title,
@@ -175,6 +178,18 @@ export function docSummary(p: P.Project): DocSummary | null {
       ...(s.unit ? { unit: s.unit } : {}),
     })),
   };
+}
+
+/** The languages of at least 15 % of the pages read, the commonest first (the document's main one leads). */
+function mainLangs(doc: P.SourceDocument): string[] {
+  const count = new Map<string, number>();
+  for (const pg of doc.pages) if (pg.lang) count.set(pg.lang, (count.get(pg.lang) ?? 0) + 1);
+  const read = doc.pages.length || 1;
+  const langs = [...count.entries()]
+    .filter(([, n]) => n / read >= 0.15)
+    .sort((a, b) => b[1] - a[1])
+    .map(([l]) => l);
+  return [doc.lang, ...langs.filter((l) => l !== doc.lang)];
 }
 
 /** Languages a lesson is available in (author language + translated). */
@@ -350,8 +365,17 @@ export function projectDetail(id: string, p: P.Project, jobs: ProjectDetail['job
     }
   }
   const pdf = p.sourcePdf();
+  let pdfBytes: number | undefined;
+  try {
+    pdfBytes = pdf ? statSync(pdf).size : undefined;
+  } catch {
+    pdfBytes = undefined;
+  }
+  const planUpdated = existsSync(p.path('plan.json')) ? mtime(p.path('plan.json')) : undefined;
   return {
     ...s,
+    ...(pdfBytes !== undefined ? { pdfBytes } : {}),
+    ...(planUpdated ? { planUpdated } : {}),
     book: {
       id: p.book.id,
       title: p.book.title,

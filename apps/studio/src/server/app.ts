@@ -539,7 +539,7 @@ export function createApp(opts: AppOptions) {
       }
     }
     try {
-      return c.json(P.estimateBuild(p));
+      return c.json({ ...P.estimateBuild(p), ...P.estimateChapters(p) });
     } catch (e) {
       return c.json({ p50: 0, p90: 0, lines: [], error: (e as Error).message });
     }

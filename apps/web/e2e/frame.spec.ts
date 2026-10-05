@@ -12,7 +12,7 @@ async function exampleBook(page: Page) {
 test('Go to finds a step without starting any work, and the book page follows it', async ({ page }) => {
   await exampleBook(page);
   await page.goto('project/integers?step=make');
-  await expect(page.locator('.step-panel h2')).toContainText('Make lessons');
+  await expect(page.locator('.station[aria-current="step"]')).toContainText('Make lessons');
 
   await page.keyboard.press('ControlOrMeta+k');
   const goto = page.getByRole('dialog', { name: 'Go to a book, a step or an action' });
@@ -28,10 +28,10 @@ test('Go to finds a step without starting any work, and the book page follows it
   await page.keyboard.press('Enter');
   await expect(goto).toBeHidden();
   await expect(page).toHaveURL(/step=plan/);
-  await expect(page.locator('.step-panel h2')).toContainText('Plan');
+  await expect(page.locator('.station[aria-current="step"]')).toContainText('Plan');
   // the browser's Back shows the step again
   await page.goBack();
-  await expect(page.locator('.step-panel h2')).toContainText('Make lessons');
+  await expect(page.locator('.station[aria-current="step"]')).toContainText('Make lessons');
 });
 
 test('Esc closes the tool on top, one at a time, and never leaves the place', async ({ page }) => {

@@ -24,7 +24,7 @@ Warqa serves **three audiences**:
   - [x] 4a1 the `learn` job and `warqa learn` (backend for self-learners)
   - [x] 4a2 first visit (I teach / I'm learning for myself), the learner path, What I'm learning, Your
     books, docs
-  - [ ] 4b Read, Plan
+  - [x] 4b Read, Plan
   - [ ] 4c Make and the tray
   - [ ] 4d lesson editor: [ ] 4d1 layout and Preview · [ ] 4d2 structured inspector · [ ] 4d3 marks and cue
     threads
@@ -811,6 +811,15 @@ session. Order and what each builds on:
 | 2026-10-05 | API: `POST /api/projects/:id/learn/feedback` (too-easy, right, too-hard → `adjustLevel`); book summaries add `learn`, `made` (the chapters made, in plan order), `spent` and `source` (the PDF's pages and language) | default |
 | 2026-10-05 | What I'm learning: a Continue card (the latest course, its last chapter made), the courses (chapter track, the first chapters, Make the next chapter with its cost, Open as a teacher), Learn something new, and an empty state. Left out for now: the My notebook card (backlog) and "step 4 of 13" (the player keeps progress per browser) | default |
 | 2026-10-05 | Your books (Books board): a count, search and sort (last changed, title, spent) from four books on, New book in a side sheet and a dashed new-book tile that takes a dropped PDF; a learner's course shows "learning on my own" and the page links to What I'm learning | default |
+| 2026-10-05 | Read and Plan (4b) are their own cards with their own titles, as on the boards (no "① Read the PDF" panel title); the other steps keep the old panel until their phase | default |
+| 2026-10-05 | The page strip uses the Read board's colours (text layer white with ink lines, vision model highlighter yellow, OCR worker violet, no text dashed in the margin red) and ProtoFirstRun's "not read yet" and current-page ring; tiles are not buttons. While reading, the tiles fill in from the read job's progress, which now counts across the pages asked for (page 31 of "31-38" is 1 of 8, no longer 31/8) | default |
+| 2026-10-05 | Read again takes several ranges ("3-8, 31-38", one page, Arabic-Indic digits; one parser, `parsePageRanges` in `@warqa/i18n`, checked in the page and on the server) and keeps the pages read before (`mergeRead`): pages read again keep the book's chapters as they were (headings judged on a few pages alone are sized differently); new pages make Warqa look for chapters again. Ranges are cut at the PDF's end, one that starts past it is refused, and another PDF in `source/` starts afresh. Scanned or broken pages: Automatic, Never, Always. The note beside Read again says the cost: free with Never or without a vision model, else the vision model's price per page (all pages asked for with Always); a page read alone takes the book's language in its vision prompt, so the cache serves it | default |
+| 2026-10-05 | Read facts: pages, main languages (those of at least 15 % of the pages read), chapters found, and pages repaired (a broken Arabic text layer read again from the image; shown only when there are some). The chapters table shows the plan's titles only once there is a plan; pages outside every chapter get a generic note | default |
+| 2026-10-05 | Estimates: the book estimate adds the plan's cost and each plan chapter's cost (`estimateChapters`, from that chapter's own pages; the high end is `spread` × the estimate). The plan's bar adds up the ticked chapters not made yet as you tick, before any save; "Draft again" says the plan's cost in its dialog | default |
+| 2026-10-05 | The plan reads as a table of contents: consecutive chapters of the same unit under one heading (else the plan's title) with counts and minutes; a row is the tick, its number in the plan ("01"), the title to edit in place, the objectives (edited behind "Edit the objectives", at most 6), pages, minutes (2–30) and cost. A row changed since the last save is highlighted with one line saying what changed; an unticked row is struck through with "Skipped. Tick it…". Reordering and merging are not drawn, so not built | default |
+| 2026-10-05 | Glossary columns: the PDF's language first, each headed in its own name; removing a row names the term; a new row takes the focus | default |
+| 2026-10-05 | Approving shows "Plan approved" with Undo (the server's plan back to a draft; a toast with an action stays 12 s) and then the approved plan read only (its chapters, the ones left out, "Edit the plan"); the focus goes to the plan's title. Editing an approved plan keeps it approved. Saving reloads the book (the change marks clear); a reload of the same plan keeps unsaved edits, and leaving the Plan step with unsaved edits asks first | default |
+| 2026-10-05 | The rail shows each step's facts after its state: "48 p." read, "Draft" or "6 ch." planned. Left for later: the hatched estimate on the book head's spend bar | default |
 
 ## Session prompts
 

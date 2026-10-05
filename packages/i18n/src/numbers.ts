@@ -146,3 +146,31 @@ export function formatNumber(v: number, lang: string, opts: FormatOptions = {}):
 
 /** "−3" style display for plain author strings: turn ASCII hyphen-minus before a digit into U+2212. */
 export const prettyMinus = (s: string): string => s.replace(/(^|[\s(=+×÷*/[{,<>≤≥])-(?=[\d.(a-zA-Z])/g, '$1−');
+
+/**
+ * Page ranges as people type them: "1-20", "3-8, 31-38", "12", "٣-٨" (Arabic-Indic digits), "3 - 8". Ranges are
+ * sorted and merged; an empty string means none (the whole book). Throws on anything else, or on page 0.
+ */
+export function parsePageRanges(text: string): [number, number][] {
+  const parts = normalizeDigits(text)
+    .replace(/\s*[-–]\s*/g, '-')
+    .split(/[,،;\s]+/)
+    .filter(Boolean);
+  const out: [number, number][] = [];
+  for (const part of parts) {
+    const m = /^(\d+)(?:-(\d+))?$/.exec(part);
+    if (!m) throw new Error(`"${part}" is not a page or a range like 3-8`);
+    const a = Number(m[1]);
+    const b = m[2] ? Number(m[2]) : a;
+    if (a < 1 || b < a || b > 1e6) throw new Error(`"${part}" is not a page range`);
+    out.push([a, b]);
+  }
+  out.sort((x, y) => x[0] - y[0]);
+  const merged: [number, number][] = [];
+  for (const r of out) {
+    const last = merged.at(-1);
+    if (last && r[0] <= last[1] + 1) last[1] = Math.max(last[1], r[1]);
+    else merged.push([r[0], r[1]]);
+  }
+  return merged;
+}

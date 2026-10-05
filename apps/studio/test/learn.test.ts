@@ -222,6 +222,74 @@ describe('learning on your own', () => {
     expect(book.learn).toEqual({ level: 'beginner' });
   });
 
+  it('reads again only some pages, keeping the others, and prices each chapter of the plan', async () => {
+    const file = join(root, 'mine.warqa', 'source', 'document.json');
+    const before = JSON.parse(readFileSync(file, 'utf8')) as { pages: { n: number }[] };
+    const res = await app.request('/api/projects/mine/jobs', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ type: 'ingest', args: { pages: '2', ocr: 'never' } }),
+    });
+    expect(res.status).toBe(202);
+    const { jobId } = (await res.json()) as { jobId: string };
+    await jobs.idle('mine');
+    const { job, events } = (await (await app.request(`/api/jobs/${jobId}`)).json()) as {
+      job: { status: string; error?: string };
+      events: { kind: string; stage?: string; status?: string; index?: number; total?: number }[];
+    };
+    expect(job.error).toBeUndefined();
+    expect(job.status).toBe('done');
+    // progress counts the pages asked for: page 2 is 1 of 1
+    const beats = events.filter((e) => e.stage === 'read' && e.status === 'beat');
+    expect(beats.map((e) => [e.index, e.total])).toEqual([[0, 1]]);
+    const after = JSON.parse(readFileSync(file, 'utf8')) as { pages: { n: number }[] };
+    expect(after.pages.map((pg) => pg.n)).toEqual(before.pages.map((pg) => pg.n));
+
+    // two ranges: the progress goes on from one to the next; a range past the end is refused
+    const read = async (pages: string) => {
+      const r = await app.request('/api/projects/mine/jobs', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ type: 'ingest', args: { pages, ocr: 'never' } }),
+      });
+      const { jobId: id } = (await r.json()) as { jobId: string };
+      await jobs.idle('mine');
+      return (await (await app.request(`/api/jobs/${id}`)).json()) as {
+        job: { status: string; error?: string };
+        events: { stage?: string; status?: string; index?: number; total?: number }[];
+      };
+    };
+    const two = await read('1, 3');
+    expect(two.job.status).toBe('done');
+    expect(two.events.filter((e) => e.stage === 'read' && e.status === 'beat').map((e) => [e.index, e.total])).toEqual([
+      [0, 2],
+      [1, 2],
+    ]);
+    const past = await read('50-60');
+    expect(past.job.status).toBe('error');
+    expect(past.job.error).toMatch(/past the end/);
+
+    const detail = (await (await app.request('/api/projects/mine')).json()) as {
+      document: { read: { n: number }[]; langs: string[]; lang: string; readAt: number };
+      pdfBytes: number;
+      planUpdated: number;
+    };
+    expect(detail.document.read).toHaveLength(before.pages.length);
+    expect(detail.document.langs[0]).toBe(detail.document.lang);
+    expect(detail.document.readAt).toBeGreaterThan(0);
+    expect(detail.pdfBytes).toBeGreaterThan(1000);
+    expect(detail.planUpdated).toBeGreaterThan(0);
+
+    const est = (await (await app.request('/api/projects/mine/estimate')).json()) as {
+      plan: number;
+      chapters: Record<string, number>;
+      spread: number;
+    };
+    expect(est.chapters.ch01).toBeGreaterThan(0);
+    expect(est.plan).toBeGreaterThan(0);
+    expect(est.spread).toBeGreaterThan(1);
+  });
+
   it('makes the lesson without a voice where the voice cannot run (Edge voices in the web app)', async () => {
     const p = new P.Project(join(root, 'mine.warqa'));
     p.config.tts.provider = 'edge';

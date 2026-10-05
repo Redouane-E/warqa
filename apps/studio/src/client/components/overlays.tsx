@@ -93,7 +93,8 @@ function ToastView({ toast, onGone }: { toast: ToastOptions & { id: number }; on
   const [hold, setHold] = useState(false);
   useEffect(() => {
     if (hold) return;
-    const timer = setTimeout(onGone, toast.ms ?? 5000);
+    // a toast with an action (Undo, Open) stays longer: time to reach it from the keyboard
+    const timer = setTimeout(onGone, toast.ms ?? (toast.action ? 12000 : 5000));
     return () => clearTimeout(timer);
   }, [hold, toast, onGone]);
   return (

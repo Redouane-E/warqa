@@ -30,6 +30,11 @@ export async function go(to: string, opts: { replace?: boolean; keepScroll?: boo
   return true;
 }
 
+/** Ask the screen with unsaved work, if any, before closing a part of it without leaving its address. */
+export async function confirmLeave(): Promise<boolean> {
+  return leaveGuard ? leaveGuard() : true;
+}
+
 /** While `active`, leaving this screen through the studio (links, strips, Alt+↑, Go to) calls `ask` first. */
 export function useLeaveGuard(active: boolean, ask: () => Promise<boolean>): void {
   const ref = useRef(ask);

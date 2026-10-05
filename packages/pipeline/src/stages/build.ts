@@ -189,18 +189,10 @@ export function estimateBuild(
     opts.charsPerChapter ??
     (doc ? Math.round(doc.blocks.reduce((a, b) => a + b.text.length, 0) / Math.max(1, chapters)) : 20000);
   const langs = opts.langs ?? project.book.langs.length;
-  const tok = (c: number) => c / 3.5;
-  const role = (r: Parameters<typeof resolveRole>[0]) => resolveRole(r, project.config);
-  const beats = 14;
-  const writerIn = 9000 + tok(Math.min(chars, 16000));
   const rows: [string, string, number, number][] = [
-    ['plan', role('planner'), 20000, 4000],
-    ['storyboard', role('storyboard'), (4000 + tok(Math.min(chars, 60000))) * chapters, 3500 * chapters],
-    ['write', role('writer'), writerIn * beats * 1.4 * chapters, 1600 * beats * 1.4 * chapters],
+    ['plan', resolveRole('planner', project.config), 20000, 4000],
+    ...chapterRows(project, chapters, chars, langs),
   ];
-  // a one-language book (a learner's book) needs no translator model
-  if (langs > 1)
-    rows.push(['translate', role('translator'), 9000 * (langs - 1) * chapters, 7000 * (langs - 1) * chapters]);
   let total = 0;
   const lines = rows.map(([stage, model, i, o]) => {
     const usd = costOf(model, i, o);
@@ -209,6 +201,69 @@ export function estimateBuild(
   });
   lines.push(`narration  ${project.config.tts.provider} ~${Math.round((6000 * langs * chapters) / 1000)}k characters`);
   return { p50: total, p90: total * 2.2, lines };
+}
+
+/** The model calls of making `chapters` chapters of about `chars` characters each: storyboard, beats, translation. */
+function chapterRows(
+  project: Project,
+  chapters: number,
+  chars: number,
+  langs: number,
+): [string, string, number, number][] {
+  const tok = (c: number) => c / 3.5;
+  const role = (r: Parameters<typeof resolveRole>[0]) => resolveRole(r, project.config);
+  const beats = 14;
+  const writerIn = 9000 + tok(Math.min(chars, 16000));
+  const rows: [string, string, number, number][] = [
+    ['storyboard', role('storyboard'), (4000 + tok(Math.min(chars, 60000))) * chapters, 3500 * chapters],
+    ['write', role('writer'), writerIn * beats * 1.4 * chapters, 1600 * beats * 1.4 * chapters],
+  ];
+  // a one-language book (a learner's book) needs no translator model
+  if (langs > 1)
+    rows.push(['translate', role('translator'), 9000 * (langs - 1) * chapters, 7000 * (langs - 1) * chapters]);
+  return rows;
+}
+
+/**
+ * What drafting the plan costs, and what making each chapter of the plan costs (storyboard, beats, translation;
+ * from the text of its own pages, and the book's average for pages not read yet), so the plan screen can add up
+ * the ticked chapters as they change. The high end of a range is `spread` times the estimate.
+ */
+export function estimateChapters(project: Project): {
+  plan: number;
+  chapters: Record<string, number>;
+  spread: number;
+  visionPage?: number;
+} {
+  const doc = loadDocument(project);
+  const plan = loadPlan(project);
+  const langs = project.book.langs.length;
+  const perPage = new Map<number, number>();
+  for (const b of doc?.blocks ?? []) perPage.set(b.page, (perPage.get(b.page) ?? 0) + b.text.length);
+  const read = new Set(doc?.pages.map((p) => p.n) ?? []);
+  const average = read.size ? [...perPage.values()].reduce((a, n) => a + n, 0) / read.size : 2500;
+  const chapters: Record<string, number> = {};
+  for (const c of plan?.chapters ?? []) {
+    let chars = 0;
+    for (let n = c.pages[0]; n <= c.pages[1]; n++) chars += read.has(n) ? (perPage.get(n) ?? 0) : average;
+    chapters[c.id] = chapterRows(project, 1, Math.max(chars, 2000), langs).reduce(
+      (a, [, m, i, o]) => a + costOf(m, i, o),
+      0,
+    );
+  }
+  // a page read from its image: about 1,500 tokens in, 600 out (no vision model: nothing is read, nothing paid)
+  let visionPage: number | undefined;
+  try {
+    visionPage = costOf(resolveRole('vision', project.config), 1500, 600);
+  } catch {
+    visionPage = undefined;
+  }
+  return {
+    plan: costOf(resolveRole('planner', project.config), 20000, 4000),
+    chapters,
+    spread: 2.2,
+    ...(visionPage !== undefined ? { visionPage } : {}),
+  };
 }
 
 export const lessonDir = (project: Project, id: string) => join(project.root, 'lessons', id);

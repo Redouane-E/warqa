@@ -47,6 +47,8 @@ export interface IngestOptions {
   /** Name stored as source.file when `file` is bytes (default "document.pdf"). */
   name?: string;
   onProgress?: (e: { page: number; total: number; method: PageInfo['method']; error?: string }) => void;
+  /** The book's language, for the pages of a range read on its own (their vision prompt names it). */
+  lang?: string;
 }
 
 const sha1 = (b: Uint8Array) => createHash('sha1').update(b).digest('hex');
@@ -97,6 +99,32 @@ function markPageFurniture(blocks: Block[], pages: PageInfo[], body: number): vo
   }
 }
 
+export { parsePageRanges } from '@warqa/i18n';
+
+/**
+ * Read again, keeping what was read before: the pages of `part` (and their text) replace those of `prev`; every
+ * other page stays. The sections and the main language are worked out again from the whole.
+ */
+export function mergeRead(prev: SourceDocument, part: SourceDocument, opts: { level?: number } = {}): SourceDocument {
+  const fresh = new Set(part.pages.map((p) => p.n));
+  // headings found on a few pages alone are not sized like the whole book's: pages read again keep the chapters
+  // as they were; only new pages make Warqa look for chapters again
+  const known = new Set(prev.pages.map((p) => p.n));
+  const reread = part.pages.every((p) => known.has(p.n));
+  const pages = [...prev.pages.filter((p) => !fresh.has(p.n)), ...part.pages].sort((a, b) => a.n - b.n);
+  // a stable sort: each page's blocks keep their reading order
+  const blocks = [...prev.blocks.filter((b) => !fresh.has(b.page)), ...part.blocks].sort((a, b) => a.page - b.page);
+  const outline = prev.outline.length ? prev.outline : part.outline;
+  return {
+    ...prev,
+    outline,
+    pages,
+    blocks,
+    lang: pageLang(blocks) ?? prev.lang,
+    sections: reread ? prev.sections : chooseSections(outline, blocks, prev.source.pages, opts.level),
+  };
+}
+
 /** Extract text, OCR what needs it, and map chapters. */
 /** The book's sections: from the PDF's bookmarks when they make a valid split, else from the headings found. */
 export function chooseSections(outline: OutlineItem[], blocks: Block[], total: number, level?: number): Section[] {
@@ -111,6 +139,8 @@ export async function ingestPdf(file: string | Uint8Array, opts: IngestOptions =
   try {
     const total = pdf.numPages;
     const [from, to] = opts.pages ?? [1, total];
+    if (Math.min(from, to) > total)
+      throw new Error(`This PDF has ${total} pages: page ${Math.min(from, to)} is past the end.`);
     const first = Math.max(1, Math.min(from, to));
     const last = Math.min(total, Math.max(from, to));
     const mode = opts.ocr ?? 'auto';
@@ -128,7 +158,9 @@ export async function ingestPdf(file: string | Uint8Array, opts: IngestOptions =
       let error: string | undefined;
       let ocred = false;
       if (mode === 'always' || (mode === 'auto' && unusable)) {
-        const lang = info.lang ?? pageLang(blocks);
+        // a page read on its own takes the book's language, as it would have from the pages before it: the
+        // vision prompt (and so the cache) is the same as in the whole-book reading
+        const lang = info.lang ?? pageLang(blocks) ?? (n > 1 ? opts.lang : undefined);
         let png: Uint8Array | undefined;
         for (const o of ocrs) {
           try {

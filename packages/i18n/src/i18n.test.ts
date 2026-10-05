@@ -14,6 +14,7 @@ import {
   normalizeForMatch,
   normalizePresentationForms,
   parseNumber,
+  parsePageRanges,
   rational,
   rationalEquals,
   rationalOf,
@@ -186,5 +187,22 @@ describe('Darija (Moroccan Arabic)', () => {
     expect(t('ary', 'finish.again')).toBe('عاود شوف');
     expect(t('ary', 'book.chapters', { n: 2 })).toBe('جوج فصول');
     expect(parseNumber('0,5', { lang: 'ary' })?.value.d).toBe(2n);
+  });
+});
+
+describe('parsePageRanges', () => {
+  it('reads pages as people type them', () => {
+    expect(parsePageRanges('')).toEqual([]);
+    expect(parsePageRanges('3 - 8, 31-38')).toEqual([
+      [3, 8],
+      [31, 38],
+    ]);
+    // Arabic-Indic digits and the Arabic comma
+    expect(parsePageRanges('٣-٨، ٢٠')).toEqual([
+      [3, 8],
+      [20, 20],
+    ]);
+    expect(parsePageRanges('1-5,4-9 10')).toEqual([[1, 10]]);
+    for (const bad of ['0', '8-3', 'a-b', '1-99999999']) expect(() => parsePageRanges(bad)).toThrow();
   });
 });

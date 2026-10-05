@@ -100,6 +100,16 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - The README and the start-here guides say who Warqa is for (teachers, students, and anyone learning on
     their own), explain learning on your own, and note that lessons made from a PDF are for your own use unless
     you have the right to share them.
+- **Read and Plan, redesigned (redesign 4b).**
+  - **Read** shows what Warqa found: pages, main languages, chapters and pages repaired, then every page as a
+    tile coloured by how it was read (text layer, vision model, OCR worker, no text), filling in while the PDF
+    is read. **Read again** takes several page ranges ("3-8, 31-38") and keeps the pages read before; the next
+    step, Draft the plan, shows its cost.
+  - **Plan** reads like a book's table of contents: units, numbered chapters with their titles, objectives,
+    pages, minutes and cost; changed chapters are highlighted and left-out ones struck through. A bar at the
+    bottom adds up what making the ticked chapters costs as you tick, next to Save and Approve; approving can
+    be undone.
+  - The reading progress now counts the pages asked for (a range of pages 31–38 showed "31 of 8").
 - Cost estimates no longer ask for a translator model when a book has a single language.
 
 ### Fixed

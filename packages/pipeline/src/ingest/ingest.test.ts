@@ -12,9 +12,11 @@ import {
   headingKind,
   ingestPdf,
   listMarker,
+  mergeRead,
   type OutlineItem,
   openPdf,
   outlineSummary,
+  parsePageRanges,
   renderPage,
   type SourceDocument,
   sectionsFromOutline,
@@ -34,6 +36,24 @@ const pngSize = (b: Uint8Array) => {
 const onPage = (doc: SourceDocument, page: number) => doc.blocks.filter((b) => b.page === page);
 const texts = (blocks: Block[]) => blocks.map((b) => b.text);
 const PRESENTATION_FORMS = /[ﭐ-﷿ﹰ-\ufeff]/;
+
+describe('page ranges', () => {
+  it('reads one page, ranges and lists, merged and in order', () => {
+    expect(parsePageRanges('')).toEqual([]);
+    expect(parsePageRanges('12')).toEqual([[12, 12]]);
+    expect(parsePageRanges('31-38, 3-8')).toEqual([
+      [3, 8],
+      [31, 38],
+    ]);
+    expect(parsePageRanges('1-5,4-9 10')).toEqual([[1, 10]]);
+    expect(parsePageRanges('3–8، 20')).toEqual([
+      [3, 8],
+      [20, 20],
+    ]);
+    expect(() => parsePageRanges('8-3')).toThrow();
+    expect(() => parsePageRanges('a-b')).toThrow();
+  });
+});
 
 describe('English textbook', () => {
   let doc: SourceDocument;
@@ -120,6 +140,31 @@ describe('English textbook', () => {
     expect(text).toContain('\n\n[page 3]\n## 1.2 The number line');
     expect(sectionText(doc, 2, 3, { markers: false })).not.toContain('[page');
     expect(sectionText(doc, 2, 6, { maxChars: 100 })).toMatch(/\[… truncated at 100 characters\]$/);
+  });
+
+  it('reads again some pages, keeping the others', async () => {
+    const whole = await ingestPdf(fixture('textbook-en.pdf'));
+    const part = await ingestPdf(fixture('textbook-en.pdf'), { pages: [4, 5] });
+    // pretend pages 4–5 were read differently this time
+    const marked = { ...part, pages: part.pages.map((p) => ({ ...p, method: 'ocr-vision' as const })) };
+    const merged = mergeRead(whole, marked);
+    expect(merged.pages.map((p) => p.n)).toEqual(whole.pages.map((p) => p.n));
+    expect(merged.pages.filter((p) => p.method === 'ocr-vision').map((p) => p.n)).toEqual([4, 5]);
+    expect(onPage(merged, 2)).toEqual(onPage(whole, 2));
+    expect(texts(onPage(merged, 4))).toEqual(texts(onPage(part, 4)));
+    expect(merged.sections.map((s) => s.id)).toEqual(whole.sections.map((s) => s.id));
+  }, 30_000);
+
+  it('keeps the chapters of a book without bookmarks when a page is read again', async () => {
+    const whole = await ingestPdf(fixture('textbook-en.pdf'));
+    // no bookmarks: the chapters come from the headings, whose size is judged against the whole book
+    const flat = { ...whole, outline: [], sections: detectSections(whole.blocks, whole.source.pages) };
+    const page3 = await ingestPdf(fixture('textbook-en.pdf'), { pages: [3, 3] });
+    expect(mergeRead(flat, { ...page3, outline: [] }).sections).toEqual(flat.sections);
+  }, 30_000);
+
+  it('rejects a range past the end of the PDF', async () => {
+    await expect(ingestPdf(fixture('textbook-en.pdf'), { pages: [40, 50] })).rejects.toThrow(/past the end/);
   });
 
   it('pages option limits extraction but not the section map', async () => {

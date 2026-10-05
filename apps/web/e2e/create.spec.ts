@@ -25,11 +25,37 @@ test('a PDF becomes a planned, built and exported book (test model)', async ({ p
   await expect(page.locator('.web-chip-test')).toHaveText('Test mode');
   await expect(page.locator('.web-chip-test')).toHaveAttribute('title', 'Test mode: scripted model, no network');
   await expect(page.getByRole('cell', { name: 'Chapter 1: Integers' })).toBeVisible({ timeout: 60_000 });
+  // how each page was read: one tile per page, named for screen readers
+  await expect(page.locator('.page-strip li')).toHaveCount(6);
+  await expect(page.locator('.page-strip li').first()).toHaveAttribute('aria-label', 'Page 1, text layer');
 
-  // plan
+  // plan: a table of contents whose cost follows the ticks before anything is saved
   await step(page, /Plan/).click();
   await page.getByRole('button', { name: 'Draft the plan' }).click();
   await expect(page.locator('.plan-chapter')).toHaveCount(4, { timeout: 60_000 });
+  const bar = page.locator('.plan-bar');
+  await expect(bar).toContainText('Making 3 chapters');
+  await page.getByRole('checkbox', { name: 'Include chapter 4' }).uncheck();
+  await expect(bar).toContainText('Making 2 chapters');
+  await expect(bar).toContainText('Unsaved changes');
+  await page.getByRole('checkbox', { name: 'Include chapter 4' }).check();
+  // a new objective, typed on a new line, marks the chapter as changed until it is saved
+  await page.locator('summary[aria-label="Edit the objectives of chapter 2"]').click();
+  const box = page.getByRole('textbox', { name: 'Objectives of chapter 2, one per line' });
+  await box.focus();
+  await box.evaluate((el: HTMLTextAreaElement) => el.setSelectionRange(el.value.length, el.value.length));
+  await box.press('Enter');
+  await box.pressSequentially('Read a thermometer');
+  await expect(box).toHaveValue(/\nRead a thermometer$/);
+  await expect(page.getByText('You added an objective')).toBeVisible();
+  await page.getByRole('button', { name: 'Save the plan' }).click();
+  await expect(page.getByText('You added an objective')).toBeHidden();
+  await page.getByRole('button', { name: 'Approve the plan' }).click();
+  await expect(page.locator('.toast')).toContainText('Plan approved');
+  await expect(page.getByText('Approved', { exact: true })).toBeVisible();
+  // Undo puts the plan back to a draft, then it is approved again
+  await page.locator('.toast').getByRole('button', { name: 'Undo' }).click();
+  await expect(page.getByText('Draft', { exact: true })).toBeVisible();
   await page.getByRole('button', { name: 'Approve the plan' }).click();
   await expect(page.getByText('Approved', { exact: true })).toBeVisible();
 
@@ -89,5 +115,7 @@ test('a scanned PDF is rendered in the browser and read by the (test) vision mod
   await page.goto('project/scanned?step=read');
   await page.locator('.step-panel').getByRole('button', { name: 'Read the PDF' }).click();
   expect(await jobDone(page)).toContain('pill-done');
-  await expect(page.locator('.methods')).toContainText('vision model');
+  // the scanned pages show as read by the vision model, in the strip and its legend
+  await expect(page.locator('.read-legend')).toContainText('Vision model');
+  await expect(page.locator('.page-strip li.is-ocr-vision').first()).toHaveAttribute('aria-label', /vision model/);
 });
