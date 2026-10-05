@@ -54,6 +54,8 @@ export interface LedgerEntry {
   ms: number;
   ok: boolean;
   cached?: boolean;
+  /** The call's name ("beat:ch01:b03", "storyboard:ch01", "translate:ch01:fr:0"): costs per chapter. */
+  name?: string;
 }
 
 /** Test hook: a fake model that answers prompts without any provider. */
@@ -266,6 +268,7 @@ export class Llm {
           this.log({
             ts: new Date().toISOString(),
             stage: call.stage,
+            name: call.name,
             role: call.role,
             model: call.model,
             input: inTok,
@@ -289,6 +292,7 @@ export class Llm {
             this.log({
               ts: new Date().toISOString(),
               stage: call.stage,
+              name: call.name,
               role: call.role,
               model: call.model,
               input: inTok,
@@ -308,6 +312,7 @@ export class Llm {
       this.log({
         ts: new Date().toISOString(),
         stage: call.stage,
+        name: call.name,
         role: call.role,
         model: call.model,
         input: inTok,
@@ -401,9 +406,17 @@ export function ledgerSummary(file: string): {
   total: number;
   byStage: Record<string, number>;
   byModel: Record<string, number>;
+  /** What making each chapter cost (storyboard, beats, translation), from the calls' names. */
+  byChapter: Record<string, number>;
   calls: number;
 } {
-  const out = { total: 0, byStage: {} as Record<string, number>, byModel: {} as Record<string, number>, calls: 0 };
+  const out = {
+    total: 0,
+    byStage: {} as Record<string, number>,
+    byModel: {} as Record<string, number>,
+    byChapter: {} as Record<string, number>,
+    calls: 0,
+  };
   if (!existsSync(file)) return out;
   for (const line of readFileSync(file, 'utf8').split('\n')) {
     if (!line.trim()) continue;
@@ -413,6 +426,8 @@ export function ledgerSummary(file: string): {
       out.calls++;
       out.byStage[e.stage] = (out.byStage[e.stage] ?? 0) + e.usd;
       out.byModel[e.model] = (out.byModel[e.model] ?? 0) + e.usd;
+      const ch = /^(?:storyboard|beat|beat-lite|translate):([^:]+)/.exec(e.name ?? '')?.[1];
+      if (ch) out.byChapter[ch] = (out.byChapter[ch] ?? 0) + e.usd;
     } catch {
       /* skip */
     }

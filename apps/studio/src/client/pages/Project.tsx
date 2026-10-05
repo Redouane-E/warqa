@@ -1,5 +1,6 @@
 import { dirOf, parsePageRanges } from '@warqa/i18n';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { FAKE_PROVIDER, PROVIDERS } from '../../shared/providers';
 import type {
   BookPlan,
   DocSummary,
@@ -16,7 +17,7 @@ import type {
 import { useStatus } from '../App';
 import { api, errorText } from '../api';
 import { withBase } from '../base';
-import { useJobStream, useJobs } from '../components/JobBoard';
+import { buildProgress, type ChapterRun, useJobStream, useJobs, writingBeat } from '../components/JobBoard';
 import { useConfirm, useToast, useUnsavedGuard } from '../components/overlays';
 import { Button, Field, Icon, LangTag, Loading, Notice } from '../components/ui';
 import { useExtras } from '../extras';
@@ -930,124 +931,338 @@ function PlanStep({ p, run, live, reload, estimate }: StepProps) {
   );
 }
 
-/* ---------- ③ make lessons ---------- */
+/* ---------- ③ make the lessons ---------- */
 
-function MakeStep({ p, status, run, live }: StepProps) {
-  const { t, usd } = useI18n();
+/** Speech engines by their usual names ("Also narrate with free Edge voices"). */
+const ENGINES: Record<string, string> = {
+  edge: 'Edge',
+  azure: 'Azure Speech',
+  elevenlabs: 'ElevenLabs',
+  openai: 'OpenAI',
+  gemini: 'Gemini',
+};
+
+type MakeState = 'made' | 'todo' | 'making' | 'waiting' | 'stopped';
+
+/**
+ * Make (its own card, the Make board): every chapter of the plan with what making it costs before the click, each
+ * made lesson's facts (beats, problems, languages, what it cost), the chapter being made with the beat being
+ * written, and a chapter stopped partway with what is left. The work itself shows in the tray.
+ */
+function MakeStep({ p, status, run, reload, estimate }: StepProps) {
+  const { t, usd, langName } = useI18n();
   const confirm = useConfirm();
+  const jobs = useJobs();
   const engine = p.config.tts.provider;
   const engineOff = !!status?.capabilities?.ttsUnavailable.includes(engine);
   const [narrate, setNarrate] = useState(engine !== 'none' && !engineOff);
   const approved = p.plan?.status === 'approved';
   const lessons = new Map(p.lessons.map((l) => [l.id, l]));
+  const book = encodeURIComponent(p.id);
+
+  // this book's builds: the one at work (its events say where it is) and those waiting their turn. A job just
+  // started is listed as queued until the book reloads; the oldest one listed (the list is newest first) goes first
+  const builds = p.jobs.filter((j) => j.type === 'build' && (j.status === 'running' || j.status === 'queued'));
+  const atWork = builds.find((j) => j.status === 'running') ?? builds.at(-1);
+  // its end reloads the book even when the tray follows another job
+  const { events } = useJobStream(atWork?.id ?? null, () => void reload());
+  const prog = useMemo(() => buildProgress(events), [events]);
+  const madeNow = prog.chapters.filter((c) => c.done).length;
+  // a chapter made while the job goes on to the next shows as made at once
+  // biome-ignore lint/correctness/useExhaustiveDependencies: when a chapter of the running job is made
+  useEffect(() => {
+    if (madeNow) void reload();
+  }, [madeNow]);
+  const asks = (j: JobInfo, id: string) =>
+    Array.isArray(j.args.chapters) ? (j.args.chapters as string[]).includes(id) : !lessons.has(id);
+  const stateOf = (id: string): MakeState => {
+    const c = prog.chapters.find((x) => x.id === id);
+    // a chapter made in this job stays "being made" until the book reloads with its lesson (no flash of Make)
+    if (c && (!c.done || !lessons.has(id))) return 'making';
+    if (!c?.done && builds.some((j) => asks(j, id))) return 'waiting';
+    if (p.drafts?.[id] || p.stale?.[id]) return 'stopped';
+    return lessons.has(id) ? 'made' : 'todo';
+  };
+
+  // the chapters to make, numbered among themselves (as the rail's "1/3" and the tray); a book without a plan
+  // lists its lessons
   const rows = p.plan
-    ? p.plan.chapters.filter((c) => c.include).map((c) => ({ id: c.id, title: c.title }))
-    : p.lessons.map((l) => ({ id: l.id, title: l.title[l.lang] ?? l.id }));
-  // cost per chapter from the latest build jobs of this session
-  const cost = new Map<string, number>();
+    ? p.plan.chapters.filter((c) => c.include).map((c, i) => ({ id: c.id, title: c.title, n: i + 1 }))
+    : p.lessons.map((l, i) => ({ id: l.id, title: l.title[l.lang] ?? l.id, n: i + 1 }));
+  // what a made chapter cost: the ledger by chapter, else this session's build results
+  const session = new Map<string, number>();
   for (const j of [...p.jobs].reverse()) {
     const r = j.result as { chapters?: { chapter: string; usd: number }[] } | undefined;
-    if (j.type === 'build' && r?.chapters) for (const c of r.chapters) cost.set(c.chapter, c.usd);
+    if (j.type === 'build' && r?.chapters) for (const c of r.chapters) session.set(c.chapter, c.usd);
   }
-  const args = (ids?: string[], again = false) => ({
-    ...(ids ? { chapters: ids } : {}),
-    narrate,
+  const spentOn = (id: string) => p.ledger.byChapter?.[id] ?? session.get(id);
+  // what is left to pay: the chapter's estimate, or the part of it its unwritten beats need
+  const toPay = (id: string) => {
+    const e = estimate?.chapters?.[id];
+    const d = p.drafts?.[id];
+    // only translations left: a small part the estimate doesn't single out
+    if (!d && p.stale?.[id]) return undefined;
+    return e === undefined ? undefined : d ? (e * (d.total - d.written)) / d.total : e;
+  };
+  const left = rows.filter((r) => ['todo', 'stopped'].includes(stateOf(r.id)));
+  const leftCost = left.some((r) => toPay(r.id) !== undefined)
+    ? left.reduce((a, r) => a + (toPay(r.id) ?? 0), 0)
+    : undefined;
+  const args = (ids: string[], again = false) => ({
+    chapters: ids,
+    narrate: narrate && !engineOff,
     ...(again ? { force: ['storyboard', 'translate'] } : {}),
   });
+  // a job starts once (a double click would queue a second one): the button waits for the server, then the
+  // focus goes to the row it makes, as the button is gone
+  const [starting, setStarting] = useState<string | null>(null);
+  const start = async (key: string, ids: string[], again = false) => {
+    if (starting) return;
+    setStarting(key);
+    try {
+      await run('build', args(ids, again));
+    } finally {
+      setStarting(null);
+    }
+    document.getElementById(`make-row-${ids[0]}`)?.focus();
+  };
+
+  const provider = (model?: string) => {
+    const id = model?.split(':')[0];
+    return id === FAKE_PROVIDER.id ? FAKE_PROVIDER.name : (PROVIDERS.find((x) => x.id === id)?.name ?? id);
+  };
+  const writer = provider(p.roles.writer?.model);
+  const set = status?.presets.find((x) => x.id === p.config.preset)?.label;
+
+  // replacing a teacher's work is the only thing here that asks first
+  const again = async (r: { id: string; n: number }) => {
+    const beats = t('common.beats', { n: lessons.get(r.id)?.beats ?? 0 });
+    const cost = estimate?.chapters?.[r.id];
+    const ok = await confirm({
+      title: t('make.againTitle', { n: r.n }),
+      body: cost !== undefined ? t('make.againBody', { beats, cost: usd(cost) }) : t('make.againBodyNoCost', { beats }),
+      confirm: t('dlg.rebuild'),
+      cancel: t('dlg.keepLesson'),
+      danger: true,
+    });
+    if (ok) void start(`again:${r.id}`, [r.id], true);
+  };
+
+  // where the chapter being made is: the stage, the beat being written
+  const chip = (c: ChapterRun | undefined): string => {
+    const busy = (l: { lang: string; state: string }[]) => l.find((x) => x.state === 'running')?.lang.toUpperCase();
+    if (!c) return t('make.chip.start');
+    const voice = busy(c.narrate);
+    if (voice) return t('make.chip.narrate', { lang: voice });
+    const lang = busy(c.translate);
+    if (lang) return t('make.chip.translate', { lang });
+    if (c.write === 'running') {
+      const w = writingBeat(c);
+      return w ? t('make.chip.write', { i: w.i, n: w.n }) : t('make.chip.writing');
+    }
+    if (c.storyboard === 'running') return t('make.chip.storyboard');
+    return c.write === 'done' ? t('make.chip.finishing') : t('make.chip.start');
+  };
+
+  const title = (
+    <h2 id="make-title" className="card-title">
+      {t('step.make')}
+    </h2>
+  );
+  if (!rows.length)
+    return (
+      <section className="sheet make-sheet" aria-labelledby="make-title">
+        <div className="make-head">{title}</div>
+        <div className="make-empty">
+          <h3 className="block-title">{t('make.emptyTitle')}</h3>
+          <p className="hint">{t('make.emptyBody')}</p>
+          <Link className="btn btn-primary" to={`/project/${book}?step=plan`}>
+            <span>{t('make.toPlan')}</span>
+            <Icon name="next" className="flip-rtl" />
+          </Link>
+        </div>
+      </section>
+    );
+
   return (
-    <>
-      <p className="lede">{t('make.intro')}</p>
-      {!approved && !p.lessons.length && <Notice>{t('make.needsPlan')}</Notice>}
-      {approved && (
-        <div className="actions">
-          <Button variant="primary" busy={live.has('build')} onClick={() => run('build', args())}>
-            {t('make.buildAll')}
-          </Button>
-          <label className="check">
-            <input
-              type="checkbox"
-              checked={narrate && !engineOff}
-              disabled={engine === 'none' || engineOff}
-              onChange={(e) => setNarrate(e.target.checked)}
-            />
-            <span>{t('make.narrate', { engine })}</span>
-          </label>
-          {engineOff && <span className="muted small">{t('cap.desktopOnly')}</span>}
-          {p.roles.writer?.model && (
-            <span className="muted small">{t('make.model', { model: p.roles.writer.model })}</span>
+    <section className="sheet make-sheet" aria-labelledby="make-title">
+      <div className="make-head">
+        <div className="make-head-start">
+          {title}
+          {writer && (
+            <p className="make-models">
+              <bdi>{set ? t('make.models', { set, writer }) : t('make.writer', { writer })}</bdi>{' '}
+              <Link to="/ai">{t('learn.setup.change')}</Link>
+            </p>
+          )}
+          {approved && engine !== 'none' && (
+            <label className="check make-narrate">
+              <input
+                type="checkbox"
+                checked={narrate && !engineOff}
+                disabled={engineOff}
+                onChange={(e) => setNarrate(e.target.checked)}
+              />
+              <span>
+                {engine === 'edge'
+                  ? t('make.narrateFree', { engine: ENGINES.edge! })
+                  : t('make.narrate', { engine: ENGINES[engine] ?? engine })}
+              </span>
+              {engineOff && <span className="muted small">{t('cap.desktopOnly')}</span>}
+            </label>
           )}
         </div>
+        {approved && (
+          <div className="make-head-end">
+            {left.length ? (
+              <>
+                <span className="card-meta">
+                  {t('make.leftN', { n: left.length })}
+                  {leftCost !== undefined && ` · ${t('learn.est.cost', { cost: usd(leftCost) })}`}
+                </span>
+                <Button
+                  variant="primary"
+                  icon="play"
+                  busy={starting === 'left'}
+                  disabled={!!starting}
+                  onClick={() =>
+                    void start(
+                      'left',
+                      left.map((r) => r.id),
+                    )
+                  }
+                >
+                  {t('make.makeLeft', { n: left.length })}
+                </Button>
+              </>
+            ) : (
+              !builds.length && (
+                <span className="card-meta make-all">
+                  <Icon name="check" size={16} /> {t('make.allMade')}
+                </span>
+              )
+            )}
+          </div>
+        )}
+      </div>
+      {p.plan && !approved && (
+        <Notice
+          action={
+            <Link className="btn btn-default" to={`/project/${book}?step=plan`}>
+              {t('make.toPlan')}
+            </Link>
+          }
+        >
+          {t('make.needsPlan')}
+        </Notice>
       )}
-      <ol className="chapters">
+      <ol className="make-rows">
         {rows.map((r) => {
           const l = lessons.get(r.id);
-          const c = cost.get(r.id);
+          const state = stateOf(r.id);
+          const c = prog.chapters.find((x) => x.id === r.id);
+          const d = p.drafts?.[r.id];
+          const stale = p.stale?.[r.id];
+          const spent = state === 'made' ? spentOn(r.id) : undefined;
+          const pay = state === 'todo' || state === 'stopped' ? toPay(r.id) : undefined;
           return (
-            <li key={r.id} className={`chapter ${l ? 'is-made' : ''}`}>
-              <div className="chapter-main">
-                <code className="chapter-id">{r.id}</code>
-                <span className="chapter-title" dir="auto">
-                  {r.title}
+            <li key={r.id} id={`make-row-${r.id}`} tabIndex={-1} className={`make-row is-${state}`}>
+              <span className="make-n mono">{two(r.n)}</span>
+              <div className="make-main">
+                <bdi className="make-title">{r.title}</bdi>
+                <span className="make-meta">
+                  {state === 'made' && l ? (
+                    <>
+                      <span>{t('common.beats', { n: l.beats })}</span>
+                      {l.errors ? (
+                        <span className="bad">
+                          <Icon name="error" size={16} /> {t('common.errors', { n: l.errors })}
+                        </span>
+                      ) : l.warnings ? (
+                        <span className="warn">
+                          <Icon name="warn" size={16} /> {t('common.warnings', { n: l.warnings })}
+                        </span>
+                      ) : (
+                        <span className="good">
+                          <Icon name="check" size={16} /> {t('make.ok')}
+                        </span>
+                      )}
+                      {l.errors && l.warnings ? (
+                        <span className="warn">{t('common.warnings', { n: l.warnings })}</span>
+                      ) : null}
+                      <span className="langs mono">
+                        {l.langs.map((g, i) => (
+                          <Fragment key={g}>
+                            {i ? ' · ' : ''}
+                            <abbr title={langName(g)}>{g}</abbr>
+                          </Fragment>
+                        ))}
+                      </span>
+                      {spent !== undefined && <span className="mono">{usd(spent)}</span>}
+                    </>
+                  ) : state === 'making' ? (
+                    <span className="make-now">{t('make.now')}</span>
+                  ) : state === 'waiting' ? (
+                    <span>{t('job.status.queued')}</span>
+                  ) : state === 'stopped' && (d || stale) ? (
+                    <span className="make-stopped">
+                      {d
+                        ? d.written
+                          ? t('make.stopped', { b: d.written, n: d.total })
+                          : t('make.stoppedNone')
+                        : t('make.stoppedLangs', { langs: (stale ?? []).map((g) => g.toUpperCase()).join(' · ') })}
+                    </span>
+                  ) : (
+                    <span>{t('make.notMade')}</span>
+                  )}
                 </span>
               </div>
-              <div className="chapter-meta">
-                {l ? (
-                  <>
-                    <span>{t('common.beats', { n: l.beats })}</span>
-                    {l.errors ? (
-                      <span className="bad">{t('common.errors', { n: l.errors })}</span>
-                    ) : (
-                      <span className="good">{t('make.ok')}</span>
-                    )}
-                    {l.warnings ? <span className="warn">{t('common.warnings', { n: l.warnings })}</span> : null}
-                    <span className="langs">
-                      {l.langs.map((g) => (
-                        <LangTag key={g} code={g} />
-                      ))}
-                    </span>
-                  </>
+              <div className="make-end">
+                {state === 'making' ? (
+                  // the chip says where the work is; the tray has the rest
+                  <button type="button" className="status-chip is-running make-chip" onClick={() => jobs.show()}>
+                    <span className="chip-dot" aria-hidden="true" />
+                    <span aria-live="polite">{chip(c)}</span>
+                  </button>
                 ) : (
-                  <span className="muted">{t('make.notMade')}</span>
-                )}
-                {c !== undefined && <span className="muted">{t('make.cost', { usd: usd(c) })}</span>}
-              </div>
-              <div className="chapter-actions">
-                {l && (
-                  <Link
-                    className="btn btn-default"
-                    to={`/project/${encodeURIComponent(p.id)}/lesson/${encodeURIComponent(r.id)}`}
-                  >
-                    <Icon name="settings" />
-                    <span>{t('make.edit')}</span>
-                  </Link>
-                )}
-                {approved && (
-                  <Button
-                    variant={l ? 'quiet' : 'default'}
-                    onClick={async () => {
-                      // replacing a teacher's work: only this interrupts
-                      if (
-                        l &&
-                        !(await confirm({
-                          title: t('make.rebuildConfirm', { title: r.title }),
-                          confirm: t('dlg.rebuild'),
-                          cancel: t('dlg.keepLesson'),
-                          danger: true,
-                        }))
-                      )
-                        return;
-                      void run('build', args([r.id], !!l));
-                    }}
-                  >
-                    {l ? t('make.rebuild') : t('make.build')}
-                  </Button>
+                  <>
+                    {pay !== undefined && approved && (
+                      <span className="card-meta">{t('learn.est.cost', { cost: usd(pay) })}</span>
+                    )}
+                    {approved && (state === 'todo' || state === 'stopped') && (
+                      <Button
+                        icon="play"
+                        busy={starting === `row:${r.id}`}
+                        disabled={!!starting}
+                        onClick={() => void start(`row:${r.id}`, [r.id])}
+                      >
+                        {state === 'todo' ? t('make.build') : t('make.rest')}
+                      </Button>
+                    )}
+                    {l && state !== 'waiting' && (
+                      <Link className="btn btn-default" to={`/project/${book}/lesson/${encodeURIComponent(r.id)}`}>
+                        <Icon name="edit" />
+                        <span>{t('make.edit')}</span>
+                      </Link>
+                    )}
+                    {approved && l && state === 'made' && (
+                      <Button
+                        variant="quiet"
+                        busy={starting === `again:${r.id}`}
+                        disabled={!!starting}
+                        onClick={() => void again(r)}
+                      >
+                        {t('make.rebuild')}
+                      </Button>
+                    )}
+                  </>
                 )}
               </div>
             </li>
           );
         })}
       </ol>
-    </>
+    </section>
   );
 }
 
@@ -1430,13 +1645,18 @@ function Stepper({ p, current, onSelect }: { p: ProjectDetail; current: StepId; 
     const ol = el?.closest('ol');
     if (el && ol && ol.scrollWidth > ol.clientWidth) el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
   }, [current]);
-  // the facts a step has found: "48 p." read, "Draft" or "6 ch." planned
+  // the facts a step has found: "48 p." read, "Draft" or "6 ch." planned, "3/6" made
   const meta = (s: StepId): string => {
     if (s === 'read' && p.document) return t('step.meta.pages', { n: num(p.document.pages) });
     if (s === 'plan' && p.plan)
       return p.plan.status === 'approved'
         ? t('step.meta.chapters', { n: num(p.plan.chapters.filter((c) => c.include).length) })
         : t('plan.status.draft');
+    if (s === 'make' && p.plan?.status === 'approved') {
+      const ids = p.plan.chapters.filter((c) => c.include).map((c) => c.id);
+      const made = ids.filter((id) => p.lessons.some((l) => l.id === id)).length;
+      return t('step.meta.made', { made, total: ids.length });
+    }
     return '';
   };
   return (
@@ -1544,6 +1764,12 @@ export function ProjectPage({ id }: { id: string }) {
     const running = p?.jobs.find((j) => j.status === 'running') ?? p?.jobs.find((j) => j.status === 'queued');
     if (running && jobs.current?.jobId !== running.id) jobs.track(id, running);
   }, [p?.id]);
+  // a job of this book started elsewhere (the tray's Make the rest, Go to) shows on its step
+  // biome-ignore lint/correctness/useExhaustiveDependencies: when the tray follows another job
+  useEffect(() => {
+    const cur = jobs.current;
+    if (cur?.projectId === id && p && !p.jobs.some((j) => j.id === cur.jobId)) void load();
+  }, [jobs.current?.jobId]);
   useSetPlace(p ? { book: bookPlaceOf(p, step ?? p.next, lang) } : null);
 
   const live = useMemo(
@@ -1567,7 +1793,7 @@ export function ProjectPage({ id }: { id: string }) {
     );
 
   const current = step ?? p.next;
-  const bare = current === 'read' || current === 'plan';
+  const bare = current === 'read' || current === 'plan' || current === 'make';
   const select = async (s: StepId) => {
     // a step with unsaved work (the plan) asks before it is closed
     if (s !== current && !(await confirmLeave())) return;
@@ -1638,7 +1864,7 @@ export function ProjectPage({ id }: { id: string }) {
       <p className="visually-hidden">{t('project.cached')}</p>
       <div className="project-grid">
         <Stepper p={p} current={current} onSelect={select} />
-        {/* Read and Plan are their own cards, each with its title (the boards of redesign 4b) */}
+        {/* Read, Plan and Make are their own cards, each with its title (the boards of redesign 4b and 4c) */}
         <section
           className={`step-panel${bare ? ' step-bare' : ' sheet'}`}
           {...(bare ? { 'aria-label': t(`step.${current}` as MsgKey) } : { 'aria-labelledby': 'step-title' })}

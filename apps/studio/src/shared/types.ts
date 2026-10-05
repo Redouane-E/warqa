@@ -46,8 +46,14 @@ export interface JobEvent {
   /** Beat progress (write and narrate stages). */
   index?: number;
   total?: number;
-  /** Model spend of the job so far in USD (the learn job reports it). */
+  /** Model spend of the job so far in USD (the learn and build jobs report it). */
   usd?: number;
+  /** A written beat's title (write stage). */
+  title?: string;
+  /** A build's chapter events (stage "chapter"): its number in the plan, its estimate in USD, the book's limit. */
+  n?: number;
+  estimate?: number;
+  limit?: number;
   /** Chapter the event belongs to (build, translate, narrate). */
   chapter?: string;
   message?: string;
@@ -273,7 +279,18 @@ export interface ProjectDetail extends ProjectSummary {
   config: ProjectConfig;
   plan: BookPlan | null;
   lessons: LessonSummary[];
-  ledger: { total: number; calls: number; byStage: Record<string, number>; byModel: Record<string, number> };
+  ledger: {
+    total: number;
+    calls: number;
+    byStage: Record<string, number>;
+    byModel: Record<string, number>;
+    /** Spent on each chapter (storyboard, beats, translation); calls recorded before 4c have no chapter. */
+    byChapter?: Record<string, number>;
+  };
+  /** Chapters whose writing stopped partway: the beats written so far (kept) of how many. */
+  drafts?: Record<string, { written: number; total: number }>;
+  /** Chapters written again whose translations into these languages are still the old beats' (a Stop came first). */
+  stale?: Record<string, string[]>;
   document: DocSummary | null;
   pdf?: string;
   exportInfo: { exported: boolean; zip: boolean; at?: number };

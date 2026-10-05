@@ -372,6 +372,15 @@ export function projectDetail(id: string, p: P.Project, jobs: ProjectDetail['job
     pdfBytes = undefined;
   }
   const planUpdated = existsSync(p.path('plan.json')) ? mtime(p.path('plan.json')) : undefined;
+  const drafts: NonNullable<ProjectDetail['drafts']> = {};
+  const stale: NonNullable<ProjectDetail['stale']> = {};
+  for (const c of plan?.chapters ?? []) {
+    if (!c.include) continue;
+    const d = P.unfinishedDraft(p, c.id);
+    if (d) drafts[c.id] = d;
+    const langs = P.staleTranslations(p, c.id);
+    if (langs.length) stale[c.id] = langs;
+  }
   return {
     ...s,
     ...(pdfBytes !== undefined ? { pdfBytes } : {}),
@@ -392,6 +401,8 @@ export function projectDetail(id: string, p: P.Project, jobs: ProjectDetail['job
     config: p.config as ProjectDetail['config'],
     plan,
     lessons,
+    ...(Object.keys(drafts).length ? { drafts } : {}),
+    ...(Object.keys(stale).length ? { stale } : {}),
     ledger: P.ledgerSummary(p.path('.ledger.jsonl')),
     document: doc,
     ...(pdf ? { pdf: basename(pdf) } : {}),

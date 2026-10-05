@@ -1,6 +1,6 @@
 // The self-learner's one go through the studio API: the summary's estimate (free text read, the PDF's
 // language), then the `learn` job (read → plan approved automatically → chapter 1), with a scripted model.
-import { copyFileSync, mkdtempSync, readFileSync, rmSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -288,6 +288,63 @@ describe('learning on your own', () => {
     expect(est.chapters.ch01).toBeGreaterThan(0);
     expect(est.plan).toBeGreaterThan(0);
     expect(est.spread).toBeGreaterThan(1);
+  });
+
+  it('makes a chapter again: the chapter it is on, Stop between two beats, then the rest from there', async () => {
+    type Detail = { drafts?: Record<string, { written: number; total: number }>; ledger: { byChapter?: Record<string, number> } };
+    const detail = async () => (await (await app.request('/api/projects/mine')).json()) as Detail;
+    // Stop pressed while the second beat is being written: the job stops once that beat is saved
+    const again = jobs.enqueue('mine', 'build', { chapters: ['ch01'], narrate: false, force: ['storyboard', 'translate'] });
+    const off = jobs.subscribe(again.id, (e) => {
+      if (e.stage === 'write' && e.status === 'beat' && e.index === 1) jobs.cancel(again.id);
+    });
+    await jobs.idle('mine');
+    off();
+    expect(jobs.get(again.id)?.status).toBe('cancelled');
+    const progress = jobs.events(again.id).filter((e) => e.kind === 'progress');
+    expect(progress[0]).toMatchObject({
+      stage: 'chapter',
+      status: 'start',
+      chapter: 'ch01',
+      detail: 'The water cycle',
+      n: 1, // among the chapters to make: the front matter left out has no number
+      index: 0,
+      total: 1,
+      limit: 1,
+    });
+    expect(progress[0]!.estimate).toBeGreaterThan(0);
+    expect(progress.filter((e) => e.status === 'beat').map((e) => e.title)).toEqual(['The water cycle', 'Three states']);
+    expect(progress.every((e) => typeof e.usd === 'number')).toBe(true);
+    expect((await detail()).drafts).toEqual({ ch01: { written: 2, total: 6 } });
+
+    // Make the rest (no force): beats 3 to 6, then the chapter is made and says so
+    const rest = jobs.enqueue('mine', 'build', { chapters: ['ch01'], narrate: false });
+    await jobs.idle('mine');
+    expect(jobs.get(rest.id)).toMatchObject({
+      status: 'done',
+      result: { chapters: [{ chapter: 'ch01', title: 'The water cycle', n: 1, beats: 6 }] },
+    });
+    const written = jobs.events(rest.id).filter((e) => e.stage === 'write' && e.status === 'beat');
+    expect(written.map((e) => e.index)).toEqual([2, 3, 4, 5]);
+    expect(jobs.events(rest.id).at(-1)).toMatchObject({ kind: 'status' });
+    expect(jobs.events(rest.id).some((e) => e.stage === 'chapter' && e.status === 'done')).toBe(true);
+    const after = await detail();
+    expect(after.drafts).toBeUndefined();
+    expect(Object.keys(after.ledger.byChapter ?? {})).toContain('ch01');
+
+    // Stop pressed while the last beat is written: it is taken once the lesson is saved, so nothing is lost
+    const lessonFile = join(root, 'mine.warqa', 'lessons', 'ch01', 'lesson.json');
+    const before = statSync(lessonFile).mtimeMs;
+    const late = jobs.enqueue('mine', 'build', { chapters: ['ch01'], narrate: false, force: ['write'] });
+    const stopLate = jobs.subscribe(late.id, (e) => {
+      if (e.stage === 'write' && e.status === 'beat' && e.index === 5) jobs.cancel(late.id);
+    });
+    await jobs.idle('mine');
+    stopLate();
+    expect(jobs.get(late.id)?.status).toBe('cancelled');
+    expect(jobs.events(late.id).filter((e) => e.stage === 'write' && e.status === 'done')).toHaveLength(1);
+    expect(statSync(lessonFile).mtimeMs).toBeGreaterThan(before);
+    expect((await detail()).drafts).toBeUndefined();
   });
 
   it('makes the lesson without a voice where the voice cannot run (Edge voices in the web app)', async () => {

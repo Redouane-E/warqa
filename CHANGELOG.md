@@ -110,10 +110,25 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
     bottom adds up what making the ticked chapters costs as you tick, next to Save and Approve; approving can
     be undone.
   - The reading progress now counts the pages asked for (a range of pages 31–38 showed "31 of 8").
+- **Make, redesigned, and the tray while lessons are made (redesign 4c).**
+  - **Make** is its own card: each chapter of the plan with what it should cost beside **Make**, a made
+    lesson's beats, problems, languages and what it cost (now kept per chapter in the cost ledger), and
+    **Make the 2 left** with their total. Making a lesson again asks first, saying how many beats it writes
+    again and what it costs.
+  - The tray follows the chapter being made: its stages, the beats as they are written (with their titles)
+    and the money spent against the chapter's estimate and the book's limit. The pill says "Making ch. 2 ·
+    45 %"; when the chapter is made, a toast offers to open it in the editor. On a phone the tray is a
+    bottom sheet that folds to a peek bar.
+  - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
+    and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
+    step, even after a restart.
 - Cost estimates no longer ask for a translator model when a book has a single language.
 
 ### Fixed
 
+- A lesson made again over an existing one (`--force write`, or "Make again" stopped and then finished) now
+  gets its translations made again instead of keeping the strings of the old beats, even when it was stopped
+  between two languages; a storyboard made again no longer reuses beats written for the old one.
 - The spending limit now also covers reading scanned pages with the vision model: a run stops at the limit
   instead of reading past it, and `ingest` no longer skips pages silently once the limit is reached.
 - `warqa init` no longer fails on folder names longer than 32 characters or with accents: the book id is

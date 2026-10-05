@@ -120,7 +120,9 @@ Start small: one chapter of 10 to 20 pages.
    **Read the PDF**.
 6. **Plan.** Click **Draft the plan**. Read the chapters, untick the ones you do not want, then click
    **Approve the plan**.
-7. **Make lessons.** Click **Make** next to one chapter. Follow the progress in **Activity**. Check the cost.
+7. **Make lessons.** Each chapter shows what it should cost beside **Make**. Click **Make** next to one
+   chapter. The work shows at the bottom of the window: its stages and the beats as they are written, with
+   what it has spent. **Stop** keeps the beats already written; **Make the rest** goes on from there.
 8. **Look and fix.** Click **Edit** to watch the lesson in the **Preview**. Change a sentence, or use
    **Regenerate this beat** with a short instruction such as "shorter, with a balance scale".
 9. **Translate & narrate** into the other languages.

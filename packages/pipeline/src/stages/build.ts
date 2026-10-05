@@ -13,11 +13,19 @@ import { learnerAudience } from './levels.js';
 import { applyPlan, type BookPlan, loadPlan, planBook } from './plan.js';
 import { type Storyboard, storyboardChapter } from './storyboard.js';
 import { translateLesson } from './translate.js';
-import { writeChapter } from './write.js';
+import { unfinishedDraft, writeChapter } from './write.js';
 
 export type ProgressEvent = (
   | { stage: string; status: 'start' | 'done' | 'skip'; detail?: string }
-  | { stage: string; status: 'beat'; detail: string; index: number; total: number }
+  | {
+      stage: string;
+      status: 'beat';
+      detail: string;
+      index: number;
+      total: number;
+      /** A written beat's title, from the storyboard (the Make screen and the tray list beats as they come). */
+      title?: string;
+    }
   | { stage: string; status: 'error'; detail: string }
 ) & {
   /** Model spend of the run so far, in USD (the learner's one-go screen shows it). */
@@ -107,26 +115,42 @@ export async function buildChapter(
   if (!story || force.has('storyboard')) {
     p({ stage: 'storyboard', status: 'start', detail: resolveRole('storyboard', project.config) });
     story = await storyboardChapter(project, doc, plan, chapter, { llm, ...(audience ? { audience } : {}) });
+    // beats written for an earlier storyboard are not this one's (beat ids repeat from one storyboard to the
+    // next): the draft starts empty, so a Stop from here on leaves a chapter that goes on with the new beats
+    project.writeJson(`lessons/${chapterId}/draft.json`, { beats: [], total: story.beats.length });
     p({ stage: 'storyboard', status: 'done', detail: `${story.beats.length} beats` });
   } else p({ stage: 'storyboard', status: 'skip' });
 
-  // beats
+  // beats (a chapter stopped partway goes on from its last written beat)
   let lesson: Lesson;
-  if (!project.hasLesson(chapterId) || force.has('write') || force.has('storyboard')) {
+  const replaced = project.hasLesson(chapterId);
+  const wrote = !replaced || force.has('write') || force.has('storyboard') || !!unfinishedDraft(project, chapterId);
+  if (wrote) {
     p({ stage: 'write', status: 'start', detail: resolveRole('writer', project.config) });
     lesson = await writeChapter(project, doc, plan, chapter, story, {
       llm,
       ...(audience ? { audience } : {}),
       force: force.has('write') || force.has('storyboard'),
-      onBeat: (e) =>
+      onBeat: (e) => {
+        const title = story.beats.find((b) => b.id === e.id)?.title;
         p({
           stage: 'write',
           status: 'beat',
           detail: `${e.id}${e.repairs ? ` (${e.repairs} repairs)` : ''}`,
           index: e.index,
           total: e.total,
-        }),
+          ...(title ? { title } : {}),
+        });
+      },
     });
+    // the strings of a lesson written over belong to its old beats: every translation is redone, and the list
+    // of those left survives a Stop, so the next build finishes them
+    if (replaced)
+      markStale(
+        project,
+        chapterId,
+        project.book.langs.filter((l) => l !== lesson.lang),
+      );
     p({ stage: 'write', status: 'done' });
   } else {
     lesson = project.loadLesson(chapterId);
@@ -144,12 +168,18 @@ export async function buildChapter(
   // translations
   const langs = opts.langs ?? project.book.langs;
   for (const lang of langs.filter((l) => l !== lesson.lang)) {
-    if (project.loadStrings(chapterId, lang) && !force.has('translate')) {
+    const redo = force.has('translate') || staleTranslations(project, chapterId).includes(lang);
+    if (project.loadStrings(chapterId, lang) && !redo) {
       p({ stage: `translate:${lang}`, status: 'skip' });
       continue;
     }
     p({ stage: `translate:${lang}`, status: 'start', detail: resolveRole('translator', project.config) });
-    await translateLesson(project, chapterId, lang, { llm, plan, force: force.has('translate') });
+    await translateLesson(project, chapterId, lang, { llm, plan, force: redo });
+    markStale(
+      project,
+      chapterId,
+      staleTranslations(project, chapterId).filter((l) => l !== lang),
+    );
     p({ stage: `translate:${lang}`, status: 'done' });
   }
 
@@ -171,6 +201,19 @@ export async function buildChapter(
     }
   }
   return { chapter: chapterId, lesson, issues: v.issues, narration, usd: llm.totalUsd - before };
+}
+
+/**
+ * Languages whose strings still belong to the beats a lesson had before it was written again ("Make again"
+ * stopped before its translations were all redone). The next build of the chapter translates them again.
+ */
+export function staleTranslations(project: Project, chapterId: string): string[] {
+  return project.readJson<{ langs?: string[] }>(`lessons/${chapterId}/stale.json`, {}).langs ?? [];
+}
+
+function markStale(project: Project, chapterId: string, langs: string[]): void {
+  if (langs.length || staleTranslations(project, chapterId).length)
+    project.writeJson(`lessons/${chapterId}/stale.json`, { langs });
 }
 
 /** Rough cost estimate of building chapters (tokens per stage × model prices), p50 and p90. */

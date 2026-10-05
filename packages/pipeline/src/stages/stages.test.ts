@@ -7,13 +7,20 @@ import { validateLesson } from '@warqa/lesson';
 import { describe, expect, it } from 'vitest';
 import { exportSite } from '../export/site.js';
 import type { SourceDocument } from '../ingest/document.js';
-import { BudgetError, extractJson, type FakeModel, Llm } from '../models/llm.js';
+import { BudgetError, extractJson, type FakeModel, Llm, ledgerSummary } from '../models/llm.js';
 import { Project } from '../project/index.js';
 import { improveLesson } from '../qa/judge.js';
 import type { TtsProvider } from '../tts/types.js';
-import { buildChapter, ensurePlan, estimateBuild, estimateChapters, type ProgressEvent } from './build.js';
+import {
+  buildChapter,
+  ensurePlan,
+  estimateBuild,
+  estimateChapters,
+  type ProgressEvent,
+  staleTranslations,
+} from './build.js';
 import { adjustLevel, documentLang, estimateLearn, learnFromPdf, readTextLayer, startLearning } from './learn.js';
-import { liteToBeat } from './write.js';
+import { liteToBeat, unfinishedDraft } from './write.js';
 
 const doc: SourceDocument = {
   schema: 'warqa.document/1',
@@ -240,6 +247,83 @@ describe('pipeline stages (fake model)', () => {
     expect(arAfter['beat.rule.narration']).toBeUndefined();
     expect(arAfter['beat.intro.narration']).toBeDefined();
     expect(validateLesson(project.loadLesson('ch01')).ok).toBe(true);
+  });
+
+  it('goes on from the last written beat after Stop, and translates a lesson written again', async () => {
+    const root = mkdtempSync(join(tmpdir(), 'warqa-test-'));
+    const project = Project.create(root, { id: 'demo', title: 'Demo', langs: ['en', 'ar'], defaultLang: 'en' });
+    project.config.models = {
+      planner: 'anthropic:claude-sonnet-5-5',
+      storyboard: 'anthropic:claude-sonnet-5-5',
+      writer: 'anthropic:claude-sonnet-5-5',
+      translator: 'anthropic:claude-sonnet-5-5',
+    };
+    project.saveBook();
+    project.writeJson('source/document.json', doc);
+    const llm = new Llm({ fake, cacheDir: project.path('cache', 'llm'), ledger: project.path('.ledger.jsonl') });
+    await ensurePlan(project, { llm, approve: true });
+    await buildChapter(project, 'ch01', { llm, narrate: false });
+    expect(unfinishedDraft(project, 'ch01')).toBeUndefined();
+    // what making the chapter cost, kept in the ledger by the calls' names (the test model costs nothing)
+    expect(Object.keys(ledgerSummary(project.path('.ledger.jsonl')).byChapter)).toEqual(['ch01']);
+
+    // "Make again", stopped after its third beat: the beats written are kept, the old lesson stays meanwhile
+    const stop = new Error('stopped');
+    await expect(
+      buildChapter(project, 'ch01', {
+        llm,
+        narrate: false,
+        force: ['storyboard', 'translate'],
+        onProgress: (e) => {
+          if (e.status === 'beat' && e.index === 2) throw stop;
+        },
+      }),
+    ).rejects.toBe(stop);
+    expect(unfinishedDraft(project, 'ch01')).toEqual({ written: 3, total: 6 });
+    expect(project.hasLesson('ch01')).toBe(true);
+
+    // "Make the rest" (no force): the three beats left, each with its storyboard title, then the strings again
+    const seen: ProgressEvent[] = [];
+    await buildChapter(project, 'ch01', { llm, narrate: false, onProgress: (e) => seen.push(e) });
+    const beatsSeen = seen.filter((e) => e.status === 'beat');
+    expect(beatsSeen.map((e) => (e.status === 'beat' ? [e.index, e.title] : []))).toEqual([
+      [3, 'wrap'],
+      [4, 'final1'],
+      [5, 'finish'],
+    ]);
+    expect(seen.find((e) => e.stage === 'translate:ar')?.status).toBe('start');
+    expect(unfinishedDraft(project, 'ch01')).toBeUndefined();
+    expect(project.loadLesson('ch01').beats).toHaveLength(6);
+    expect(staleTranslations(project, 'ch01')).toEqual([]);
+
+    // stopped right after the new storyboard: the old draft's beats are not reused (beat ids repeat)
+    const after = (stage: string, status: string) => (e: ProgressEvent) => {
+      if (e.stage === stage && e.status === status) throw stop;
+    };
+    await expect(
+      buildChapter(project, 'ch01', {
+        llm,
+        narrate: false,
+        force: ['storyboard'],
+        onProgress: after('storyboard', 'done'),
+      }),
+    ).rejects.toBe(stop);
+    expect(unfinishedDraft(project, 'ch01')).toEqual({ written: 0, total: 6 });
+    const all: ProgressEvent[] = [];
+    await buildChapter(project, 'ch01', { llm, narrate: false, onProgress: (e) => all.push(e) });
+    expect(all.filter((e) => e.status === 'beat')).toHaveLength(6);
+
+    // stopped between the beats and the translations: the lesson is new, its old strings are marked, and the
+    // next build translates them again
+    await expect(
+      buildChapter(project, 'ch01', { llm, narrate: false, force: ['write'], onProgress: after('write', 'done') }),
+    ).rejects.toBe(stop);
+    expect(staleTranslations(project, 'ch01')).toEqual(['ar']);
+    const last: ProgressEvent[] = [];
+    await buildChapter(project, 'ch01', { llm, narrate: false, onProgress: (e) => last.push(e) });
+    expect(last.find((e) => e.stage === 'write')?.status).toBe('skip');
+    expect(last.find((e) => e.stage === 'translate:ar')?.status).toBe('start');
+    expect(staleTranslations(project, 'ch01')).toEqual([]);
   });
 
   it('turns a tier-C answer into a beat with automatic cues', () => {

@@ -59,14 +59,31 @@ test('a PDF becomes a planned, built and exported book (test model)', async ({ p
   await page.getByRole('button', { name: 'Approve the plan' }).click();
   await expect(page.getByText('Approved', { exact: true })).toBeVisible();
 
-  // make the first chapter (storyboard, beats, French translation)
+  // make the first chapter (storyboard, beats, French translation): its cost is shown before the click
   await step(page, /Make lessons/).click();
-  const ch01 = page.locator('.chapter', { hasText: 'ch01' });
-  await ch01.getByRole('button', { name: 'Make' }).click();
+  await expect(page.getByRole('heading', { level: 2, name: 'Make lessons' })).toBeVisible();
+  const ch01 = page.locator('.make-row').first();
+  await expect(ch01).toContainText('Not made yet');
+  await expect(ch01).toContainText(/about \$/);
+  await ch01.getByRole('button', { name: 'Make', exact: true }).click();
   expect(await jobDone(page)).toContain('pill-done');
+  // done: the toast names the chapter, its beats and its cost
+  await expect(page.locator('.toast')).toContainText(/Chapter \d+ is made · \d+ beats · \$/);
   await expect(ch01).toHaveClass(/is-made/);
-  await expect(ch01.getByText('No errors')).toBeVisible();
-  await expect(ch01.locator('.langs')).toContainText('FR');
+  await expect(ch01.getByText('No problems')).toBeVisible();
+  await expect(ch01.locator('.langs')).toContainText('fr');
+  await expect(page.locator('.stepper')).toContainText(/1\/\d+/);
+  // the tray keeps what happened: the chapter's stages and its beats as they were written
+  await page.locator('.tray-pill-open').click();
+  await expect(page.getByRole('list', { name: 'Stages' })).toBeVisible();
+  expect(await page.locator('.build-tiles li').count()).toBeGreaterThan(2);
+  await page.locator('.tray').getByRole('button', { name: 'Hide' }).click();
+  // making it again would replace the teacher's edits: only this asks first
+  await ch01.getByRole('button', { name: 'Make again' }).click();
+  const dialog = page.locator('dialog.dialog');
+  await expect(dialog).toContainText(/Make chapter \d+ again\?/);
+  await dialog.getByRole('button', { name: 'Keep my lesson' }).click();
+  await expect(dialog).toBeHidden();
 
   // the lesson opens in the editor and its preview plays
   await ch01.getByRole('link', { name: 'Edit' }).click();

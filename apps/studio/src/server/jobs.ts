@@ -30,7 +30,19 @@ export interface JobCtx {
   args: Record<string, unknown>;
   /** Pipeline progress (also a cancellation point at stage boundaries). */
   progress(
-    e: P.ProgressEvent | { stage: string; status: string; detail?: string; index?: number; total?: number },
+    e:
+      | P.ProgressEvent
+      | {
+          stage: string;
+          status: string;
+          detail?: string;
+          index?: number;
+          total?: number;
+          usd?: number;
+          n?: number;
+          estimate?: number;
+          limit?: number;
+        },
     chapter?: string,
   ): void;
   log(message: string, level?: 'info' | 'warn' | 'error'): void;
@@ -157,22 +169,58 @@ export const RUNNERS: Record<JobType, Runner> = {
     if (!plan) throw new Error('There is no plan yet: make the plan first.');
     if (plan.status !== 'approved') throw new Error('The plan is a draft: review it and approve it first.');
     const llm = ctx.llm();
+    const start = llm.totalUsd;
+    const spent = () => +(llm.totalUsd - start).toFixed(4);
     const langs = strList(ctx.args.langs);
     const force = strList(ctx.args.force) as P.BuildOptions['force'];
-    const out: { chapter: string; errors: number; warnings: number; usd: number }[] = [];
-    for (const id of chaptersOf(p, ctx.args.chapters)) {
+    const ids = chaptersOf(p, ctx.args.chapters);
+    const order = plan.chapters.filter((c) => c.include);
+    let estimates: Record<string, number> = {};
+    try {
+      estimates = P.estimateChapters(p).chapters;
+    } catch {
+      // a model the price list doesn't know: the tray shows what is spent without an estimate
+    }
+    const limit = p.config.budget.usd;
+    const out: {
+      chapter: string;
+      title: string;
+      n: number;
+      beats: number;
+      errors: number;
+      warnings: number;
+      usd: number;
+    }[] = [];
+    for (const [k, id] of ids.entries()) {
       ctx.checkpoint();
       ctx.log(`▸ ${id}`);
+      // the tray names the chapter it is making ("Making chapter 6 · Integers in daily life", 1 of 2) and what it
+      // should cost against the book's limit
+      // numbered among the chapters to make, as on the Make step ("Making chapter 3", like the rail's "1/3")
+      const n = order.findIndex((c) => c.id === id) + 1;
+      const title = order[n - 1]?.title ?? id;
+      const head = {
+        stage: 'chapter',
+        detail: title,
+        index: k,
+        total: ids.length,
+        ...(n > 0 ? { n } : {}),
+        ...(estimates[id] !== undefined ? { estimate: +estimates[id].toFixed(4) } : {}),
+        ...(limit !== undefined ? { limit } : {}),
+      };
+      ctx.progress({ ...head, status: 'start', usd: spent() }, id);
       const r = await P.buildChapter(p, id, {
         llm,
         ...(langs ? { langs } : {}),
         ...(typeof ctx.args.narrate === 'boolean' ? { narrate: ctx.args.narrate } : {}),
         ...(force ? { force } : {}),
-        onProgress: (e) => ctx.progress(e, id),
+        // every event says what the run has spent so far (the tray shows it against the estimate)
+        onProgress: (e) => ctx.progress({ ...e, usd: spent() }, id),
       });
       const errors = r.issues.filter((i) => i.level === 'error').length;
       const warnings = r.issues.filter((i) => i.level === 'warn').length;
-      out.push({ chapter: id, errors, warnings, usd: r.usd });
+      out.push({ chapter: id, title, n, beats: r.lesson.beats.length, errors, warnings, usd: r.usd });
+      ctx.progress({ ...head, status: 'done', usd: spent() }, id);
       ctx.log(
         `${id}: ${errors ? `${errors} errors` : 'valid'}, ${warnings} warnings, $${r.usd.toFixed(3)}`,
         errors ? 'warn' : 'info',
@@ -622,9 +670,18 @@ export class Jobs {
           ...(e.detail !== undefined ? { detail: e.detail } : {}),
           ...('index' in e && e.index !== undefined ? { index: e.index, total: e.total } : {}),
           ...('usd' in e && typeof e.usd === 'number' ? { usd: e.usd } : {}),
+          ...('title' in e && typeof e.title === 'string' ? { title: e.title } : {}),
+          ...('n' in e && typeof e.n === 'number' ? { n: e.n } : {}),
+          ...('estimate' in e && typeof e.estimate === 'number' ? { estimate: e.estimate } : {}),
+          ...('limit' in e && typeof e.limit === 'number' ? { limit: e.limit } : {}),
           ...(chapter ? { chapter } : {}),
         });
-        if (e.status === 'done' || e.status === 'skip') checkpoint();
+        // Stop takes effect between stages, and between written beats (each is saved before its event): a chapter
+        // stopped partway goes on from there. Not after the last beat: the lesson is saved just after it (Stop is
+        // taken at "write done"). Pages read are only saved at the end of a reading, so not there either.
+        const between = 'index' in e && e.index !== undefined && e.total !== undefined && e.index + 1 < e.total;
+        if (e.status === 'done' || e.status === 'skip' || (e.stage === 'write' && e.status === 'beat' && between))
+          checkpoint();
       },
       log: (message, level = 'info') => this.emit(j, { kind: 'log', message, level }),
       checkpoint,

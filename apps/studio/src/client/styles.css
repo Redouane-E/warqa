@@ -1113,58 +1113,6 @@ input[type="radio"] {
   font-size: 15px;
   flex: none;
 }
-.chapters {
-  list-style: none;
-  padding: 0;
-  margin: 16px 0 0;
-  display: grid;
-  gap: 10px;
-}
-.chapter {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
-  gap: 6px 16px;
-  padding: 12px 14px;
-  border: 1px solid var(--rule);
-  border-radius: 12px;
-  background: var(--field);
-}
-.chapter.is-made {
-  border-inline-start: 3px solid var(--ink);
-}
-.chapter-main {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  min-inline-size: 0;
-}
-.chapter-id {
-  color: var(--ink-3);
-}
-.chapter-title {
-  font-weight: 600;
-  overflow-wrap: anywhere;
-}
-.chapter-meta {
-  grid-row: 2;
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  align-items: center;
-  font-size: 13.5px;
-  color: var(--ink-2);
-}
-.chapter-meta .langs {
-  display: inline-flex;
-  gap: 4px;
-}
-.chapter-actions {
-  grid-column: 2;
-  grid-row: 1 / span 2;
-  display: flex;
-  gap: 8px;
-  align-items: center;
-}
 .engine-line {
   display: flex;
   gap: 8px 16px;
@@ -1442,7 +1390,7 @@ input[type="radio"] {
   color: var(--wq-good);
   animation: none;
 }
-.tray-pill.is-error .tray-dot {
+.tray-pill:is(.is-error, .is-cancelled) .tray-dot {
   background: var(--wq-pen-tint);
   color: var(--wq-pen);
 }
@@ -2076,13 +2024,6 @@ details > summary {
   }
   .money {
     gap: 16px;
-  }
-  .chapter {
-    grid-template-columns: minmax(0, 1fr);
-  }
-  .chapter-actions {
-    grid-column: 1;
-    grid-row: auto;
   }
   .lang-pair {
     grid-template-columns: minmax(0, 1fr);
@@ -5225,5 +5166,393 @@ select {
   }
   .page-tile {
     transition: none;
+  }
+}
+
+/* ---------- ③ Make: each chapter with its cost before the click, the one being made (redesign 4c) ---------- */
+.make-sheet {
+  display: grid;
+  padding: 0;
+}
+.make-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 28px 28px 20px;
+  border-block-end: 1px solid var(--wq-seyes);
+}
+.make-head-start {
+  display: grid;
+  gap: 8px;
+  min-inline-size: 0;
+}
+.make-models {
+  margin: 0;
+  font-size: 14px;
+  color: var(--wq-text-2);
+}
+.make-narrate {
+  min-block-size: 44px;
+  font-size: 15px;
+  flex-wrap: wrap;
+}
+.make-narrate input {
+  inline-size: 20px;
+  block-size: 20px;
+  accent-color: var(--wq-ink);
+}
+.make-head-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.make-all {
+  color: var(--wq-good);
+}
+.make-sheet > .notice {
+  margin: 16px 28px 0;
+}
+.make-empty {
+  display: grid;
+  justify-items: start;
+  gap: 12px;
+  padding: 28px;
+}
+.make-empty .hint {
+  max-inline-size: 560px;
+  margin: 0;
+}
+.make-rows {
+  list-style: none;
+  margin: 0;
+  padding: 8px 12px 12px;
+}
+.make-row {
+  display: grid;
+  grid-template-columns: 40px minmax(0, 1fr) auto;
+  gap: 4px 12px;
+  align-items: center;
+  padding: 14px 16px;
+  border-block-end: 1px solid var(--wq-seyes);
+  border-radius: var(--wq-radius-sheet);
+}
+.make-row:hover {
+  background: var(--wq-ground);
+}
+.make-n {
+  font-size: 14px;
+  color: var(--wq-text-2);
+}
+.make-row:is(.is-made, .is-making, .is-stopped) .make-n {
+  color: var(--wq-ink);
+  font-weight: 600;
+}
+.make-main {
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+}
+.make-title {
+  font-size: 17px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.make-meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 14px;
+  font-size: 14px;
+  color: var(--wq-text-2);
+}
+.make-meta > span {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.make-meta abbr {
+  text-decoration: none;
+}
+/* the row a Make button started takes the focus (the button is gone) */
+.make-row:focus-visible {
+  outline: 2px solid var(--wq-focus);
+  outline-offset: 2px;
+}
+.make-meta .good {
+  color: var(--wq-good);
+}
+.make-meta .warn,
+.make-now {
+  color: var(--wq-fluo-text);
+  font-weight: 500;
+}
+.make-meta .bad,
+.make-stopped {
+  color: var(--wq-pen);
+  font-weight: 500;
+}
+/* the chapter being made: on the highlighter, its chip pointing at the tray */
+.make-row.is-making {
+  background: color-mix(in srgb, var(--wq-fluo-tint) 55%, var(--wq-sheet));
+  box-shadow: inset 0 0 0 1.5px color-mix(in srgb, var(--wq-fluo) 75%, transparent);
+  border-block-end-color: transparent;
+}
+.make-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.status-chip.is-running {
+  background: var(--wq-fluo-tint);
+  color: var(--wq-fluo-text);
+}
+.make-chip {
+  min-block-size: 32px;
+  border: 0;
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+.make-chip .chip-dot {
+  animation: pulse 1.4s ease-in-out infinite;
+}
+
+/* ---------- the tray while lessons are made: stages, beats as they are written, money ---------- */
+.build-view {
+  display: grid;
+  gap: 16px;
+  padding-block: 6px 4px;
+}
+.build-stages {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 10px;
+}
+.build-stage {
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px dashed var(--wq-control-border);
+  border-radius: var(--wq-radius-sheet);
+}
+.build-stage.is-done {
+  border: 1px solid transparent;
+  background: var(--wq-ink-tint);
+}
+.build-stage.is-running {
+  border: 1px solid transparent;
+  background: var(--wq-raised);
+  box-shadow: inset 0 0 0 2px var(--wq-ink);
+}
+.build-stage:is(.is-stopped, .is-error) {
+  border: 1px solid transparent;
+  background: var(--wq-pen-tint);
+}
+.build-stage-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.build-stage-mark {
+  display: grid;
+  place-items: center;
+  flex: none;
+  inline-size: 22px;
+  block-size: 22px;
+  border-radius: 50%;
+  border: 1.5px solid var(--wq-input-border);
+  background: var(--wq-ground);
+}
+.is-done > .build-stage-head .build-stage-mark {
+  border-color: var(--wq-ink);
+  background: var(--wq-ink);
+  color: var(--wq-on-ink);
+}
+.is-running > .build-stage-head .build-stage-mark {
+  border: 2px solid var(--wq-ink);
+  background: var(--wq-raised);
+}
+.build-stage-mark i {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--wq-ink);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+:is(.is-stopped, .is-error) > .build-stage-head .build-stage-mark {
+  border-color: var(--wq-pen);
+  background: var(--wq-pen);
+  color: var(--wq-on-ink);
+}
+.build-stage-name {
+  font-size: 14px;
+  font-weight: 500;
+}
+.build-stage.is-running .build-stage-name {
+  padding-inline: 4px;
+  border-radius: 2px;
+  background: var(--wq-fluo);
+  color: var(--wq-on-fluo);
+  font-weight: 600;
+}
+.build-stage.is-waiting .build-stage-name {
+  color: var(--wq-text-2);
+}
+.build-stage .bar {
+  flex: none;
+}
+.build-stage-sub {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--wq-text-2);
+  overflow-wrap: anywhere;
+}
+.build-stage.is-running .build-stage-sub {
+  color: var(--wq-text);
+}
+.build-beats-title {
+  margin: 0 0 8px;
+  font-size: 15px;
+  font-weight: 500;
+  color: var(--wq-text-2);
+}
+.build-tiles {
+  grid-template-columns: repeat(auto-fill, minmax(min(130px, 100%), 1fr));
+}
+.beat-tiles li.is-todo {
+  border-style: dashed;
+  border-color: var(--wq-seyes);
+  background: transparent;
+  animation: none;
+}
+.is-todo .beat-thumb {
+  background: transparent;
+  border: 1.5px dashed var(--wq-seyes);
+}
+.is-todo .beat-cap {
+  color: var(--wq-text-3);
+}
+/* a beat's lines are drawn in the reading direction */
+[dir="rtl"] .beat-thumb i {
+  transform-origin: right;
+}
+.build-money {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 20px;
+  padding-block-start: 12px;
+  border-block-start: 1px solid var(--wq-seyes);
+}
+.build-money p {
+  margin: 0;
+  font-size: 14px;
+  color: var(--wq-text-2);
+}
+.build-money strong {
+  color: var(--wq-text);
+  font-weight: 600;
+}
+.build-meter {
+  flex: 0 1 200px;
+  block-size: 8px;
+  border-radius: 4px;
+}
+
+/* the handle and the peek bar exist on phones only */
+.tray-grab,
+.tray-pill-bar {
+  display: none;
+}
+
+@media (max-width: 760px) {
+  .make-head {
+    padding: 20px 16px 16px;
+  }
+  .make-sheet > .notice {
+    margin: 12px 16px 0;
+  }
+  .make-empty {
+    padding: 20px 16px;
+  }
+  .make-rows {
+    padding: 4px 4px 8px;
+  }
+  .make-row {
+    grid-template-columns: 28px minmax(0, 1fr);
+    padding: 12px;
+  }
+  .make-end {
+    grid-column: 2;
+    justify-content: flex-start;
+  }
+  /* the open tray is a bottom sheet with a handle; folded, a 56 px peek bar with its progress */
+  .tray {
+    inset-inline: 0;
+    border-radius: 16px 16px 0 0;
+  }
+  .tray-head {
+    padding-block-start: 0;
+  }
+  .tray-grab {
+    display: grid;
+    place-items: center;
+    flex: 1 0 100%;
+    block-size: 24px;
+    border: 0;
+    background: transparent;
+    cursor: pointer;
+  }
+  .tray-grab span {
+    inline-size: 40px;
+    block-size: 4px;
+    border-radius: 2px;
+    background: var(--wq-control-border);
+  }
+  .tray-pill {
+    inset-inline: 0;
+    inset-block-end: 0;
+    max-inline-size: none;
+    border-block-end: 0;
+    border-radius: 16px 16px 0 0;
+  }
+  .tray-pill-open {
+    position: relative;
+    flex: 1;
+    min-block-size: 56px;
+    padding: 0 18px;
+    border-radius: 16px 16px 0 0;
+  }
+  .tray-pill-bar {
+    display: block;
+    position: absolute;
+    inset-inline: 18px;
+    inset-block-end: 8px;
+    block-size: 4px;
+    border-radius: 2px;
+    background: var(--wq-seyes);
+    overflow: hidden;
+  }
+  .tray-pill-bar span {
+    display: block;
+    block-size: 100%;
+    background: var(--wq-ink);
+    transition: inline-size var(--wq-t-menu) linear;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .make-chip .chip-dot,
+  .build-stage-mark i {
+    animation: none;
   }
 }

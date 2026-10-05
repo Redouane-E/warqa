@@ -133,8 +133,10 @@ Commencez petit : un chapitre de 10 à 20 pages.
    cliquez sur **Lire le PDF**.
 6. **Plan.** Cliquez sur **Proposer le plan**. Lisez les chapitres, décochez ceux dont vous ne voulez pas,
    puis cliquez sur **Valider le plan**.
-7. **Créer les leçons.** Cliquez sur **Créer** à côté d’un seul chapitre. Suivez l’avancement dans
-   **Activité** et surveillez le coût.
+7. **Créer les leçons.** Chaque chapitre affiche son coût probable à côté de **Créer**. Cliquez sur
+   **Créer** à côté d’un seul chapitre. Le travail s’affiche en bas de la fenêtre : ses phases et les étapes
+   à mesure qu’elles sont écrites, avec ce qui a été dépensé. **Arrêter** garde les étapes déjà écrites ;
+   **Créer la suite** reprend à partir de là.
 8. **Regarder et corriger.** Cliquez sur **Modifier** pour voir la leçon dans l’**Aperçu**. Changez une
    phrase, ou utilisez **Régénérer cette étape** avec une consigne courte comme « plus court, avec une
    balance ».

@@ -395,13 +395,27 @@ Write beat "${sb.id}" now. Make the picture carry the argument: schedule a visua
     }
     const beat = schemas().Beat.parse({ id: sb.id, move: sb.move, ...draft }) as Beat;
     done.push(beat);
-    project.writeJson(draftPath, { beats: done });
+    project.writeJson(draftPath, { beats: done, total: story.beats.length });
     opts.onBeat?.({ id: sb.id, index: i, total: story.beats.length, repairs, usd });
   }
 
   const lesson = parseLesson({ ...base, beats: done });
   project.saveLesson(chapter.id, lesson);
   return lesson;
+}
+
+/**
+ * A chapter whose writing stopped partway (Stop, the spending limit, an error): its draft has fewer beats than its
+ * storyboard. The beats written are kept and the next build goes on from there. Drafts left by older versions or
+ * by "Regenerate this beat" carry no total and never count.
+ */
+export function unfinishedDraft(project: Project, chapterId: string): { written: number; total: number } | undefined {
+  const d = project.readJson<{ beats?: unknown[]; total?: number } | undefined>(
+    `lessons/${chapterId}/draft.json`,
+    undefined,
+  );
+  const written = Array.isArray(d?.beats) ? d.beats.length : 0;
+  return typeof d?.total === 'number' && written < d.total ? { written, total: d.total } : undefined;
 }
 
 export interface RewriteOptions {
