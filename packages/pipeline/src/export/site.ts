@@ -2,6 +2,7 @@
 import { copyFileSync, cpSync, existsSync, mkdirSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join } from 'node:path';
+import { COLORS } from '@warqa/brand';
 import { dirOf } from '@warqa/i18n';
 import { completeTimings, type Lesson, type LText, localize, ltext, type Strings, type Timings } from '@warqa/lesson';
 import type { Project } from '../project/index.js';
@@ -56,6 +57,8 @@ function page(opts: {
   description?: string;
   /** Component pack scripts, loaded before the player so it can register their components. */
   packs?: string[];
+  /** The book shows on the navy Board (the page's colour before the player draws). */
+  board?: boolean;
 }): string {
   return `<!doctype html>
 <html lang="${esc(opts.lang)}" dir="${opts.dir}">
@@ -65,7 +68,7 @@ function page(opts: {
 <title>${esc(opts.title)}</title>
 ${opts.description ? `<meta name="description" content="${esc(opts.description)}">\n` : ''}<meta name="generator" content="Warqa">
 <link rel="stylesheet" href="${opts.base}_warqa/player.css">
-<style>html,body{margin:0;height:100%;background:#121b18}#warqa{height:100%}</style>
+<style>html,body{margin:0;height:100%;background:${opts.board ? COLORS.ground[1] : COLORS.ground[0]}}#warqa{height:100%}</style>
 </head>
 <body>
 <div id="warqa"></div>
@@ -87,6 +90,8 @@ export function exportSite(project: Project, opts: ExportOptions = {}): ExportRe
   mkdirSync(out, { recursive: true });
   const book = project.book;
   const langs = opts.langs ?? book.langs;
+  // "chalk", the old chalkboard, is shown on the navy Board; anything else on the white Sheet
+  const board = book.theme === 'board' || book.theme === 'chalk';
   const ids = (opts.lessons ?? project.lessonIds()).filter((id) => project.hasLesson(id));
   const lessons = new Map<string, Lesson>(ids.map((id) => [id, project.loadLesson(id)]));
   // map data is large: ship it only with books that have maps
@@ -146,6 +151,7 @@ export function exportSite(project: Project, opts: ExportOptions = {}): ExportRe
         id: book.id,
         title: ltext(book.title, defaultLang),
         digits: book.digits,
+        theme: book.theme,
         home: '../index.html#contents',
         ...(ids[k + 1] ? { next: `../${ids[k + 1]}/index.html` } : {}),
         ...(ids[k - 1] ? { prev: `../${ids[k - 1]}/index.html` } : {}),
@@ -165,6 +171,7 @@ export function exportSite(project: Project, opts: ExportOptions = {}): ExportRe
         base: '../',
         script: `window.WARQA_DATA=${inline(data)};`,
         packs,
+        board,
       }),
     );
   });
@@ -211,6 +218,7 @@ export function exportSite(project: Project, opts: ExportOptions = {}): ExportRe
     langs,
     defaultLang,
     digits: book.digits,
+    theme: book.theme,
     units: unitData,
     ...(book.source ? { source: book.source } : {}),
     ...(book.attribution ? { attribution: book.attribution } : {}),
@@ -224,6 +232,7 @@ export function exportSite(project: Project, opts: ExportOptions = {}): ExportRe
       title: ltext(book.title, defaultLang),
       base: '',
       script: `window.WARQA_BOOK=${inline(bookData)};`,
+      board,
     }),
   );
   writeFileSync(

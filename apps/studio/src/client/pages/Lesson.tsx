@@ -89,7 +89,7 @@ function Preview({
         if (rating) data.panel = { kit: bookId, code: lid };
         if (cancelled || !host.current) return;
         host.current.replaceChildren();
-        mounted = await W.mount(host.current, data, { storage: false, keyboard: 'local' });
+        mounted = await W.mount(host.current, data, { storage: false, keyboard: 'local', head: false });
         if (cancelled) {
           mounted.destroy();
           return;

@@ -1,6 +1,8 @@
 // The lesson player: clock, audio, beats, questions, captions, transcript, keyboard and progress.
 // Portions derived from Papermorph (MIT): the player model (beats, audio-driven clock, segments bar, cover,
 // help overlay, finish card, "?beat=&t=" review frames, sound-failure fallback).
+
+import type { IconName } from '@warqa/brand';
 import {
   dirOf,
   formatNumber,
@@ -19,10 +21,11 @@ import { narrationText, spokenText, wordAt } from '../core/timing.js';
 import type { Segment } from '../core/types.js';
 import { key as segKey } from '../core/types.js';
 import { type Lesson, type LessonInput, parseLesson, type Strings, type Timings } from '../schema/lesson.js';
-import { h, markIcon, svg } from './dom.js';
+import { h, icon, markIcon, rich, svg } from './dom.js';
 import { type PanelConfig, RatingPanel } from './panel.js';
 import { type CardController, openCard, type Score } from './quiz.js';
 import { type CardPlace, SceneRenderer } from './scene.js';
+import { activeTheme, setTheme as setPalette, type Theme, themeOf } from './theme.js';
 
 export interface PlayerData {
   /** The lesson skeleton (author language). */
@@ -38,6 +41,8 @@ export interface PlayerData {
     id: string;
     title?: string;
     digits?: 'latn' | 'arab';
+    /** The book's theme: sheet (the default), board, or chalk (shown as the board). */
+    theme?: string;
     /** Links (relative to the page): contents, next and previous lessons. */
     home?: string;
     next?: string;
@@ -59,6 +64,12 @@ export interface PlayerOptions {
   review?: { beat: number; t: number };
   /** Save progress and scores in localStorage. */
   storage?: boolean;
+  /** Force a theme (otherwise: ?theme= in the address, the learner's last choice, then the book's). */
+  theme?: Theme;
+  /** The stage alone, edge to edge, with no strip, captions or bar (?bare: video export, QA shots, thumbnails). */
+  bare?: boolean;
+  /** Show the strip above the stage (default true; a host page that has its own title turns it off). */
+  head?: boolean;
   onEvent?: (e: PlayerEvent) => void;
 }
 
@@ -69,6 +80,11 @@ export type PlayerEvent =
   | { type: 'lang'; lang: string };
 
 const CAPTIONS_KEY = 'warqa:captions';
+const THEME_KEY = 'warqa:theme';
+const SPEED_KEY = 'warqa:speed';
+/** Playback speeds; the voice keeps its pitch. */
+export const SPEEDS: readonly number[] = [0.75, 1, 1.25, 1.5];
+let players = 0;
 
 export class Player {
   readonly root: HTMLElement;
@@ -78,7 +94,7 @@ export class Player {
   private htmlLayer!: HTMLDivElement;
   private overlay!: HTMLDivElement;
   private cardHost!: HTMLDivElement;
-  private captionEl!: HTMLDivElement;
+  private captionEl!: HTMLParagraphElement;
   private pausedEl!: HTMLDivElement;
   private soundNote!: HTMLParagraphElement;
   private cover!: HTMLButtonElement;
@@ -86,6 +102,22 @@ export class Player {
   private panel: RatingPanel | null = null;
   private transcriptEl!: HTMLElement;
   private bar!: HTMLElement;
+  private head!: HTMLElement;
+  private marginLine!: SVGPathElement;
+  private themeBtn!: HTMLButtonElement;
+  private speedBtn!: HTMLButtonElement;
+  private speedMenu!: HTMLElement;
+  private theme: Theme = 'sheet';
+  private rate = 1;
+  private stepKey = '';
+  private readonly uid = ++players;
+  /** Phones: question cards sit under the stage instead of inside the small picture. */
+  private cardsOut = false;
+  private phone: MediaQueryList | null = null;
+  private onPhone = () => this.placeCards(true);
+  private onOutside = (e: PointerEvent) => {
+    if (!(e.target as Element).closest?.('.wq-speedwrap')) this.toggleSpeedMenu(false);
+  };
   private segsEl!: HTMLElement;
   private stepName!: HTMLElement;
   private playBtn!: HTMLButtonElement;
@@ -117,7 +149,7 @@ export class Player {
   /** Caption being shown (beat:sentence) and its word spans, for the word-by-word highlight. */
   private capKey = '';
   private capWords: { k: number; el: HTMLElement }[] = [];
-  private capLit: HTMLElement | undefined;
+  private capK = -2;
   private reducedMotion = false;
   private destroyed = false;
   private reviewMode = false;
@@ -146,8 +178,19 @@ export class Player {
     this.skeleton = parseLesson(data.lesson);
     const langs = this.langs();
     this.lang = data.lang && langs.includes(data.lang) ? data.lang : langs[0]!;
-    this.root = h('div', { class: 'wq-player', tabindex: '-1' });
+    this.root = h('div', {
+      class: `wq-player${opts.bare ? ' wq-bare' : ''}${opts.head === false ? ' wq-nohead' : ''}`,
+      tabindex: '-1',
+    });
     host.append(this.root);
+    this.theme = this.initialTheme();
+    this.applyTheme();
+    try {
+      const r = Number(localStorage.getItem(SPEED_KEY));
+      if (SPEEDS.includes(r)) this.rate = r;
+    } catch {
+      /* storage unavailable */
+    }
     this.reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
     try {
       this.captionsOn = localStorage.getItem(CAPTIONS_KEY) === '1';
@@ -157,6 +200,9 @@ export class Player {
     this.buildDom();
     this.applyLang(this.lang);
     this.loadScores();
+    this.phone = typeof matchMedia === 'function' ? matchMedia('(max-width: 640px)') : null;
+    this.placeCards(false);
+    this.phone?.addEventListener?.('change', this.onPhone);
     this.keyHandler = this.keyHandler.bind(this);
     (opts.keyboard === 'local' ? this.root : window).addEventListener('keydown', this.keyHandler as EventListener);
     this.fitObserver();
@@ -189,6 +235,9 @@ export class Player {
     this.root.setAttribute('lang', lang);
     this.root.setAttribute('dir', this.dir);
     this.root.classList.toggle('wq-rtl', this.dir === 'rtl');
+    // the paper's margin line sits at the inline start, outside the slots (80 to 1520), on the right in Arabic;
+    // the picture never mirrors
+    this.marginLine?.setAttribute('d', this.dir === 'rtl' ? 'M1562 0V900' : 'M38 0V900');
     this.lesson = lang === this.skeleton.lang ? this.skeleton : localize(this.skeleton, this.data.strings?.[lang]);
     this.compiled = compileLesson(this.lesson, this.data.timings?.[lang], { lang, strict: false });
     for (const issue of this.compiled.issues)
@@ -230,28 +279,158 @@ export class Player {
     this.opts.onEvent?.({ type: 'lang', lang });
   }
 
+  /* ---------- theme and speed ---------- */
+
+  private initialTheme(): Theme {
+    let fromUrl: Theme | undefined;
+    let saved: Theme | undefined;
+    try {
+      fromUrl = themeOf(new URLSearchParams(location.search).get('theme'));
+    } catch {
+      /* no location (embedded) */
+    }
+    try {
+      saved = themeOf(localStorage.getItem(THEME_KEY));
+    } catch {
+      /* storage unavailable */
+    }
+    return themeOf(this.opts.theme) ?? fromUrl ?? saved ?? themeOf(this.data.book?.theme) ?? 'sheet';
+  }
+
+  private applyTheme() {
+    setPalette(this.theme);
+    this.root.classList.toggle('wq-theme-sheet', this.theme === 'sheet');
+    this.root.classList.toggle('wq-theme-board', this.theme === 'board');
+    if (this.themeBtn) {
+      const label = this.t(this.theme === 'sheet' ? 'theme.toBoard' : 'theme.toSheet');
+      this.themeBtn.setAttribute('aria-label', label);
+      this.themeBtn.title = label;
+      this.themeBtn.replaceChildren(icon(this.theme === 'sheet' ? 'board-theme' : 'sheet-theme'));
+    }
+  }
+
+  /** Switch between the white Sheet and the navy Board, keeping the place; the choice is remembered. */
+  setTheme(name: Theme): void {
+    const theme = themeOf(name);
+    if (!theme || theme === this.theme) return;
+    this.theme = theme;
+    try {
+      localStorage.setItem(THEME_KEY, theme);
+    } catch {
+      /* storage unavailable */
+    }
+    this.applyTheme();
+    this.redraw();
+  }
+
+  /** Phones put the question cards under the stage, full size; the picture then keeps its whole width. */
+  private placeCards(rebuild: boolean) {
+    const out = !!this.phone?.matches && !this.opts.bare;
+    if (out === this.cardsOut && rebuild) return;
+    this.cardsOut = out;
+    const asked = rebuild && this.cardShown;
+    if (asked) {
+      this.closeCard();
+      this.cardShown = false;
+    }
+    this.cardHost.classList.toggle('wq-cards-out', out);
+    if (out) this.frame.parentElement!.after(this.cardHost);
+    else this.frame.insertBefore(this.cardHost, this.pausedEl);
+    if (rebuild) this.redraw();
+    if (asked) this.maybeAsk();
+  }
+
+  /** Where the scene leaves room for a card (nowhere when the card sits under the stage). */
+  private layoutPlace(cb: CompiledBeat): CardPlace {
+    return this.cardsOut ? null : this.cardPlace(cb);
+  }
+
+  /** Several players may share a page with different themes: each sets its palette before it draws. */
+  private usePalette() {
+    if (activeTheme() !== this.theme) setPalette(this.theme);
+  }
+
+  /** Rebuild the picture at the same moment (after the palette changed). */
+  private redraw() {
+    if (this.destroyed) return;
+    this.usePalette();
+    const cb = this.beat();
+    if (this.i > 0) {
+      const prev = this.compiled.beats[this.i - 1]!;
+      this.renderer.build(prev, this.layoutPlace(prev));
+    } else this.renderer.boxes = new Map();
+    this.renderer.build(cb, this.layoutPlace(cb));
+    this.builtIndex = this.i;
+    this.render();
+  }
+
+  private fmtRate(r: number): string {
+    return `${formatNumber(r, this.lang, { digits: this.data.book?.digits ?? 'latn' })}×`;
+  }
+
+  /** Playback speed (0.75× to 1.5×): the audio's rate, or the clock's when there is no audio. */
+  setSpeed(rate: number): void {
+    if (!SPEEDS.includes(rate)) return;
+    this.rate = rate;
+    if (this.audio) this.audio.playbackRate = rate;
+    try {
+      localStorage.setItem(SPEED_KEY, String(rate));
+    } catch {
+      /* storage unavailable */
+    }
+    this.updateSpeed();
+  }
+
+  private updateSpeed() {
+    if (!this.speedBtn) return;
+    const label = this.t('bar.speed', { rate: this.fmtRate(this.rate) });
+    this.speedBtn.setAttribute('aria-label', label);
+    this.speedBtn.title = label;
+    (this.speedBtn.querySelector('.wq-rate') as HTMLElement).textContent = this.fmtRate(this.rate);
+    for (const b of this.speedMenu.querySelectorAll('button'))
+      b.setAttribute('aria-checked', String(Number(b.dataset.rate) === this.rate));
+  }
+
+  private toggleSpeedMenu(open = this.speedMenu.hidden) {
+    if (open === !this.speedMenu.hidden) return;
+    this.speedMenu.hidden = !open;
+    this.speedBtn.setAttribute('aria-expanded', String(open));
+    // a click anywhere outside closes it
+    if (open) document.addEventListener('pointerdown', this.onOutside, true);
+    else document.removeEventListener('pointerdown', this.onOutside, true);
+    if (open) (this.speedMenu.querySelector('[aria-checked="true"]') as HTMLElement | null)?.focus();
+  }
+
   /* ---------- DOM ---------- */
 
   private buildDom() {
     const r = this.root;
     this.frame = h('div', { class: 'wq-frame' });
     this.stage = svg('svg', { class: 'wq-stage', viewBox: '0 0 1600 900', role: 'img' });
+    // the paper: a faint ruling and the red margin line (the Board has its navy equivalent)
     const defs = svg('defs', {}, this.stage);
-    const grain = svg('filter', { id: 'wq-grain', x: 0, y: 0, width: '100%', height: '100%' }, defs);
-    svg('feTurbulence', { type: 'fractalNoise', baseFrequency: 0.85, numOctaves: 2, seed: 7 }, grain);
-    svg('feColorMatrix', { values: '0 0 0 0 .92  0 0 0 0 .95  0 0 0 0 .9  0 0 0 .07 0' }, grain);
-    const vig = svg('radialGradient', { id: 'wq-vignette', cx: 0.5, cy: 0.45, r: 0.75 }, defs);
-    svg('stop', { offset: 0.6, 'stop-color': '#000', 'stop-opacity': 0 }, vig);
-    svg('stop', { offset: 1, 'stop-color': '#000', 'stop-opacity': 0.35 }, vig);
+    const ruling = svg(
+      'pattern',
+      { id: `wq-ruling-${this.uid}`, width: 1600, height: 52, patternUnits: 'userSpaceOnUse' },
+      defs,
+    );
+    svg('path', { class: 'wq-ruling', d: 'M0 51.5H1600' }, ruling);
     svg('rect', { width: 1600, height: 900, class: 'wq-board' }, this.stage);
-    svg('rect', { width: 1600, height: 900, filter: 'url(#wq-grain)' }, this.stage);
-    svg('rect', { width: 1600, height: 900, fill: 'url(#wq-vignette)' }, this.stage);
+    svg('rect', { width: 1600, height: 900, fill: `url(#wq-ruling-${this.uid})` }, this.stage);
+    this.marginLine = svg('path', { class: 'wq-margin', d: 'M38 0V900' }, this.stage);
     this.scene = svg('g', { class: 'wq-scene' }, this.stage);
     this.htmlLayer = h('div', { class: 'wq-html' });
     this.overlay = h('div', { class: 'wq-overlay' });
     this.cardHost = h('div', { class: 'wq-cards' });
-    this.captionEl = h('div', { class: 'wq-caption', hidden: true });
-    this.pausedEl = h('div', { class: 'wq-paused', hidden: true }, h('div'));
+    // captions sit under the stage, never on the picture
+    this.captionEl = h('p', { class: 'wq-caption', hidden: true, dir: 'auto' });
+    // paused: no dark veil, the picture stays readable
+    this.pausedEl = h(
+      'div',
+      { class: 'wq-paused', hidden: true },
+      h('span', { class: 'wq-paused-btn' }, icon('play', 40)),
+      h('p', {}),
+    );
     this.soundNote = h('p', { class: 'wq-soundnote', hidden: true, role: 'status' });
     this.live = h('div', { class: 'wq-sr', 'aria-live': 'polite' });
     this.cover = h('button', { class: 'wq-cover', type: 'button' });
@@ -261,7 +440,6 @@ export class Player {
       this.htmlLayer,
       this.overlay,
       this.cardHost,
-      this.captionEl,
       this.pausedEl,
       this.soundNote,
       this.cover,
@@ -269,8 +447,19 @@ export class Player {
     this.pausedEl.addEventListener('click', () => this.togglePlay());
     this.helpEl = h('dialog', { class: 'wq-help' }) as HTMLDialogElement;
     this.transcriptEl = h('aside', { class: 'wq-transcript', hidden: true });
+    this.head = h('header', { class: 'wq-head' });
     this.bar = h('div', { class: 'wq-bar' });
-    r.append(h('div', { class: 'wq-viewport' }, this.frame), this.bar, this.transcriptEl, this.helpEl, this.live);
+    r.append(
+      this.head,
+      h(
+        'div',
+        { class: 'wq-main' },
+        h('div', { class: 'wq-stagecol' }, h('div', { class: 'wq-viewport' }, this.frame), this.captionEl, this.bar),
+        this.transcriptEl,
+      ),
+      this.helpEl,
+      this.live,
+    );
     const panel = this.panelConfig();
     if (panel) {
       this.panel = new RatingPanel(
@@ -285,11 +474,30 @@ export class Player {
     }
   }
 
+  private iconBtn(
+    cls: string,
+    label: string,
+    name: IconName,
+    fn: () => void,
+    extra: Record<string, unknown> = {},
+    short?: string,
+  ): HTMLButtonElement {
+    const b = h(
+      'button',
+      { class: `wq-icon ${cls}`.trim(), type: 'button', 'aria-label': label, title: label, ...extra },
+      icon(name),
+      // phones show a word next to the icon
+      short ? h('span', { class: 'wq-lbl', 'aria-hidden': 'true' }, short) : null,
+    );
+    b.addEventListener('click', fn);
+    return b;
+  }
+
   private translateChrome() {
     const t = this.t;
     const b = this.lesson;
     this.stage.setAttribute('aria-label', t('lesson.aria'));
-    (this.pausedEl.firstChild as HTMLElement).textContent = t('lesson.paused');
+    (this.pausedEl.querySelector('p') as HTMLElement).textContent = t('lesson.paused');
     this.soundNote.textContent = t('lesson.soundFailed');
     const mins = b.minutes ?? Math.max(1, Math.round(this.compiled.beats.reduce((a, c) => a + c.timing.dur, 0) / 60));
     this.cover.replaceChildren(
@@ -306,7 +514,7 @@ export class Player {
             )
           : null,
         h('span', { class: 'wq-cover-t' }, b.title),
-        h('span', { class: 'wq-go' }, svgIcon('play'), t('cover.start')),
+        h('span', { class: 'wq-go' }, icon('play', 24), t('cover.start')),
         h(
           'small',
           {},
@@ -315,99 +523,192 @@ export class Player {
       ),
     );
     this.cover.setAttribute('aria-label', `${t('cover.start')}: ${b.title}`);
+    this.buildHead();
     this.buildBar();
     this.buildHelp();
     this.setCaptions(this.captionsOn);
   }
 
-  private buildBar() {
+  /** The strip above the stage: all lessons, the title, language, Sheet or Board, transcript, full screen. */
+  private buildHead() {
     const t = this.t;
-    const btn = (
-      cls: string,
-      label: string,
-      icon: string | Node,
-      fn: () => void,
-      extra: Record<string, unknown> = {},
-    ) => {
-      const b = h(
-        'button',
-        { class: `wq-icon ${cls}`, type: 'button', 'aria-label': label, title: label, ...extra },
-        typeof icon === 'string' ? svgIcon(icon) : icon,
-      );
-      b.addEventListener('click', fn);
-      return b;
-    };
+    const b = this.lesson;
     const home = this.data.book?.home
-      ? h(
-          'a',
-          { class: 'wq-icon', href: this.data.book.home, 'aria-label': t('bar.home'), title: t('bar.home') },
-          svgIcon('grid'),
-        )
+      ? h('a', { class: 'wq-home', href: this.data.book.home }, icon('book'), h('span', {}, t('bar.home')))
       : null;
-    this.playBtn = btn('wq-play', t('bar.play'), svgIcon(this.playing ? 'pause' : 'play'), () => this.togglePlay());
-    this.segsEl = h('div', { class: 'wq-segs' });
-    this.stepName = h('div', { class: 'wq-stepname', 'aria-live': 'off' });
+    const kicker = [b.unit, b.number !== undefined ? t('head.chapter', { n: b.number }) : '']
+      .filter(Boolean)
+      .join(' · ');
     const langs = this.langs();
     const langSel =
       langs.length > 1
         ? h(
-            'select',
-            {
-              class: 'wq-lang',
-              'aria-label': t('bar.language'),
-              title: t('bar.language'),
-              onchange: (e: Event) => this.setLang((e.target as HTMLSelectElement).value),
-            },
-            langs.map((l) =>
-              h(
-                'option',
-                { value: l, selected: l === this.lang },
-                LANG_INFO[l as keyof typeof LANG_INFO]?.name ?? langInfo(l).name,
+            'label',
+            { class: 'wq-langsel' },
+            icon('language'),
+            h(
+              'select',
+              {
+                class: 'wq-lang',
+                'aria-label': t('bar.language'),
+                title: t('bar.language'),
+                onchange: (e: Event) => this.setLang((e.target as HTMLSelectElement).value),
+              },
+              langs.map((l) =>
+                h(
+                  'option',
+                  { value: l, selected: l === this.lang },
+                  LANG_INFO[l as keyof typeof LANG_INFO]?.name ?? langInfo(l).name,
+                ),
               ),
             ),
           )
         : null;
-    this.bar.replaceChildren(
-      ...([
+    this.themeBtn = this.iconBtn('wq-theme', '', 'board-theme', () =>
+      this.setTheme(this.theme === 'sheet' ? 'board' : 'sheet'),
+    );
+    this.head.replaceChildren(
+      h(
+        'div',
+        { class: 'wq-head-l' },
         home,
-        this.playBtn,
-        btn('wq-back', t('bar.back'), 'back', () => this.prev()),
-        btn('wq-next', t('bar.next'), 'next', () => this.next()),
-        btn('', t('bar.restart'), 'restart', () => this.restart()),
-        this.segsEl,
-        this.stepName,
+        h(
+          'div',
+          { class: 'wq-head-title' },
+          kicker ? h('span', { class: 'wq-head-k' }, kicker) : null,
+          h('h1', { dir: 'auto' }, rich(b.title)),
+        ),
+      ),
+      h(
+        'div',
+        { class: 'wq-head-tools' },
         langSel,
-        btn('wq-txt', t('bar.transcript'), 'transcript', () => this.toggleTranscript(), {
+        this.themeBtn,
+        this.iconBtn('wq-txt', t('bar.transcript'), 'transcript', () => this.toggleTranscript(), {
           'aria-pressed': String(!this.transcriptEl.hidden),
         }),
-        btn(
+        this.panel ? this.iconBtn('wq-rate-btn', t('panel.rate'), 'edit', () => this.toggleRating()) : null,
+        h(
+          'button',
+          {
+            class: 'wq-icon wq-help-btn',
+            type: 'button',
+            'aria-label': t('bar.help'),
+            title: t('bar.help'),
+            onclick: () => this.toggleHelp(),
+          },
+          h('span', { class: 'wq-key' }, '?'),
+        ),
+        this.iconBtn('wq-full', t('bar.fullscreen'), 'fullscreen', () => this.toggleFull()),
+      ),
+    );
+    this.applyTheme();
+  }
+
+  /** The bar under the stage: play, back, next, the timeline with its questions, the step, speed, captions. */
+  private buildBar() {
+    const t = this.t;
+    this.playBtn = this.iconBtn('wq-play', t('bar.play'), this.playing ? 'pause' : 'play', () => this.togglePlay());
+    this.segsEl = h('div', { class: 'wq-segs' });
+    this.stepName = h('div', { class: 'wq-stepname', 'aria-live': 'off' });
+    this.stepKey = '';
+    this.speedBtn = h(
+      'button',
+      {
+        class: 'wq-icon wq-speed',
+        type: 'button',
+        'aria-haspopup': 'menu',
+        'aria-expanded': 'false',
+        onclick: () => this.toggleSpeedMenu(),
+      },
+      h('span', { class: 'wq-lbl', 'aria-hidden': 'true' }, t('speed.title')),
+      h('bdi', { class: 'wq-rate', dir: 'ltr' }),
+    );
+    this.speedMenu = h(
+      'div',
+      { class: 'wq-speedmenu', role: 'menu', hidden: true, 'aria-label': t('speed.title') },
+      SPEEDS.map((r) =>
+        h(
+          'button',
+          {
+            type: 'button',
+            role: 'menuitemradio',
+            'data-rate': String(r),
+            'aria-checked': String(r === this.rate),
+            onclick: () => {
+              this.setSpeed(r);
+              this.toggleSpeedMenu(false);
+              this.speedBtn.focus();
+            },
+          },
+          this.fmtRate(r),
+        ),
+      ),
+    );
+    this.speedMenu.addEventListener('focusout', (e) => {
+      if (!this.speedMenu.contains(e.relatedTarget as Node | null)) this.toggleSpeedMenu(false);
+    });
+    this.speedMenu.addEventListener('keydown', (e) => {
+      const items = [...this.speedMenu.querySelectorAll('button')];
+      const k = items.indexOf(document.activeElement as HTMLButtonElement);
+      if (e.code === 'ArrowDown' || e.code === 'ArrowUp') {
+        e.preventDefault();
+        items[(k + (e.code === 'ArrowDown' ? 1 : items.length - 1)) % items.length]?.focus();
+      } else if (e.code === 'Escape') {
+        e.preventDefault();
+        e.stopPropagation();
+        this.toggleSpeedMenu(false);
+        this.speedBtn.focus();
+      }
+    });
+    this.bar.replaceChildren(
+      ...([
+        this.playBtn,
+        this.iconBtn('wq-back', t('bar.back'), 'back', () => this.prev()),
+        this.iconBtn('wq-next', t('bar.next'), 'next', () => this.next()),
+        this.segsEl,
+        this.stepName,
+        h('div', { class: 'wq-speedwrap' }, this.speedBtn, this.speedMenu),
+        this.iconBtn(
           'wq-cc',
           t('bar.captions'),
-          h('span', { class: 'wq-cc-t' }, 'CC'),
+          'captions',
           () => this.setCaptions(!this.captionsOn),
           { 'aria-pressed': String(this.captionsOn) },
+          t('bar.cc'),
         ),
-        this.panel
-          ? btn('wq-txt wq-rate', t('panel.rate'), h('span', { class: 'wq-cc-t' }, '★'), () => this.toggleRating())
-          : null,
-        btn('wq-txt', t('bar.help'), h('span', { class: 'wq-cc-t' }, '?'), () => this.toggleHelp()),
-        btn('', t('bar.fullscreen'), 'full', () => this.toggleFull()),
+        // the teacher's rating, in the bar where the strip is hidden (the studio's preview)
+        this.panel ? this.iconBtn('wq-rate-bar', t('panel.rate'), 'edit', () => this.toggleRating()) : null,
+        // on phones (and without the strip) the transcript button sits here, next to the captions
+        this.iconBtn(
+          'wq-txt wq-txt-bar',
+          t('bar.transcript'),
+          'transcript',
+          () => this.toggleTranscript(),
+          { 'aria-pressed': String(!this.transcriptEl.hidden) },
+          t('bar.text'),
+        ),
       ].filter(Boolean) as Node[]),
     );
+    this.updateSpeed();
     this.buildSegments();
   }
 
+  /** The timeline: one bar per step, a diamond for each question step (practice ones in grey). */
   private buildSegments() {
     if (!this.segsEl || !this.compiled) return;
     const total = this.compiled.beats.reduce((a, b) => a + Math.max(b.timing.dur, 2), 0);
+    this.stepKey = '';
     this.segsEl.replaceChildren(
       ...this.compiled.beats.map((b, i) => {
+        const q = !!b.beat.questions?.length;
+        const practice = q && (b.beat.card?.label === 'practice' || b.beat.move === 'practice');
         const s = h(
           'button',
           {
-            class: 'wq-seg',
+            class: `wq-seg${q ? ' wq-seg-q' : ''}${practice ? ' wq-seg-p' : ''}`,
             type: 'button',
-            style: { flexGrow: String(Math.max(b.timing.dur, 2) / total) },
+            style: q ? {} : { flexGrow: String(Math.max(b.timing.dur, 2) / total) },
             'aria-label': this.t('bar.goto', { i: i + 1, title: b.beat.title }),
             title: b.beat.title,
           },
@@ -483,24 +784,32 @@ export class Player {
   private buildTranscript() {
     if (!this.transcriptEl) return;
     const t = this.t;
-    const close = h(
-      'button',
-      { class: 'wq-icon', type: 'button', 'aria-label': t('transcript.close'), onclick: () => this.toggleTranscript() },
-      '×',
-    );
     const list = h('ol', {});
     this.compiled.beats.forEach((cb, i) => {
+      const q = !!cb.beat.questions?.length;
       const li = h(
         'li',
         { 'data-i': String(i) },
-        h('button', { type: 'button', class: 'wq-tr-beat', onclick: () => this.seek(i, true) }, cb.beat.title),
-        h('p', {}, narrationText(cb.beat.narration)),
+        h(
+          'button',
+          { type: 'button', class: 'wq-tr-beat', onclick: () => this.seek(i, true) },
+          h('bdi', { class: 'wq-tr-n', dir: 'ltr' }, String(i + 1)),
+          q ? h('span', { class: 'wq-tr-q', 'aria-hidden': 'true' }) : null,
+          h('bdi', { class: 'wq-tr-t' }, rich(cb.beat.title)),
+        ),
+        h('p', {}, rich(narrationText(cb.beat.narration))),
       );
       list.append(li);
     });
-    this.transcriptEl.setAttribute('aria-label', t('transcript.title'));
+    this.transcriptEl.setAttribute('aria-labelledby', `wq-tr-${this.uid}`);
     this.transcriptEl.replaceChildren(
-      h('div', { class: 'wq-tr-head' }, h('h2', {}, t('transcript.title')), close),
+      h(
+        'div',
+        { class: 'wq-tr-head' },
+        h('h2', { id: `wq-tr-${this.uid}` }, t('transcript.title')),
+        this.iconBtn('', t('transcript.close'), 'close', () => this.toggleTranscript()),
+      ),
+      h('p', { class: 'wq-tr-hint' }, t('transcript.hint')),
       list,
     );
   }
@@ -534,6 +843,7 @@ export class Player {
 
   seek(i: number, play = this.playing): void {
     if (i < 0 || i >= this.compiled.beats.length) return;
+    this.usePalette();
     this.stopAudio();
     this.closeCard();
     this.i = i;
@@ -544,10 +854,10 @@ export class Player {
     // a beat's layout continues the previous one (nodes that stay or fade out): build that first when jumping
     if (i > 0 && this.builtIndex !== i - 1) {
       const prev = this.compiled.beats[i - 1]!;
-      this.renderer.build(prev, this.cardPlace(prev));
+      this.renderer.build(prev, this.layoutPlace(prev));
     }
     if (i === 0) this.renderer.boxes = new Map();
-    this.renderer.build(cb, this.cardPlace(cb));
+    this.renderer.build(cb, this.layoutPlace(cb));
     this.builtIndex = i;
     this.render();
     this.opts.onEvent?.({ type: 'beat', index: i, id: cb.id });
@@ -568,6 +878,7 @@ export class Player {
       if (!this.audio) {
         this.audio = new Audio(src);
         this.audio.preload = 'auto';
+        this.audio.playbackRate = this.rate;
         this.audioStartedAt = performance.now();
         if (this.time > 0.05) this.audio.currentTime = this.time;
       }
@@ -597,7 +908,7 @@ export class Player {
     this.playing = v;
     this.root.classList.toggle('wq-playing', v);
     this.pausedEl.hidden = v || !this.started || this.reviewMode || this.beat().ask;
-    if (this.playBtn) this.playBtn.replaceChildren(svgIcon(v ? 'pause' : 'play'));
+    if (this.playBtn) this.playBtn.replaceChildren(icon(v ? 'pause' : 'play'));
     if (!v) cancelAnimationFrame(this.raf);
   }
 
@@ -633,7 +944,7 @@ export class Player {
     const a = this.audio;
     if (a && !a.paused && !a.ended && a.currentTime > 0) this.time = Math.max(this.time, a.currentTime);
     else {
-      this.time += dt;
+      this.time += dt * this.rate;
       // audio that never starts counts as a failure; the lesson continues on the wall clock
       if (a && a.currentTime === 0 && !this.audioFailed && now - this.audioStartedAt > 4000 && a.readyState < 3)
         this.soundFailed();
@@ -659,6 +970,7 @@ export class Player {
 
   /** Draw the picture at the current time. */
   render(): void {
+    this.usePalette();
     const cb = this.beat();
     const t = this.reducedMotion ? this.snapTime(cb, this.time) : this.time;
     const base = sampler(cb, t, this.extra);
@@ -683,15 +995,29 @@ export class Player {
           k < this.i ? 1 : k > this.i ? 0 : Math.min(1, this.time / Math.max(0.1, cb.ask ? cb.timing.dur : cb.end));
         (segs[k] as HTMLElement).style.setProperty('--f', fill.toFixed(3));
         segs[k]!.classList.toggle('wq-cur', k === this.i);
+        segs[k]!.classList.toggle('wq-past', k < this.i);
       }
     }
-    if (this.stepName)
-      this.stepName.textContent = `${this.t('bar.stepOf', { i: this.i + 1, n: this.compiled.beats.length })} · ${cb.beat.title}`;
+    const key = `${this.i}:${this.lang}`;
+    if (this.stepName && key !== this.stepKey) {
+      this.stepKey = key;
+      this.stepName.replaceChildren(
+        h(
+          'bdi',
+          { class: 'wq-mono', dir: 'ltr' },
+          this.t('bar.stepOf', { i: this.i + 1, n: this.compiled.beats.length }),
+        ),
+        h('span', { class: 'wq-sep', 'aria-hidden': 'true' }, '·'),
+        h('bdi', { class: 'wq-stepname-t' }, rich(cb.beat.title)),
+      );
+    }
     if (this.captionsOn) this.updateCaption(cb);
     const cur = this.transcriptEl.querySelector('li.wq-cur');
     if (cur?.getAttribute('data-i') !== String(this.i)) {
       cur?.classList.remove('wq-cur');
-      this.transcriptEl.querySelector(`li[data-i="${this.i}"]`)?.classList.add('wq-cur');
+      const now = this.transcriptEl.querySelector(`li[data-i="${this.i}"]`);
+      now?.classList.add('wq-cur');
+      if (!this.transcriptEl.hidden) now?.scrollIntoView?.({ block: 'nearest' });
     }
   }
 
@@ -848,15 +1174,21 @@ export class Player {
       h(
         'div',
         { class: 'wq-actions' },
+        next
+          ? h(
+              'a',
+              { class: 'wq-btn wq-primary', href: next, 'aria-keyshortcuts': 'Enter' },
+              t('finish.next'),
+              icon('next'),
+            )
+          : null,
         h(
           'button',
           { type: 'button', class: 'wq-btn', onclick: () => this.restart(), 'aria-keyshortcuts': 'R' },
+          icon('restart'),
           t('finish.again'),
         ),
-        home ? h('a', { class: 'wq-btn', href: home }, t('finish.contents')) : null,
-        next
-          ? h('a', { class: 'wq-btn wq-primary', href: next, 'aria-keyshortcuts': 'Enter' }, t('finish.next'))
-          : null,
+        home ? h('a', { class: 'wq-btn', href: home }, icon('book'), t('finish.contents')) : null,
       ),
     );
     this.cardHost.replaceChildren(card);
@@ -890,7 +1222,10 @@ export class Player {
 
   /* ---------- chrome toggles ---------- */
 
-  /** Caption of the sentence being spoken; with word times, the current word is highlighted (read-along). */
+  /**
+   * The sentence being spoken, under the stage. With word times it reads along: words already said in the text
+   * colour, the spoken word on the highlighter, words to come muted.
+   */
   private updateCaption(cb: CompiledBeat): void {
     const caps = cb.timing.captions;
     let ci = -1;
@@ -902,33 +1237,41 @@ export class Player {
     if (key !== this.capKey) {
       this.capKey = key;
       this.capWords = [];
-      this.capLit = undefined;
+      this.capK = -2;
       this.captionEl.replaceChildren();
       const cap = ci >= 0 ? (caps[ci]?.[1] ?? '') : '';
       const words = cb.timing.words;
       const clean = words?.length ? spokenText(cb.beat.narration).clean : '';
       const sentence = clean ? splitSentences(clean)[ci] : undefined;
       if (cap && words?.length && sentence && sentence.text === cap) {
-        let at = sentence.start;
-        for (const w of splitWords(clean).filter((x) => x.start >= sentence.start && x.end <= sentence.end)) {
-          if (w.start > at) this.captionEl.append(clean.slice(at, w.start));
-          const el = h('span', {}, clean.slice(w.start, w.end));
+        const list = splitWords(clean).filter((x) => x.start >= sentence.start && x.end <= sentence.end);
+        if (list[0] && list[0].start > sentence.start)
+          this.captionEl.append(clean.slice(sentence.start, list[0].start));
+        list.forEach((w, n) => {
+          // a word keeps the punctuation and space after it, so said text reads as one colour
+          const gapEnd = list[n + 1]?.start ?? sentence.end;
+          const el = h(
+            'span',
+            {},
+            h('span', { class: 'wq-w' }, clean.slice(w.start, w.end)),
+            clean.slice(w.end, gapEnd),
+          );
           const k = words.findIndex(([, a]) => a === w.start);
           if (k >= 0) this.capWords.push({ k, el });
           this.captionEl.append(el);
-          at = w.end;
-        }
-        this.captionEl.append(clean.slice(at, sentence.end));
+        });
       } else this.captionEl.textContent = cap;
-      this.captionEl.hidden = !cap;
+      this.captionEl.classList.toggle('wq-rw', this.capWords.length > 0);
+      this.captionEl.classList.toggle('wq-empty', !cap);
     }
     if (this.capWords.length) {
       const k = wordAt(cb.timing.words, this.time, cb.timing.dur);
-      const el = this.capWords.find((w) => w.k === k)?.el;
-      if (el !== this.capLit) {
-        this.capLit?.classList.remove('wq-now');
-        el?.classList.add('wq-now');
-        this.capLit = el;
+      if (k !== this.capK) {
+        this.capK = k;
+        for (const w of this.capWords) {
+          w.el.classList.toggle('wq-said', w.k < k);
+          w.el.classList.toggle('wq-now', w.k === k);
+        }
       }
     }
   }
@@ -937,7 +1280,6 @@ export class Player {
     this.captionsOn = on;
     this.capKey = '';
     this.captionEl.hidden = !on;
-    this.captionEl.setAttribute('dir', 'auto');
     try {
       localStorage.setItem(CAPTIONS_KEY, on ? '1' : '0');
     } catch {
@@ -947,11 +1289,20 @@ export class Player {
     this.render?.call(this);
   }
 
+  /** The transcript is a side sheet that pushes the stage (a bottom sheet on phones); the stage scales down. */
   toggleTranscript(): void {
     this.transcriptEl.hidden = !this.transcriptEl.hidden;
-    this.root.classList.toggle('wq-with-transcript', !this.transcriptEl.hidden);
-    this.bar.querySelectorAll('.wq-txt')[0]?.setAttribute('aria-pressed', String(!this.transcriptEl.hidden));
-    if (!this.transcriptEl.hidden) (this.transcriptEl.querySelector('li.wq-cur button') as HTMLElement | null)?.focus();
+    const open = !this.transcriptEl.hidden;
+    this.root.classList.toggle('wq-with-transcript', open);
+    for (const b of this.root.querySelectorAll('.wq-txt')) b.setAttribute('aria-pressed', String(open));
+    if (open) {
+      const cur = this.transcriptEl.querySelector('li.wq-cur');
+      cur?.scrollIntoView?.({ block: 'nearest' });
+      (cur?.querySelector('button') as HTMLElement | null)?.focus();
+    } else if (this.transcriptEl.contains(document.activeElement)) {
+      const btn = [...this.root.querySelectorAll<HTMLElement>('.wq-txt')].find((b) => b.offsetParent !== null);
+      (btn ?? this.root).focus();
+    }
   }
 
   /** Teacher panel from the book data, or ad hoc with ?panel in the address. */
@@ -1010,6 +1361,7 @@ export class Player {
     else if (e.code === 'KeyR' && this.panel && !asking) this.toggleRating();
     else if (e.code === 'KeyT' && !asking) this.toggleTranscript();
     else if (e.code === 'KeyF' && !asking) this.toggleFull();
+    else if (e.code === 'Escape' && this.speedMenu && !this.speedMenu.hidden) this.toggleSpeedMenu(false);
     else if (e.code === 'Escape' && !this.transcriptEl.hidden) this.toggleTranscript();
     else handled = false;
     if (handled) e.preventDefault();
@@ -1060,7 +1412,7 @@ export class Player {
       const p = this.readProgress();
       localStorage.setItem(
         this.storeKey('progress'),
-        JSON.stringify({ ...p, last: this.skeleton.id, lang: this.lang }),
+        JSON.stringify({ ...p, last: this.skeleton.id, lang: this.lang, at: [this.i + 1, this.compiled.beats.length] }),
       );
     } catch {
       /* storage unavailable */
@@ -1106,6 +1458,8 @@ export class Player {
 
   destroy(): void {
     this.destroyed = true;
+    this.phone?.removeEventListener?.('change', this.onPhone);
+    document.removeEventListener('pointerdown', this.onOutside, true);
     this.stopAudio();
     cancelAnimationFrame(this.raf);
     (this.opts.keyboard === 'local' ? this.root : window).removeEventListener(
@@ -1114,21 +1468,4 @@ export class Player {
     );
     this.root.remove();
   }
-}
-
-const ICONS: Record<string, string> = {
-  play: 'M4 2v14l12-7z',
-  pause: 'M3.5 2h4v14h-4zM10.5 2h4v14h-4z',
-  back: 'M3 2h2.5v14H3zM16 2v14L6.5 9z',
-  next: 'M15 2h-2.5v14H15zM2 2v14l9.5-7z',
-  restart: 'M9 2.5a6.5 6.5 0 1 1-6.3 8.1l2-.5A4.5 4.5 0 1 0 9 4.5V7L4.5 3.5 9 0z',
-  grid: 'M2 2h6v6H2zM10 2h6v6h-6zM2 10h6v6H2zM10 10h6v6h-6z',
-  full: 'M1 1h6v2H3v4H1zM11 1h6v6h-2V3h-4zM1 11h2v4h4v2H1zM15 11h2v6h-6v-2h4z',
-  transcript: 'M3 3h12v2H3zM3 7h12v2H3zM3 11h8v2H3z',
-};
-
-function svgIcon(name: string): SVGSVGElement {
-  const s = svg('svg', { viewBox: '0 0 18 18', 'aria-hidden': 'true', class: `wq-i wq-i-${name}` });
-  svg('path', { d: ICONS[name] ?? '' }, s);
-  return s;
 }

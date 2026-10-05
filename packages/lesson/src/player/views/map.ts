@@ -287,7 +287,11 @@ export const map: ViewFactory = (ctx) => {
         },
         labels,
       );
-    svg('rect', { x: b.x, y: b.y, width: w, height: h, rx: 8, fill: '#1d2b27cc', opacity: o }, labels);
+    svg(
+      'rect',
+      { x: b.x, y: b.y, width: w, height: h, rx: 8, fill: COLORS.board, 'fill-opacity': 0.8, opacity: o },
+      labels,
+    );
     svgLabel(labels, text, {
       x: pos[0],
       y: pos[1] + 2,

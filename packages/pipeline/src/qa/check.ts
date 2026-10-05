@@ -23,6 +23,8 @@ export interface QaOptions {
   moments?: ('open' | 'mid' | 'end')[];
   browser?: 'chromium' | 'firefox' | 'webkit';
   viewport?: { width: number; height: number };
+  /** Look at the lesson on the white Sheet or the navy Board (default: the book's theme). */
+  theme?: 'sheet' | 'board';
 }
 
 export interface QaResult {
@@ -97,7 +99,10 @@ export async function checkLesson(opts: QaOptions): Promise<QaResult> {
   const sheets: string[] = [];
   const url = new URL(opts.url);
   if (opts.lang) url.searchParams.set('lang', opts.lang);
+  if (opts.theme) url.searchParams.set('theme', opts.theme);
   url.searchParams.set('beat', '0');
+  // the stage alone, at full size: the shots and the checks look at the picture, not the page around it
+  url.searchParams.set('bare', '');
   await page.goto(url.href);
   await page.waitForFunction(() => !!(window as unknown as { warqa?: unknown }).warqa, null, { timeout: 15000 });
   const n = (await page.evaluate('window.warqa.compiled.beats.length')) as number;

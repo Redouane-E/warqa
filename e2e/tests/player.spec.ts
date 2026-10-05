@@ -162,7 +162,7 @@ test.describe('player', () => {
     await page.goto('index.html?lang=ar');
     await expect(page.locator('h1')).toContainText('الأعداد الصحيحة');
     await expect(page.locator('.wq-unit a')).toHaveCount(1);
-    await page.locator('.wq-book select').selectOption('fr');
+    await page.getByRole('button', { name: 'Français' }).click();
     await expect(page.locator('h1')).toContainText('entiers relatifs');
   });
 

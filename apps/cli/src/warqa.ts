@@ -786,6 +786,7 @@ program
   .argument('[dir]', 'project folder', '.')
   .option('-c, --chapter <ids>', 'chapter id(s) or "all"', 'all')
   .option('--lang <list>', 'languages (default: all)')
+  .option('--theme <list>', "sheet, board or both (default: the book's)")
   .option('--shots', 'write screenshots and contact sheets into qa/')
   .option('--browser <name>', 'chromium, firefox or webkit', 'chromium')
   .option('--judge', 'also ask the vision (judge) model whether each picture shows what is said')
@@ -797,29 +798,45 @@ program
     let problems = 0;
     try {
       for (const id of chaptersOf(p, o.chapter).filter((x) => p.hasLesson(x))) {
-        for (const lang of o.lang ? String(o.lang).split(',') : p.book.langs) {
-          const r = await P.checkLesson({
-            url: `${url}${id}/index.html`,
-            lang,
-            browser: o.browser,
-            ...(o.shots ? { shots: p.path('qa', id, lang) } : {}),
-          });
-          problems += r.issues.length;
-          console.log(
-            `${id} ${lang} ${r.issues.length ? c.warn(`${r.issues.length} issues`) : c.ok('clean')} ${c.dim(`${r.beats} beats`)}`,
-          );
-          for (const i of r.issues.slice(0, 15))
-            console.log(`  ${c.warn(i.kind)} ${i.id ? `${i.id}: ` : ''}${i.message}`);
-          if (r.sheets.length) console.log(c.dim(`  contact sheets: ${dirname(r.sheets[0]!)}`));
-          if (o.judge) {
-            const notes = await P.judgeLesson(p, id, { llm: P.projectLlm(p, { onEvent: llmEvents }), lang });
-            for (const n of notes.filter((x) => x.score < 4))
+        // "chalk", the old chalkboard, is the board
+        const themes = o.theme
+          ? String(o.theme)
+              .split(',')
+              .map((x) => {
+                const v = x.trim().toLowerCase();
+                if (v === 'sheet') return 'sheet' as const;
+                if (v === 'board' || v === 'chalk') return 'board' as const;
+                throw new Error(`--theme takes sheet, board or both (not "${x}")`);
+              })
+          : [undefined];
+        for (const lang of o.lang ? String(o.lang).split(',') : p.book.langs)
+          for (const theme of themes) {
+            const r = await P.checkLesson({
+              url: `${url}${id}/index.html`,
+              lang,
+              browser: o.browser,
+              ...(theme ? { theme } : {}),
+              ...(o.shots ? { shots: theme ? p.path('qa', id, lang, theme) : p.path('qa', id, lang) } : {}),
+            });
+            problems += r.issues.length;
+            console.log(
+              `${id} ${lang}${theme ? ` ${theme}` : ''} ${r.issues.length ? c.warn(`${r.issues.length} issues`) : c.ok('clean')} ${c.dim(`${r.beats} beats`)}`,
+            );
+            for (const i of r.issues.slice(0, 15))
+              console.log(`  ${c.warn(i.kind)} ${i.id ? `${i.id}: ` : ''}${i.message}`);
+            if (r.sheets.length) console.log(c.dim(`  contact sheets: ${dirname(r.sheets[0]!)}`));
+            // the judge looks once per language (it spends model credits), not once per theme
+            if (o.judge && theme === themes[0]) {
+              const notes = await P.judgeLesson(p, id, { llm: P.projectLlm(p, { onEvent: llmEvents }), lang });
+              for (const n of notes.filter((x) => x.score < 4))
+                console.log(
+                  `  ${c.warn(`judge ${n.score}/5`)} ${n.id}: ${n.problem ?? ''}${n.fix ? c.dim(` → ${n.fix}`) : ''}`,
+                );
               console.log(
-                `  ${c.warn(`judge ${n.score}/5`)} ${n.id}: ${n.problem ?? ''}${n.fix ? c.dim(` → ${n.fix}`) : ''}`,
+                c.dim(`  judge: ${notes.filter((x) => x.score >= 4).length}/${notes.length} beats look right`),
               );
-            console.log(c.dim(`  judge: ${notes.filter((x) => x.score >= 4).length}/${notes.length} beats look right`));
+            }
           }
-        }
       }
     } finally {
       server.close();

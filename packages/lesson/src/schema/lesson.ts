@@ -156,7 +156,8 @@ export const Book = z.object({
   defaultLang: z.string().min(2).optional(),
   sourceLang: z.string().min(2).optional(),
   digits: z.enum(['latn', 'arab']).default('latn'),
-  theme: z.string().default('chalk'),
+  /** sheet (white paper, the default) or board (navy); "chalk", the old chalkboard, is shown as the board. */
+  theme: z.string().default('sheet'),
   audience: z.string().optional(),
   /** A self-learner's book: made in one go for one person, at a level that can change chapter by chapter. */
   learn: z.object({ level: z.enum(['beginner', 'some', 'advanced']) }).optional(),

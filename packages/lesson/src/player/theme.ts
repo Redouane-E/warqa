@@ -1,22 +1,43 @@
-// The default "chalk" theme: a chalkboard look adapted from Papermorph (MIT).
-export const COLORS: Record<string, string> = {
-  chalk: '#ece8dc',
-  dim: '#9aaba3',
-  faint: '#5d7068',
-  task: '#f0b45a',
-  good: '#8fd6b0',
-  bad: '#f08c7a',
-  board: '#1d2b27',
-  coral: '#f4a48c',
-  sky: '#86c9e8',
-  gold: '#f3c95c',
-  rose: '#e8a0c8',
-  mint: '#8fd6b0',
-  lilac: '#bba8ee',
-};
+// Stage colours by name, per theme. Lessons name their colours (chalk, sky, coral…), never hex values, so every
+// lesson works in both themes: the Sheet (white paper, the default) and the Board (navy). "chalk", the old
+// green chalkboard, is shown as the Board. Values: @warqa/brand (STAGE), from REDESIGN.md's stage table.
+import { STAGE } from '@warqa/brand';
 
+export type Theme = 'sheet' | 'board';
+export const THEMES: readonly Theme[] = ['sheet', 'board'];
+
+/** A book's or a link's theme name → the player's theme (undefined when it names none). */
+export const themeOf = (name: unknown): Theme | undefined =>
+  name === 'sheet' ? 'sheet' : name === 'board' || name === 'chalk' ? 'board' : undefined;
+
+/**
+ * The active theme's text and line colours, by name. The object stays the same (views and component packs keep a
+ * reference to it); setTheme refills it, then the player redraws the scene.
+ */
+export const COLORS: Record<string, string> = {};
+const FILLS: Record<string, string> = {};
+let active: Theme = 'sheet';
+
+export function setTheme(theme: Theme): void {
+  active = theme;
+  for (const [name, [text, fill]] of Object.entries(STAGE[theme])) {
+    COLORS[name] = text;
+    FILLS[name] = fill;
+  }
+}
+setTheme('sheet');
+
+export const activeTheme = (): Theme => active;
+
+const isHex = (v: string) => /^#[0-9a-f]{3,8}$/i.test(v);
+
+/** A named colour for text and lines (a hex value passes through). */
 export const color = (name: unknown, fallback = COLORS.chalk!): string =>
-  (typeof name === 'string' && (COLORS[name] ?? (/^#[0-9a-f]{3,8}$/i.test(name) ? name : undefined))) || fallback;
+  (typeof name === 'string' && (COLORS[name] ?? (isHex(name) ? name : undefined))) || fallback;
+
+/** A named colour for filled areas: on the Sheet, task and gold fill with the highlighter yellow. */
+export const fill = (name: unknown, fallback = COLORS.chalk!): string =>
+  (typeof name === 'string' && (FILLS[name] ?? (isHex(name) ? name : undefined))) || fallback;
 
 /** Mix two hex colours (q = share of b). */
 export function mix(a: string, b: string, q: number): string {

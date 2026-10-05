@@ -3,7 +3,7 @@ import { normalizeForMatch, splitSentences, splitWords } from '@warqa/i18n';
 import { parseMarks } from '../../core/text.js';
 import { spokenText, wordAt } from '../../core/timing.js';
 import { clamp, h, num, rich, svg, svgLabel, svgText, textWidth } from '../dom.js';
-import { COLORS, color, mix } from '../theme.js';
+import { COLORS, color, fill, mix } from '../theme.js';
 import { applyHtml, applySvg } from './apply.js';
 import type { Box, ViewFactory } from './types.js';
 
@@ -213,7 +213,7 @@ const areagrid: ViewFactory = (ctx) => {
       }
       for (const [k, rect] of cells) {
         const hl = num(get(`cell:${k}`, 'hl'), 0);
-        rect.setAttribute('fill', hl > 0.01 ? color(get(`cell:${k}`, 'hlc'), COLORS.task) : 'none');
+        rect.setAttribute('fill', hl > 0.01 ? fill(get(`cell:${k}`, 'hlc'), fill('task')) : 'none');
         rect.setAttribute('fill-opacity', String(0.45 * hl));
       }
     },
@@ -264,7 +264,7 @@ const balance: ViewFactory = (ctx) => {
         { d: `M${lx} ${ly}L${rx} ${ry}`, stroke: COLORS.chalk, 'stroke-width': 6, 'stroke-linecap': 'round' },
         layer,
       );
-      svg('circle', { cx, cy, r: 10, fill: COLORS.task }, layer);
+      svg('circle', { cx, cy, r: 10, fill: fill('task'), stroke: COLORS.chalk, 'stroke-width': 2 }, layer);
       const pan = (x: number, y: number, side: 'left' | 'right') => {
         svg(
           'path',

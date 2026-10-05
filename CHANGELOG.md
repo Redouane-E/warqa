@@ -37,6 +37,29 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - Exported books: new icons (including a maskable icon and an Apple touch icon) and the brand's colours
     in the manifest and `theme-color`. The lesson player itself keeps its chalkboard look until the next
     phase.
+- **The player and the exported book, redesigned (redesign phase 2).**
+  - **Themes:** lessons show on the white Sheet (ruled paper with the red margin line, on the right in
+    Arabic) or the navy Board. Learners switch in the player's strip and the choice is remembered;
+    `?theme=sheet|board` in the address chooses too. Lessons keep naming their colours (chalk, sky,
+    coral…), so every lesson works in both.
+  - **Migration:** new books default to `"theme": "sheet"`. Books saved before this version have
+    `"theme": "chalk"` in `warqa.json` (the old default) and open on the navy Board, the chalkboard's
+    successor; set `"theme": "sheet"` there for the paper look. The example books now use the Sheet.
+  - **The page around the stage:** a strip with All lessons, the title, the language, Sheet or Board, the
+    transcript and full screen; captions under the stage (never on the picture) that read along with the
+    highlighter; a bar with a large play button, a timeline whose question steps are diamonds, the step's
+    name, speed (0.75× to 1.5×, remembered) and captions; the transcript opens beside the stage and pushes
+    it instead of covering it.
+  - **States:** pausing leaves the picture bright (no dark veil); the finish card's mark turns its corner
+    once; question cards and feedback ("Not quite." with its hint) use the new colours, with key hints in
+    Geist Mono.
+  - **Phones:** the stage on top, then the words and the controls; question cards move under the picture at
+    full size; the transcript is a bottom sheet.
+  - **The book's home:** a cover with Continue (or Start), the contents with each chapter's state (done
+    with its first-try score, last opened with progress, not opened yet), language buttons, the theme
+    switch and "Install for offline use" where the browser offers it.
+  - `warqa qa --theme sheet,board` checks and photographs a lesson in either theme; the video export and
+    QA shots use the bare stage (`?bare`), and the studio's preview hides the player's strip.
 - Cost estimates no longer ask for a translator model when a book has a single language.
 
 ### Fixed

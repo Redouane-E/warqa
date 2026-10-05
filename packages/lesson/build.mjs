@@ -30,6 +30,43 @@ rmSync(join(out, 'fonts'), { recursive: true, force: true });
 mkdirSync(join(out, 'fonts'), { recursive: true });
 for (const f of readdirSync(join(brand, 'fonts'))) copyFileSync(join(brand, 'fonts', f), join(out, 'fonts', f));
 let css = `${readFileSync(join(brand, 'fonts.css'), 'utf8')}\n`;
+// Themes, from the brand tokens: the interface colours (--wq-*) and the stage colours lessons name (--chalk,
+// --sky…, with a -fill variant for areas). The Sheet is the default; .wq-theme-board switches to the Board.
+const { COLORS, cssVariables, STAGE } = await import('@warqa/brand');
+// translucent colours as plain rgba() (color-mix() is too new for the player's oldest browsers)
+const rgba = (hex, a) => {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return `rgba(${n >> 16},${(n >> 8) & 255},${n & 255},${a})`;
+};
+const mixes = (scheme, theme) => {
+  const i = scheme === 'light' ? 0 : 1;
+  const stage = (name) => STAGE[theme][name][0];
+  return [
+    ['--chalk-a4', rgba(stage('chalk'), 0.04)],
+    ['--sky-a6', rgba(stage('sky'), 0.06)],
+    ['--sky-a8', rgba(stage('sky'), 0.08)],
+    ['--bad-a8', rgba(stage('bad'), 0.08)],
+    ['--good-a8', rgba(stage('good'), 0.08)],
+    ['--board-a92', rgba(STAGE[theme].board[1], 0.92)],
+    ['--wq-fluo-a28', rgba(COLORS.fluo[i], 0.28)],
+    ['--wq-fluo-a35', rgba(COLORS.fluo[i], 0.35)],
+    ['--wq-ground-a80', rgba(COLORS.ground[i], 0.8)],
+    ['--wq-seyes-a45', rgba(COLORS.seyes[i], 0.45)],
+  ];
+};
+const block = (scheme, theme) =>
+  [
+    ...cssVariables(scheme),
+    ...mixes(scheme, theme),
+    ...Object.entries(STAGE[theme]).flatMap(([name, [text, fill]]) => [
+      [`--${name}`, text],
+      [`--${name}-fill`, fill],
+    ]),
+  ]
+    .map(([k, v]) => `${k}:${v}`)
+    .join(';');
+css += `.wq-player,.wq-book{${block('light', 'sheet')};color-scheme:light}\n`;
+css += `.wq-player.wq-theme-board,.wq-book.wq-theme-board{${block('dark', 'board')};color-scheme:dark}\n`;
 css += readFileSync(join(here, 'src/player/styles.css'), 'utf8');
 const min = await esbuild.transform(css, { loader: 'css', minify: true });
 writeFileSync(join(out, 'player.css'), min.code);

@@ -49,7 +49,7 @@ export async function exportVideo(project: Project, lessonId: string, opts: Vide
   const out = opts.out ?? project.path(`${lessonId}.${opts.lang}.mp4`);
   try {
     const page = await browser.newPage({ viewport: { width: 1600, height: 956 }, deviceScaleFactor: 1 });
-    await page.goto(`${url}${lessonId}/index.html?lang=${opts.lang}&beat=0&t=0`);
+    await page.goto(`${url}${lessonId}/index.html?lang=${opts.lang}&beat=0&t=0&bare`);
     await page.waitForFunction(() => !!(window as unknown as { warqa?: unknown }).warqa);
     const beats = (await page.evaluate(
       `window.warqa.compiled.beats.map(b => ({ id: b.id, ask: b.ask, speech: b.timing.dur, end: b.end }))`,

@@ -22,6 +22,8 @@ export interface WarqaApi {
     opts?: {
       storage?: boolean;
       keyboard?: 'global' | 'local';
+      /** The player's own strip (title, language, theme); off where the page shows them. */
+      head?: boolean;
       autoplay?: boolean;
       onEvent?: (e: { type: string; index?: number; id?: string; lang?: string }) => void;
     },

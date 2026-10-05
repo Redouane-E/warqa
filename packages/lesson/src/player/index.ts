@@ -53,7 +53,7 @@ export async function bootPage(): Promise<Player | undefined> {
     }
   }
   const beat = q.get('beat');
-  const opts: PlayerOptions = { keyboard: 'global', autoplay: q.get('autoplay') === '1' };
+  const opts: PlayerOptions = { keyboard: 'global', autoplay: q.get('autoplay') === '1', bare: q.has('bare') };
   if (beat !== null) opts.review = { beat: Number(beat) || 0, t: Number(q.get('t') ?? 0) || 0 };
   await fontsReady();
   const player = new Player(host, lang ? { ...data, lang } : data, opts);

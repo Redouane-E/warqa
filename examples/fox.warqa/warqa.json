@@ -22,7 +22,7 @@
   "defaultLang": "ar",
   "sourceLang": "ar",
   "digits": "latn",
-  "theme": "chalk",
+  "theme": "sheet",
   "units": [
     {
       "title": {

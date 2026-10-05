@@ -1,9 +1,9 @@
 // Small DOM helpers for SVG and HTML, text measurement and rich text with inline math.
 
-import { MARK, MARK_VARIANTS } from '@warqa/brand';
+import { ICON_STROKE, ICONS, type IconDef, type IconName, MARK, MARK_VARIANTS, MIRRORED } from '@warqa/brand';
 import { prettyMinus } from '@warqa/i18n';
 import { inlineRuns } from '../core/text.js';
-import { FONT_MATH, FONT_UI } from './theme.js';
+import { COLORS, FONT_MATH, FONT_UI } from './theme.js';
 
 export const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -34,6 +34,27 @@ export function markIcon(height: number): SVGSVGElement {
   svg('path', { class: 'wq-mark-sheet', d: MARK.sheet, fill: 'currentColor' }, m);
   svg('path', { class: 'wq-mark-fold', d: MARK.fold, fill: MARK_VARIANTS.ink.fold }, m);
   return m;
+}
+
+/** An icon from Warqa's set (24 grid, 1.75 stroke, the text colour); back and next swap in right-to-left pages. */
+export function icon(name: IconName, size = 20): SVGSVGElement {
+  const def: IconDef = ICONS[name];
+  const s = svg('svg', {
+    class: `wq-i${MIRRORED.has(name) ? ' wq-i-mirror' : ''}`,
+    viewBox: '0 0 24 24',
+    width: size,
+    height: size,
+    fill: 'none',
+    stroke: 'currentColor',
+    'stroke-width': ICON_STROKE,
+    'stroke-linecap': 'round',
+    'stroke-linejoin': 'round',
+    'aria-hidden': 'true',
+    focusable: 'false',
+  });
+  svg('path', { d: def.d }, s);
+  if (def.fill) svg('path', { d: def.fill, fill: 'currentColor', stroke: 'none' }, s);
+  return s;
 }
 
 type Child = Node | string | null | undefined | false;
@@ -105,7 +126,7 @@ export function svgLabel(
     dir?: 'ltr' | 'rtl';
   },
 ): SVGTextElement {
-  const { x = 0, y = 0, size = 28, fill = '#ece8dc', anchor = 'middle', weight = 500, math = false, dir } = opts;
+  const { x = 0, y = 0, size = 28, fill = COLORS.chalk!, anchor = 'middle', weight = 500, math = false, dir } = opts;
   const t = svg(
     'text',
     {

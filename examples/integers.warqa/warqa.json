@@ -19,7 +19,7 @@
   "defaultLang": "ar",
   "sourceLang": "en",
   "digits": "latn",
-  "theme": "chalk",
+  "theme": "sheet",
   "units": [
     {
       "title": {

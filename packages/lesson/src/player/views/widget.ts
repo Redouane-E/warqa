@@ -1,13 +1,14 @@
 // Experimental custom widget: model-written HTML in a sandboxed iframe (scripts only — no same-origin,
 // no network via CSP, no storage), driven by the lesson clock through postMessage.
 import { h } from '../dom.js';
+import { COLORS } from '../theme.js';
 import type { ViewFactory } from './types.js';
 
 const CSP = "default-src 'none'; script-src 'unsafe-inline'; style-src 'unsafe-inline'; img-src data:; font-src data:";
 
 export const widget: ViewFactory = (ctx) => {
   const p = ctx.node.props as { html: string; title: string; height: number };
-  const doc = `<!doctype html><html lang="${ctx.lang}" dir="${ctx.dir}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}"><style>html,body{margin:0;height:100%;background:transparent;color:#ece8dc;font-family:system-ui,sans-serif;overflow:hidden}</style></head><body>${p.html}</body></html>`;
+  const doc = `<!doctype html><html lang="${ctx.lang}" dir="${ctx.dir}"><head><meta charset="utf-8"><meta http-equiv="Content-Security-Policy" content="${CSP}"><style>html,body{margin:0;height:100%;background:transparent;color:${COLORS.chalk};font-family:system-ui,sans-serif;overflow:hidden}</style></head><body>${p.html}</body></html>`;
   const frame = h('iframe', {
     class: 'wq-widget',
     title: p.title,
