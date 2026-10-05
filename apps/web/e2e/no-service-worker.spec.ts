@@ -7,7 +7,14 @@ test.use({ serviceWorkers: 'block' });
 
 test('without a service worker, the preview still plays its audio and the book still downloads', async ({ page }) => {
   await openStudio(page);
-  await expect(page.locator('.web-warning-soft')).toBeVisible();
+  // the warning waits in the status menu of the top bar
+  const status = page.locator('.web-status-menu.has-warnings');
+  await expect(status).toBeVisible();
+  await status.getByRole('button').click();
+  // the warning describes the menu (screen readers read it when the menu opens)
+  await expect(page.getByRole('menu')).toHaveAccessibleDescription(/blocks service workers/);
+  await page.keyboard.press('Escape');
+  await expect(page.getByRole('menu')).toBeHidden();
   await page.getByRole('button', { name: 'Open the example book' }).click();
   const preview = page.locator('.preview');
   await preview.locator('.wq-go').click();

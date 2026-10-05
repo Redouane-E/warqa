@@ -12,11 +12,17 @@ export const en = {
   'boot.released': 'Warqa is now open in another tab.',
 
   'banner.label': 'Browser version',
+  'status.runs': 'Runs in this browser',
+  'status.menu': 'Browser version: status and help',
+  'status.menuWarn': 'Browser version: there are warnings',
+  'status.ok': 'Everything works in this browser.',
+  'project.deleteYes': 'Delete the book',
   'banner.private': 'Your books and keys stay in this browser.',
   'banner.privacy': 'Your data',
   'banner.guide': 'Start guide',
   'banner.desktop': 'Desktop version',
   'banner.test': 'Test mode: scripted model, no network',
+  'banner.testShort': 'Test mode',
   'banner.notPersistent':
     'This browser does not let Warqa keep your books after you close the tab. Download a backup of each book before you leave.',
   'banner.storage':
@@ -128,11 +134,17 @@ export const fr: Record<WebKey, string> = {
   'boot.released': 'Warqa est maintenant ouvert dans un autre onglet.',
 
   'banner.label': 'Version navigateur',
+  'status.runs': 'Fonctionne dans ce navigateur',
+  'status.menu': 'Version navigateur : état et aide',
+  'status.menuWarn': 'Version navigateur : il y a des avertissements',
+  'status.ok': 'Tout fonctionne dans ce navigateur.',
+  'project.deleteYes': 'Supprimer le livre',
   'banner.private': 'Vos livres et vos clés restent dans ce navigateur.',
   'banner.privacy': 'Vos données',
   'banner.guide': 'Guide de démarrage',
   'banner.desktop': 'Version ordinateur',
   'banner.test': 'Mode test : modèle scripté, sans réseau',
+  'banner.testShort': 'Mode test',
   'banner.notPersistent':
     'Ce navigateur ne permet pas à Warqa de garder vos livres après la fermeture de l’onglet. Téléchargez une sauvegarde de chaque livre avant de partir.',
   'banner.storage':
@@ -247,11 +259,17 @@ export const ar: Record<WebKey, string> = {
   'boot.released': 'ورقة مفتوحة الآن في علامة تبويب أخرى.',
 
   'banner.label': 'نسخة المتصفح',
+  'status.runs': 'يعمل في هذا المتصفح',
+  'status.menu': 'نسخة المتصفح: الحالة والمساعدة',
+  'status.menuWarn': 'نسخة المتصفح: توجد تنبيهات',
+  'status.ok': 'كل شيء يعمل في هذا المتصفح.',
+  'project.deleteYes': 'احذف الكتاب',
   'banner.private': 'كتبك ومفاتيحك تبقى في هذا المتصفح.',
   'banner.privacy': 'بياناتك',
   'banner.guide': 'دليل البدء',
   'banner.desktop': 'نسخة الحاسوب',
   'banner.test': 'وضع الاختبار: نموذج مبرمج مسبقًا، بلا شبكة',
+  'banner.testShort': 'وضع الاختبار',
   'banner.notPersistent':
     'هذا المتصفح لا يسمح لورقة بالاحتفاظ بكتبك بعد إغلاق علامة التبويب. نزّل نسخة احتياطية من كل كتاب قبل المغادرة.',
   'banner.storage': 'تعذّر حفظ تعديلك الأخير في هذا المتصفح ({error}). أفرغ بعض المساحة أو نزّل نسخة احتياطية.',

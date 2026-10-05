@@ -34,7 +34,14 @@ const serviceWorker = installServiceWorker(bridge, BASE);
 window.addEventListener('beforeunload', (e) => {
   if (bridge.running > 0) e.preventDefault();
 });
-installLinkFallback(() => window.alert((WEB_CATALOGS[getLang()] ?? WEB_CATALOGS.en!)['banner.noSw']));
+// a link that needs the offline worker explains itself in a toast (the status line shows these notices)
+installLinkFallback(() =>
+  window.dispatchEvent(
+    new CustomEvent('warqa:notice', {
+      detail: { text: (WEB_CATALOGS[getLang()] ?? WEB_CATALOGS.en!)['banner.noSw'], tone: 'info' },
+    }),
+  ),
+);
 
 applyDocument();
 createRoot(document.getElementById('root')!).render(

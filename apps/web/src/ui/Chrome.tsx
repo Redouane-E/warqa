@@ -1,7 +1,10 @@
-// The web app's additions to the studio screens: a slim banner (browser version, privacy, start guide, warnings),
-// the example book and backup import on the home screen, and backup and delete on a book's screen.
+// The web app's additions to the studio screens: the quiet status line in the top bar (Your data, warnings, the
+// start guide), the example book and backup import on the home screen, and backup and delete on a book's screen.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { errorText } from '../../../studio/src/client/api';
+import { Menu } from '../../../studio/src/client/components/Menu';
+import { useConfirm, useToast } from '../../../studio/src/client/components/overlays';
+import { SideSheet } from '../../../studio/src/client/components/SideSheet';
 import { Button, Icon, Notice } from '../../../studio/src/client/components/ui';
 import { useI18n } from '../../../studio/src/client/i18n';
 import { navigate } from '../../../studio/src/client/router';
@@ -10,31 +13,29 @@ import { useW } from './i18n';
 import { setOnboarded } from './prefs';
 import { webApi } from './webApi';
 
-function PrivacyDialog({ open, onClose }: { open: boolean; onClose: () => void }) {
+/** Your data, in a side sheet: what is stored where, how much, and how to delete it all. */
+function YourData({ open, onClose }: { open: boolean; onClose: () => void }) {
   const w = useW();
   const { t, bytes } = useI18n();
-  const ref = useRef<HTMLDialogElement>(null);
+  const confirm = useConfirm();
   const [size, setSize] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [done, setDone] = useState('');
   const [error, setError] = useState('');
 
   useEffect(() => {
-    const d = ref.current;
-    if (!d) return;
-    if (open && !d.open) {
-      d.showModal();
-      setDone('');
-      setError('');
-      webApi
-        .storage()
-        .then((s) => setSize(s.books))
-        .catch(() => setSize(null));
-    } else if (!open && d.open) d.close();
+    if (!open) return;
+    setDone('');
+    setError('');
+    webApi
+      .storage()
+      .then((s) => setSize(s.books))
+      .catch(() => setSize(null));
   }, [open]);
 
   const wipe = async () => {
-    if (!window.confirm(w('privacy.wipeConfirm'))) return;
+    // a loss that cannot be undone: the dialog, with keeping everything as the safe choice
+    if (!(await confirm({ title: w('privacy.wipeConfirm'), confirm: w('privacy.wipe'), danger: true }))) return;
     setBusy(true);
     try {
       await webApi.reset();
@@ -48,11 +49,7 @@ function PrivacyDialog({ open, onClose }: { open: boolean; onClose: () => void }
   };
 
   return (
-    <dialog ref={ref} className="web-dialog sheet" aria-labelledby="privacy-title" onClose={onClose}>
-      <div className="sheet-head">
-        <h2 id="privacy-title">{w('privacy.title')}</h2>
-        <Button variant="quiet" icon="close" aria-label={t('common.close')} onClick={onClose} />
-      </div>
+    <SideSheet open={open} onClose={onClose} title={w('privacy.title')} className="web-data">
       <p>{w('privacy.p1')}</p>
       <p>{w('privacy.p2')}</p>
       <p>{w('privacy.p3')}</p>
@@ -75,59 +72,88 @@ function PrivacyDialog({ open, onClose }: { open: boolean; onClose: () => void }
           </Button>
         )}
       </div>
-    </dialog>
+    </SideSheet>
   );
 }
 
-export function Banner({ bridge, serviceWorker }: { bridge: Bridge; serviceWorker: boolean }) {
+/**
+ * The web app's one quiet line in the top bar: "Runs in this browser · Your data". Warnings (storage that may
+ * be cleared, a storage error, no offline worker) wait in its status menu instead of filling the screen.
+ */
+export function WebStatus({ bridge, serviceWorker }: { bridge: Bridge; serviceWorker: boolean }) {
   const w = useW();
+  const toast = useToast();
   useSyncExternalStore(bridge.subscribe, () => bridge.storageError);
-  const [privacy, setPrivacy] = useState(false);
+  const [data, setData] = useState(false);
   const info = bridge.info;
+  // notices from outside React (a failed download, a link that needs the offline worker) become toasts
+  useEffect(() => {
+    const show = (e: Event) => {
+      const d = (e as CustomEvent<{ text: string; tone?: 'info' | 'error' }>).detail;
+      if (d?.text) toast({ text: d.text, tone: d.tone ?? 'info' });
+    };
+    window.addEventListener('warqa:notice', show);
+    return () => window.removeEventListener('warqa:notice', show);
+  }, [toast]);
+  const warnings = [
+    info && !info.persistent ? w('banner.notPersistent') : '',
+    bridge.storageError ? w('banner.storage', { error: bridge.storageError }) : '',
+    !serviceWorker ? w('banner.noSw') : '',
+  ].filter(Boolean);
   return (
-    <>
-      <div className="web-banner">
-        <span className="web-chip">{w('banner.label')}</span>
-        <span className="web-private">{w('banner.private')}</span>
-        {info?.fake && <span className="web-chip web-chip-test">{w('banner.test')}</span>}
-        <span className="web-links">
-          <button type="button" className="link-btn" onClick={() => setPrivacy(true)}>
-            {w('banner.privacy')}
-          </button>
-          <button
-            type="button"
-            className="link-btn"
-            onClick={() => {
+    <div className="web-status">
+      <span className="web-dot" aria-hidden="true" />
+      <span className="web-runs">{w('status.runs')}</span>
+      <span className="web-sep" aria-hidden="true">
+        ·
+      </span>
+      <button type="button" className="link-btn web-data-btn" onClick={() => setData(true)}>
+        {w('banner.privacy')}
+      </button>
+      {info?.fake && (
+        <span className="web-chip web-chip-test" title={w('banner.test')}>
+          {w('banner.testShort')}
+        </span>
+      )}
+      <Menu
+        className={`web-status-menu${warnings.length ? ' has-warnings' : ''}`}
+        label={warnings.length ? w('status.menuWarn') : w('status.menu')}
+        button={
+          <>
+            <Icon name={warnings.length ? 'warn' : 'info'} size={18} />
+            {warnings.length ? <span className="web-count">{warnings.length}</span> : null}
+          </>
+        }
+        header={
+          <div className="web-status-list">
+            <p className="web-status-title">{w('banner.label')}</p>
+            <p>{w('banner.private')}</p>
+            {info?.fake && <p>{w('banner.test')}</p>}
+            {warnings.length ? (
+              warnings.map((x) => (
+                <p key={x} className="web-warning-line">
+                  <Icon name="warn" size={16} /> {x}
+                </p>
+              ))
+            ) : (
+              <p className="muted">{w('status.ok')}</p>
+            )}
+          </div>
+        }
+        items={[
+          {
+            key: 'guide',
+            label: w('banner.guide'),
+            onSelect: () => {
               setOnboarded(false);
               navigate('/welcome');
-            }}
-          >
-            {w('banner.guide')}
-          </button>
-          {__WARQA_REPO__ && (
-            <a href={`${__WARQA_REPO__}#readme`} target="_blank" rel="noreferrer">
-              {w('banner.desktop')} <Icon name="open" size={13} />
-            </a>
-          )}
-        </span>
-      </div>
-      {info && !info.persistent && (
-        <div className="web-warning" role="alert">
-          <Icon name="warn" /> {w('banner.notPersistent')}
-        </div>
-      )}
-      {bridge.storageError && (
-        <div className="web-warning" role="alert">
-          <Icon name="warn" /> {w('banner.storage', { error: bridge.storageError })}
-        </div>
-      )}
-      {!serviceWorker && (
-        <div className="web-warning web-warning-soft" role="status">
-          <Icon name="info" /> {w('banner.noSw')}
-        </div>
-      )}
-      <PrivacyDialog open={privacy} onClose={() => setPrivacy(false)} />
-    </>
+            },
+          },
+          ...(__WARQA_REPO__ ? [{ key: 'desktop', label: w('banner.desktop'), href: `${__WARQA_REPO__}#readme` }] : []),
+        ]}
+      />
+      <YourData open={data} onClose={() => setData(false)} />
+    </div>
   );
 }
 
@@ -192,6 +218,7 @@ export function HomeActions() {
 export function ProjectActions({ id }: { id: string }) {
   const w = useW();
   const { t } = useI18n();
+  const confirm = useConfirm();
   const [busy, setBusy] = useState<'' | 'backup' | 'delete'>('');
   const [error, setError] = useState('');
 
@@ -206,7 +233,7 @@ export function ProjectActions({ id }: { id: string }) {
     setBusy('');
   };
   const remove = async () => {
-    if (!window.confirm(w('project.deleteConfirm'))) return;
+    if (!(await confirm({ title: w('project.deleteConfirm'), confirm: w('project.deleteYes'), danger: true }))) return;
     setBusy('delete');
     setError('');
     try {

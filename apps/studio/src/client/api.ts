@@ -92,6 +92,7 @@ export const api = {
   startJob: (id: string, type: JobType, args: Record<string, unknown> = {}) =>
     req<{ jobId: string; job: JobInfo }>('POST', `/api/projects/${encodeURIComponent(id)}/jobs`, { type, args }),
   job: (jobId: string) => req<{ job: JobInfo; events: JobEvent[] }>('GET', `/api/jobs/${jobId}`),
+  jobs: (id: string) => req<{ jobs: JobInfo[] }>('GET', `/api/projects/${encodeURIComponent(id)}/jobs`),
   cancelJob: (jobId: string) => req<{ job: JobInfo }>('POST', `/api/jobs/${jobId}/cancel`),
   lesson: (id: string, lid: string) =>
     req<LessonDetail>('GET', `/api/projects/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lid)}`),

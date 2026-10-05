@@ -13,15 +13,15 @@ import type {
 import { useStatus } from '../App';
 import { api, errorText } from '../api';
 import { withBase } from '../base';
-import { JobBoard } from '../components/JobBoard';
-import { Button, Field, Icon, LangTag, Loading, Notice, Toast } from '../components/ui';
+import { useJobs } from '../components/JobBoard';
+import { Toast, useConfirm, useUnsavedGuard } from '../components/overlays';
+import { Button, Field, Icon, LangTag, Loading, Notice } from '../components/ui';
 import { useExtras } from '../extras';
 import { useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
+import { bookPlaceOf, STEPS, useSetPlace } from '../place';
 import { Link, navigate, useLocation } from '../router';
 import { bookTitle } from './Home';
-
-const STEPS: StepId[] = ['read', 'plan', 'make', 'voice', 'export'];
 
 type Run = (type: JobType, args?: Record<string, unknown>) => Promise<void>;
 
@@ -154,8 +154,10 @@ function ReadStep({ p, status, run, live }: StepProps) {
 
 function PlanStep({ p, run, live, reload }: StepProps) {
   const { t, langName } = useI18n();
+  const confirm = useConfirm();
   const [draft, setDraft] = useState<BookPlan | null>(p.plan);
   const [dirty, setDirty] = useState(false);
+  useUnsavedGuard(dirty);
   const [busy, setBusy] = useState<'' | 'save' | 'approve'>('');
   const [error, setError] = useState('');
   const [toast, setToast] = useState('');
@@ -370,7 +372,15 @@ function PlanStep({ p, run, live, reload }: StepProps) {
         <Button
           variant="quiet"
           busy={live.has('plan')}
-          onClick={() => window.confirm(t('plan.redraftConfirm')) && run('plan', { redo: true })}
+          onClick={async () => {
+            const ok = await confirm({
+              title: t('plan.redraftConfirm'),
+              confirm: t('dlg.redraft'),
+              cancel: t('dlg.keepPlan'),
+              danger: true,
+            });
+            if (ok) await run('plan', { redo: true });
+          }}
         >
           {t('plan.redraft')}
         </Button>
@@ -385,6 +395,7 @@ function PlanStep({ p, run, live, reload }: StepProps) {
 
 function MakeStep({ p, status, run, live }: StepProps) {
   const { t, usd } = useI18n();
+  const confirm = useConfirm();
   const engine = p.config.tts.provider;
   const engineOff = !!status?.capabilities?.ttsUnavailable.includes(engine);
   const [narrate, setNarrate] = useState(engine !== 'none' && !engineOff);
@@ -474,8 +485,18 @@ function MakeStep({ p, status, run, live }: StepProps) {
                 {approved && (
                   <Button
                     variant={l ? 'quiet' : 'default'}
-                    onClick={() => {
-                      if (l && !window.confirm(t('make.rebuildConfirm', { title: r.title }))) return;
+                    onClick={async () => {
+                      // replacing a teacher's work: only this interrupts
+                      if (
+                        l &&
+                        !(await confirm({
+                          title: t('make.rebuildConfirm', { title: r.title }),
+                          confirm: t('dlg.rebuild'),
+                          cancel: t('dlg.keepLesson'),
+                          danger: true,
+                        }))
+                      )
+                        return;
                       void run('build', args([r.id], !!l));
                     }}
                   >
@@ -582,10 +603,9 @@ function VoiceStep({ p, status, run, live }: StepProps) {
 
 /* ---------- ⑤ export ---------- */
 
-function ExportStep({ p, status, run, live }: StepProps) {
+function ShareStep({ p, run, live }: StepProps) {
   const { t, ago } = useI18n();
   const ex = p.exportInfo;
-  const qa = status?.qa !== false;
   return (
     <>
       <p className="lede">{t('export.intro')}</p>
@@ -617,6 +637,18 @@ function ExportStep({ p, status, run, live }: StepProps) {
         )}
       </div>
       {ex.at && <p className="muted">{t('export.last', { when: ago(ex.at) })}</p>}
+    </>
+  );
+}
+
+/* ---------- ⑤ check: the delivery checks, the judge, a teacher review kit ---------- */
+
+function CheckStep({ p, status, run, live }: StepProps) {
+  const { t } = useI18n();
+  const qa = status?.qa !== false;
+  return (
+    <>
+      <p className="lede">{t('check.intro')}</p>
       <div className="qa-box">
         <Button variant="quiet" busy={live.has('qa')} disabled={!p.lessons.length || !qa} onClick={() => run('qa')}>
           {t('export.qa')}
@@ -901,8 +933,13 @@ export function ProjectPage({ id }: { id: string }) {
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
   const [estimate, setEstimate] = useState<EstimateInfo | null>(null);
-  const [jobId, setJobId] = useState<string | null>(null);
-  const [step, setStep] = useState<StepId | null>((query.get('step') as StepId) || null);
+  const jobs = useJobs();
+  // "?step=export" is the old name of Share
+  const asked = query.get('step') === 'export' ? 'share' : (query.get('step') as StepId | null);
+  const wanted = asked && STEPS.includes(asked) ? asked : null;
+  const [step, setStep] = useState<StepId | null>(wanted);
+  // the address can change while the book stays open (Go to, the browser's Back)
+  useEffect(() => setStep(wanted), [wanted]);
 
   const loadEstimate = useCallback(() => {
     api
@@ -918,10 +955,6 @@ export function ProjectPage({ id }: { id: string }) {
       const d = await api.project(id);
       setP(d);
       setError('');
-      setJobId(
-        (cur) =>
-          cur ?? d.jobs.find((j) => j.status === 'running' || j.status === 'queued')?.id ?? d.jobs[0]?.id ?? null,
-      );
     } catch (e) {
       setError(errorText(e, tRef.current));
     }
@@ -937,13 +970,14 @@ export function ProjectPage({ id }: { id: string }) {
       setActionError('');
       try {
         const r = await api.startJob(id, type, args);
-        setJobId(r.jobId);
+        // the work sinks to the tray, which follows you from screen to screen
+        jobs.track(id, r.job);
         setP((cur) => (cur ? { ...cur, jobs: [r.job, ...cur.jobs] } : cur));
       } catch (e) {
         setActionError(errorText(e, tRef.current));
       }
     },
-    [id],
+    [id, jobs],
   );
 
   const onEnd = useCallback(
@@ -954,6 +988,14 @@ export function ProjectPage({ id }: { id: string }) {
     },
     [load, loadEstimate],
   );
+  useEffect(() => jobs.onEnd(id, onEnd), [jobs, id, onEnd]);
+  // a running job of this book (after a reload) goes back to the tray
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once, when the book first loads
+  useEffect(() => {
+    const running = p?.jobs.find((j) => j.status === 'running') ?? p?.jobs.find((j) => j.status === 'queued');
+    if (running && jobs.current?.jobId !== running.id) jobs.track(id, running);
+  }, [p?.id]);
+  useSetPlace(p ? { book: bookPlaceOf(p, step ?? p.next, lang) } : null);
 
   const live = useMemo(
     () => new Set((p?.jobs ?? []).filter((j) => j.status === 'running' || j.status === 'queued').map((j) => j.type)),
@@ -987,13 +1029,17 @@ export function ProjectPage({ id }: { id: string }) {
     return run(type, args);
   };
   const props: StepProps = { p, status, run: runHere, live, reload: load };
-  const Panel = { read: ReadStep, plan: PlanStep, make: MakeStep, voice: VoiceStep, export: ExportStep }[current];
+  const Panel = {
+    read: ReadStep,
+    plan: PlanStep,
+    make: MakeStep,
+    voice: VoiceStep,
+    check: CheckStep,
+    share: ShareStep,
+  }[current];
 
   return (
     <div className="page page-project">
-      <nav className="crumbs" aria-label="breadcrumb">
-        <Link to="/">{t('project.books')}</Link>
-      </nav>
       <header className="project-head">
         <div className="project-title">
           <h1 className="display">
@@ -1050,7 +1096,6 @@ export function ProjectPage({ id }: { id: string }) {
           {actionError && <Notice tone="error">{actionError}</Notice>}
           <Panel {...props} />
         </section>
-        <JobBoard jobId={jobId} jobs={p.jobs} onSelect={setJobId} onEnd={onEnd} />
       </div>
     </div>
   );

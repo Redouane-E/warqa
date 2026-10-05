@@ -5,10 +5,12 @@ import type { KeyInfo } from '../../shared/types';
 import { useStatus } from '../App';
 import { api, errorText } from '../api';
 import { useI18n } from '../i18n';
-import { Button, Icon, Loading, Notice, Toast } from './ui';
+import { Toast, useConfirm } from './overlays';
+import { Button, Icon, Loading, Notice } from './ui';
 
 export function KeysForm() {
   const { t } = useI18n();
+  const confirm = useConfirm();
   const { status, reload } = useStatus();
   const [keys, setKeys] = useState<KeyInfo[] | null>(null);
   const [file, setFile] = useState('');
@@ -53,7 +55,7 @@ export function KeysForm() {
   const inBrowser = status?.capabilities?.keyStore === 'browser';
   const stored = keys.filter((k) => k.set && k.source === 'studio');
   const forgetAll = async () => {
-    if (!window.confirm(t('cap.forgetConfirm'))) return;
+    if (!(await confirm({ title: t('cap.forgetConfirm'), confirm: t('dlg.forget'), danger: true }))) return;
     setBusy(true);
     setError('');
     try {

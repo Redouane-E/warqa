@@ -5,6 +5,8 @@ import { createContext, type ReactNode, useContext } from 'react';
 export interface StudioExtras {
   /** Under the top bar, on every screen. */
   banner?: ReactNode;
+  /** In the top bar, before the spend chip (the web app's "Runs in this browser · Your data"). */
+  topbarStatus?: ReactNode;
   /** Next to "New book" on the home screen. */
   homeActions?: ReactNode;
   /** In a project's header, next to Settings. */

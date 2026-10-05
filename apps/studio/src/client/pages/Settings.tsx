@@ -3,11 +3,11 @@ import type { GeoLayerInfo, GeoResult, ModelSummary, ProjectDetail, StatusInfo }
 import { useStatus } from '../App';
 import { api, errorText, waitForJob } from '../api';
 import { KeysForm } from '../components/KeysForm';
-import { Button, Field, Loading, Notice, Toast } from '../components/ui';
+import { Toast, useUnsavedGuard } from '../components/overlays';
+import { Button, Field, Loading, Notice } from '../components/ui';
 import { BOOK_LANGS, useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
-import { Link } from '../router';
-import { bookTitle } from './Home';
+import { usePublishBook } from '../place';
 
 interface Form {
   title: Record<string, string>;
@@ -215,7 +215,8 @@ function MapsSection({ id }: { id: string }) {
 }
 
 export function SettingsPage({ id }: { id: string }) {
-  const { t, langName, lang } = useI18n();
+  const { t, langName } = useI18n();
+  usePublishBook(id, 'next');
   const { status } = useStatus();
   const [p, setP] = useState<ProjectDetail | null>(null);
   const [f, setF] = useState<Form | null>(null);
@@ -223,6 +224,7 @@ export function SettingsPage({ id }: { id: string }) {
   const [saveError, setSaveError] = useState('');
   const [busy, setBusy] = useState(false);
   const [dirty, setDirty] = useState(false);
+  useUnsavedGuard(dirty);
   const [toast, setToast] = useState('');
   const tRef = useRef(t);
   tRef.current = t;
@@ -312,17 +314,9 @@ export function SettingsPage({ id }: { id: string }) {
     ['maps', 'settings.maps'],
     ['budget', 'settings.budget'],
   ];
-  const title = bookTitle(p.title, lang, p.defaultLang);
 
   return (
     <div className="page page-settings">
-      <nav className="crumbs" aria-label="breadcrumb">
-        <Link to="/">{t('project.books')}</Link>
-        <span aria-hidden="true">/</span>
-        <Link to={`/project/${encodeURIComponent(id)}`} dir="auto">
-          {title}
-        </Link>
-      </nav>
       <header className="page-head">
         <h1 className="display">{t('settings.title')}</h1>
       </header>

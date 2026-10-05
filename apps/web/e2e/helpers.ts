@@ -19,11 +19,19 @@ export async function serviceWorkerReady(page: Page) {
   await page.waitForFunction(() => !!navigator.serviceWorker?.controller, undefined, { timeout: 20_000 });
 }
 
-/** Wait for the job shown on the activity board to finish, and return its final state. */
+/** Wait for the job shown in the tray (open, or folded into its pill) to finish, and return its final state. */
 export async function jobDone(page: Page, timeout = 90_000): Promise<string> {
-  const pill = page.locator('.board .board-head .pill');
-  await expect(pill).toHaveClass(/pill-(done|error|cancelled)/, { timeout });
-  return (await pill.getAttribute('class')) ?? '';
+  const pill = page.locator('.tray-head .pill, .tray-pill');
+  await expect(pill).toHaveClass(/(pill|is)-(done|error|cancelled)/, { timeout });
+  return ((await pill.getAttribute('class')) ?? '').replace(/\bis-/, 'pill-');
+}
+
+/** Answer the dialog that guards spending, replacing work or deleting, with its action (not the safe choice). */
+export async function confirmDialog(page: Page, action: string | RegExp) {
+  const dialog = page.locator('dialog.dialog');
+  await expect(dialog).toBeVisible();
+  await dialog.getByRole('button', { name: action }).click();
+  await expect(dialog).toBeHidden();
 }
 
 /** Pick a step of the project page. */

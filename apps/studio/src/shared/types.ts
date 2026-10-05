@@ -226,7 +226,8 @@ export interface BookInfo {
   units: { title: string | LTextMap; chapters: string[] }[];
 }
 
-export type StepId = 'read' | 'plan' | 'make' | 'voice' | 'export';
+/** The six steps of a book. "check" is optional (never the next step); "?step=export" is an alias of "share". */
+export type StepId = 'read' | 'plan' | 'make' | 'voice' | 'check' | 'share';
 export type StepState = 'ready' | 'done' | 'partial' | 'blocked' | 'skipped';
 
 export interface ProjectSummary {

@@ -1,7 +1,7 @@
 // Reviewing translations in the browser, on the example book: filter, approve, correct, approve what is shown,
 // download the spreadsheet and import a reviewed one; the review survives a reload. Also in Arabic.
 import { expect, test } from '@playwright/test';
-import { openStudio } from './helpers';
+import { confirmDialog, openStudio } from './helpers';
 
 const rows = (page: import('@playwright/test').Page) => page.locator('.review-row');
 
@@ -37,13 +37,13 @@ test('review the French translation of the example book', async ({ page }) => {
   await page.getByRole('button', { name: /^All/ }).click();
 
   // approve what is shown (after reading it)
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: /^Approve the \d+ strings shown/ }).click();
+  await confirmDialog(page, 'Approve them');
   await expect(page.getByText(/strings approved/)).toBeVisible();
   // a page shows 100 strings: the rest are approved from the "made by the model" list
   await page.getByRole('button', { name: /^Made by the model/ }).click();
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: /^Approve the \d+ strings? shown|^Approve the string shown/ }).click();
+  await confirmDialog(page, 'Approve them');
   await expect(rows(page)).toHaveCount(0);
 
   // a reload keeps the review (it is saved in the browser)

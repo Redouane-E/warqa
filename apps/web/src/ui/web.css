@@ -13,7 +13,7 @@
   cursor: pointer;
 }
 .link-btn:hover {
-  color: var(--amber-ink);
+  color: var(--wq-ink);
 }
 .link-btn:focus-visible {
   outline: 2px solid var(--focus);
@@ -21,75 +21,90 @@
   border-radius: 3px;
 }
 
-/* ---------- banner under the top bar ---------- */
+/* ---------- the quiet status line in the top bar: "Runs in this browser · Your data" ---------- */
 
-.web-banner {
-  display: flex;
-  flex-wrap: wrap;
+.web-status {
+  display: inline-flex;
   align-items: center;
-  gap: 4px 12px;
-  padding: 6px 20px;
-  background: color-mix(in srgb, var(--amber) 10%, var(--paper));
-  border-block-end: 1px solid var(--rule);
-  font-size: 13.5px;
-  color: var(--ink-2);
+  gap: 6px;
+  white-space: nowrap;
+  font-size: 14px;
+  color: var(--wq-text-2);
+}
+.web-dot {
+  inline-size: 8px;
+  block-size: 8px;
+  border-radius: 50%;
+  background: var(--wq-good);
+}
+.web-sep {
+  color: var(--wq-text-3);
+}
+.web-data-btn {
+  min-block-size: 44px;
+  color: var(--wq-text);
 }
 .web-chip {
   display: inline-flex;
   align-items: center;
   padding: 1px 9px;
   border-radius: 999px;
-  background: var(--board);
-  color: var(--chalk);
+  background: var(--wq-ink-tint);
+  color: var(--wq-ink);
   font-size: 12.5px;
   font-weight: 500;
   white-space: nowrap;
 }
 .web-chip-test {
-  background: var(--amber);
-  color: var(--on-amber);
+  background: var(--wq-fluo-tint);
+  color: var(--wq-fluo-text);
 }
-.web-links {
-  display: inline-flex;
-  flex-wrap: wrap;
-  gap: 4px 14px;
-  margin-inline-start: auto;
+.web-status-menu .menu-button {
+  padding: 0 8px;
 }
-.web-links a {
-  color: inherit;
+.web-status-menu.has-warnings .menu-button {
+  color: var(--wq-fluo-text);
+  background: var(--wq-fluo-tint);
 }
-.web-warning {
+.web-count {
+  font-family: var(--font-mono);
+  font-size: 13px;
+}
+.web-status-menu .menu {
+  inline-size: min(340px, calc(100vw - 24px));
+  white-space: normal;
+}
+.web-status-list p {
+  margin: 0 0 8px;
+}
+.web-status-title {
+  font-weight: 600;
+}
+.web-warning-line {
   display: flex;
   gap: 8px;
   align-items: flex-start;
-  padding: 8px 20px;
-  background: color-mix(in srgb, var(--bad) 12%, var(--paper));
-  font-size: 14px;
+  color: var(--wq-text);
 }
-.web-warning .icon {
+.web-warning-line .icon {
   flex: none;
   margin-block-start: 3px;
-}
-.web-warning-soft {
-  background: var(--wq-fluo-tint);
+  color: var(--wq-fluo-text);
 }
 .web-action-error {
   flex-basis: 100%;
   margin: 0;
 }
-
-/* ---------- privacy dialog ---------- */
-
-.web-dialog {
-  max-inline-size: min(560px, calc(100vw - 32px));
-  color: var(--ink);
+@media (max-width: 1100px) {
+  .web-runs,
+  .web-sep {
+    display: none;
+  }
 }
-.web-dialog::backdrop {
-  /* a paper veil, not a dark one (the fallback: older browsers give ::backdrop no custom properties) */
-  background: color-mix(in srgb, var(--wq-ground, #f4f6fa) 80%, transparent);
-}
-.web-dialog h2 {
-  margin: 0;
+@media (max-width: 760px) {
+  .web-chip-test {
+    display: none;
+  }
 }
 
 /* ---------- start screen ---------- */

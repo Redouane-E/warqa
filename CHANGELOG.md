@@ -60,6 +60,29 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
     switch and "Install for offline use" where the browser offers it.
   - `warqa qa --theme sheet,board` checks and photographs a lesson in either theme; the video export and
     QA shots use the bare stage (`?bare`), and the studio's preview hides the player's strip.
+- **The studio's frame (redesign phase 3).** The studio and the web app share a new way of moving around:
+  places stack, tools slide in from the side, work sinks to a tray, and only money and loss interrupt.
+  - **Top bar:** the mark (Your books), Go to, the open book's spending, "AI and voices" (a new address,
+    `/ai`; `/settings` still works), a language menu and one Sheet/Board button. Strips above the page show
+    where you are (Your books, then the book and its step) and replace the breadcrumbs; Alt+↑ goes back up.
+  - **Go to** (⌘K on a Mac, Ctrl+K elsewhere, with any keyboard layout): find a book, step, chapter, beat
+    or setting, or start Read, Plan, Make (with its estimated cost), Check or Export. Nothing starts until
+    you choose it. Esc closes whatever tool is on top.
+  - **Unsaved work asks first:** leaving a lesson, a plan or a book's settings with unsaved changes (by a
+    link, the strips, Alt+↑ or Go to) asks whether to stay or leave without saving.
+  - **The tray:** running work (reading, planning, making, exporting…) shows at the bottom of the window and
+    stays with you from screen to screen. Hide folds it into a small pill with the progress and the cost;
+    when the work ends a message offers to open it again. It replaces the activity board, so a book's page
+    is now the steps and one sheet.
+  - **Six steps:** Check is its own step (quality check, improving and rating, which used to sit under
+    Export). It is optional. The last step is now called Share; old `?step=export` links still work.
+  - **Dialogs and messages:** the browser's confirm boxes are replaced by the studio's own dialogs, which
+    focus the safe choice and name the action ("Make it again", "Delete the book"). Results such as
+    "Saved" appear as short messages in the corner.
+  - **Web app:** the banner and warning bars become one quiet line in the top bar ("Runs in this browser ·
+    Your data"), with warnings in its menu; "Your data" opens as a side sheet (a bottom sheet on phones).
+  - **Lesson editor:** the preview can fill the whole window (Esc or Close returns to the same step), and
+    a link with `?beat=3` opens the third beat.
 - Cost estimates no longer ask for a translator model when a book has a single language.
 
 ### Fixed

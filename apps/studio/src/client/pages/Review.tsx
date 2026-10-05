@@ -6,11 +6,12 @@ import { dirOf } from '@warqa/i18n';
 import { type ChangeEvent, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { ProjectDetail, ReviewImportResult, ReviewInfo, ReviewItem, ReviewState } from '../../shared/types';
 import { api, errorText } from '../api';
+import { useConfirm } from '../components/overlays';
 import { Button, Icon, Loading, Notice } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
-import { Link, navigate, useLocation } from '../router';
-import { bookTitle } from './Home';
+import { usePublishBook } from '../place';
+import { navigate, useLocation } from '../router';
 
 type Filter = 'all' | 'machine' | 'flagged' | 'stale' | 'missing' | 'checked';
 const FILTERS: Filter[] = ['all', 'machine', 'flagged', 'stale', 'missing', 'checked'];
@@ -113,6 +114,8 @@ function Row({
 
 export function ReviewPage({ id }: { id: string }) {
   const { t, lang: ui, num } = useI18n();
+  usePublishBook(id, 'voice');
+  const confirm = useConfirm();
   const langName = useI18n().langName;
   const { query } = useLocation();
   const [p, setP] = useState<ProjectDetail | null>(null);
@@ -212,7 +215,14 @@ export function ReviewPage({ id }: { id: string }) {
   };
 
   const approveShown = async () => {
-    if (!approvable.length || !window.confirm(t('review.approveShownConfirm', { n: approvable.length }))) return;
+    if (
+      !approvable.length ||
+      !(await confirm({
+        title: t('review.approveShownConfirm', { n: approvable.length }),
+        confirm: t('dlg.approve'),
+      }))
+    )
+      return;
     setBulk('approve');
     setNotice(null);
     try {
@@ -260,19 +270,11 @@ export function ReviewPage({ id }: { id: string }) {
     );
 
   const targets = targetLangs(p);
-  const title = bookTitle(p.title, ui, p.defaultLang);
   const srcOf = (lid: string) => info?.sourceLangs[lid] ?? p.book.defaultLang ?? 'en';
   const done = items.filter((i) => checked(i.state)).length;
 
   return (
     <div className="page page-review">
-      <nav className="crumbs" aria-label="breadcrumb">
-        <Link to="/">{t('project.books')}</Link>
-        <span aria-hidden="true">/</span>
-        <Link to={`/project/${encodeURIComponent(id)}?step=voice`} dir="auto">
-          {title}
-        </Link>
-      </nav>
       <header className="page-head">
         <div>
           <h1 className="display">{t('review.title')}</h1>

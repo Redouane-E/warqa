@@ -1,11 +1,11 @@
-// The activity board: follows a job over SSE and shows its stages, per-beat progress and log.
-// Styled as a small chalkboard — the one place the studio borrows the player's look.
-import { useEffect, useMemo, useRef, useState } from 'react';
+// The activity tray: follows a job over SSE (its stages, per-beat progress and log) from any screen.
+import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { JobEvent, JobInfo, JobStatus, JobType } from '../../shared/types';
 import { api } from '../api';
 import { withBase } from '../base';
 import { type I18n, useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
+import { useToast } from './overlays';
 import { Icon } from './ui';
 
 const STAGES = [
@@ -124,7 +124,7 @@ function RowView({ r, live }: { r: Row; live: boolean }) {
         ) : state === 'skip' ? (
           '·'
         ) : state === 'running' ? (
-          <span className="chalk-dot" />
+          <span className="run-dot" />
         ) : (
           '–'
         )}
@@ -160,125 +160,294 @@ function RowView({ r, live }: { r: Row; live: boolean }) {
   );
 }
 
-export function JobBoard({
-  jobId,
-  jobs,
+type View = 'hidden' | 'open' | 'pill';
+
+interface Tracked {
+  projectId: string;
+  jobId: string;
+}
+
+interface Jobs {
+  /** Follow a job: the tray opens (once per job) and stays with you from screen to screen. */
+  track(projectId: string, job: JobInfo): void;
+  /** Called when a job of this book ends (the book's screen reloads). */
+  onEnd(projectId: string, fn: (job: JobInfo) => void): () => void;
+  /** Open the tray (the spend chip, Go to). */
+  show(): void;
+  current: Tracked | null;
+}
+
+const JobsContext = createContext<Jobs>({
+  track: () => {},
+  onEnd: () => () => {},
+  show: () => {},
+  current: null,
+});
+export const useJobs = () => useContext(JobsContext);
+
+/**
+ * The tray: work that runs sinks to the bottom of the window and follows you. Hidden → open (once per job, at
+ * most 45 % of the height) → a pill in the bottom corner when hidden ("Making lessons · 43 %") → done (a toast
+ * with Open). Hide never stops the work; only Stop does.
+ */
+export function JobsProvider({ children }: { children: ReactNode }) {
+  const i18n = useI18n();
+  const toast = useToast();
+  const [current, setCurrent] = useState<Tracked | null>(null);
+  const [view, setView] = useState<View>('hidden');
+  const listeners = useRef(new Map<string, Set<(job: JobInfo) => void>>());
+  const viewRef = useRef(view);
+  viewRef.current = view;
+  const currentRef = useRef(current);
+  currentRef.current = current;
+  // jobs followed while they ran: only their end is news (an earlier job opened from the list ends at once)
+  const liveIds = useRef(new Set<string>());
+
+  const end = useCallback(
+    (job: JobInfo) => {
+      if (!liveIds.current.delete(job.id)) return;
+      const projectId = currentRef.current?.projectId;
+      if (projectId) for (const fn of listeners.current.get(projectId) ?? []) fn(job);
+      if (job.type === 'estimate') return;
+      // done: the tray folds to its pill (a check) so the screen is free again, unless you are working in it
+      const inTray = !!document.activeElement?.closest('.tray');
+      if (viewRef.current === 'open' && inTray) return;
+      if (viewRef.current === 'open') setView('pill');
+      toast({
+        text: `${jobLabel(job.type, i18n)} · ${i18n.t(`job.status.${job.status}` as MsgKey)}`,
+        tone: job.status === 'error' ? 'error' : job.status === 'done' ? 'good' : 'info',
+        action: { label: i18n.t('tray.open'), run: () => setView('open') },
+      });
+    },
+    [toast, i18n],
+  );
+  const stream = useJobStream(current?.jobId ?? null, end);
+
+  const value = useMemo<Jobs>(
+    () => ({
+      track: (projectId, job) => {
+        if (job.status === 'running' || job.status === 'queued') liveIds.current.add(job.id);
+        setCurrent((cur) => {
+          if (cur?.jobId !== job.id) setView(job.type === 'estimate' ? 'pill' : 'open');
+          return { projectId, jobId: job.id };
+        });
+      },
+      onEnd: (projectId, fn) => {
+        const set = listeners.current.get(projectId) ?? new Set();
+        set.add(fn);
+        listeners.current.set(projectId, set);
+        return () => set.delete(fn);
+      },
+      show: () => setView('open'),
+      current,
+    }),
+    [current],
+  );
+
+  return (
+    <JobsContext.Provider value={value}>
+      {children}
+      {current && view !== 'hidden' && (
+        <Tray
+          tracked={current}
+          stream={stream}
+          view={view}
+          setView={setView}
+          onSelect={(jobId) => setCurrent({ projectId: current.projectId, jobId })}
+        />
+      )}
+    </JobsContext.Provider>
+  );
+}
+
+function Tray({
+  tracked,
+  stream,
+  view,
+  setView,
   onSelect,
-  onEnd,
 }: {
-  jobId: string | null;
-  jobs: JobInfo[];
-  onSelect: (id: string) => void;
-  onEnd: (job: JobInfo) => void;
+  tracked: Tracked;
+  stream: ReturnType<typeof useJobStream>;
+  view: View;
+  setView: (v: View) => void;
+  onSelect: (jobId: string) => void;
 }) {
   const i18n = useI18n();
-  const { t, ago } = i18n;
-  const { events, info, lost } = useJobStream(jobId, onEnd);
+  const { t, ago, num, usd } = i18n;
+  const { events, info, lost } = stream;
+  const jobId = tracked.jobId;
   const logRef = useRef<HTMLOListElement>(null);
   const rows = useMemo(() => rowsOf(events), [events]);
   const lines = useMemo(() => events.filter((e) => e.kind === 'log' || e.kind === 'error').slice(-200), [events]);
   const result = events.find((e) => e.kind === 'result')?.result as { url?: string } | undefined;
-  const status = info?.status ?? (jobId ? 'queued' : null);
+  const spent = [...events].reverse().find((e) => typeof e.usd === 'number')?.usd;
+  const status = info?.status ?? 'queued';
   const live = status === 'running' || status === 'queued';
   const [stopping, setStopping] = useState(false);
+  const [earlier, setEarlier] = useState<JobInfo[]>([]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: reset when another job is shown
   useEffect(() => setStopping(false), [jobId]);
-
+  // biome-ignore lint/correctness/useExhaustiveDependencies: refresh the list when the job changes or ends
+  useEffect(() => {
+    if (view !== 'open') return;
+    api
+      .jobs(tracked.projectId)
+      .then((r) => setEarlier(r.jobs.filter((j) => j.id !== jobId).slice(0, 6)))
+      .catch(() => setEarlier([]));
+  }, [view, jobId, tracked.projectId, status]);
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll the log when a line arrives
   useEffect(() => {
     const el = logRef.current;
     if (el) el.scrollTop = el.scrollHeight;
   }, [lines.length]);
 
-  const earlier = jobs.filter((j) => j.id !== jobId).slice(0, 6);
+  // the page keeps room under its last line for the tray, so the tray never hides a button for good
+  const keepClear = useCallback((el: HTMLElement | null) => {
+    if (!el) return;
+    const root = document.documentElement;
+    const set = () => root.style.setProperty('--tray-space', `${el.offsetHeight + 16}px`);
+    const ro = new ResizeObserver(set);
+    ro.observe(el);
+    set();
+    return () => {
+      ro.disconnect();
+      root.style.removeProperty('--tray-space');
+    };
+  }, []);
+
   const latest = rows[rows.length - 1];
+  const pct = latest?.total ? Math.round((((latest.index ?? 0) + 1) * 100) / latest.total) : undefined;
+  const title = info ? jobLabel(info.type, i18n) : t('job.title');
+  const summary = [
+    title,
+    pct !== undefined && live ? `${num(pct)} %` : !live ? t(`job.status.${status}` as MsgKey) : '',
+    spent ? usd(spent) : '',
+  ]
+    .filter(Boolean)
+    .join(' · ');
+
+  if (view === 'pill')
+    return (
+      <div className={`tray-pill is-${status}`} ref={keepClear}>
+        {/* its name is what it shows ("Making lessons · 43 %"); the tooltip says what a click does */}
+        <button type="button" className="tray-pill-open" onClick={() => setView('open')} title={t('tray.show')}>
+          <span className="tray-dot" aria-hidden="true">
+            {status === 'done' ? (
+              <Icon name="check" size={14} />
+            ) : status === 'error' ? (
+              <Icon name="close" size={14} />
+            ) : null}
+          </span>
+          <span className="tray-pill-text">{summary}</span>
+        </button>
+        {!live && (
+          <button
+            type="button"
+            className="tray-pill-close"
+            aria-label={t('common.close')}
+            onClick={() => setView('hidden')}
+          >
+            <Icon name="close" size={14} />
+          </button>
+        )}
+      </div>
+    );
 
   return (
-    <section className="board" aria-labelledby="board-title">
-      <header className="board-head">
-        <h2 id="board-title">{t('job.title')}</h2>
-        {status && <span className={`pill pill-${status}`}>{t(`job.status.${status}` as MsgKey)}</span>}
-      </header>
-      {!jobId && <p className="board-idle">{t('job.idle')}</p>}
-      {jobId && info && (
-        <div className="board-job">
-          <p className="board-type">
-            {jobLabel(info.type, i18n)}
-            {Array.isArray(info.args.chapters) && info.args.chapters.length ? (
-              <span className="board-args"> · {(info.args.chapters as string[]).join(', ')}</span>
-            ) : null}
-            {typeof info.args.lang === 'string' ? (
-              <span className="board-args"> · {info.args.lang.toUpperCase()}</span>
-            ) : null}
-          </p>
+    <section className="tray" aria-labelledby="tray-title" ref={keepClear}>
+      <header className="tray-head">
+        <h2 id="tray-title">
+          {title}
+          {info && Array.isArray(info.args.chapters) && info.args.chapters.length ? (
+            <span className="tray-args"> · {(info.args.chapters as string[]).join(', ')}</span>
+          ) : null}
+          {info && typeof info.args.lang === 'string' ? (
+            <span className="tray-args"> · {info.args.lang.toUpperCase()}</span>
+          ) : null}
+        </h2>
+        <span className={`pill pill-${status}`}>{t(`job.status.${status}` as MsgKey)}</span>
+        {spent ? <span className="tray-money">{usd(spent)}</span> : null}
+        <span className="tray-tools">
           {live && (
             <button
               type="button"
-              className="board-stop"
+              className="btn btn-default tray-stop"
               disabled={stopping}
               onClick={() => {
                 setStopping(true);
                 void api.cancelJob(jobId);
               }}
             >
-              <Icon name="stop" size={14} /> {stopping ? t('job.stopping') : t('job.stop')}
+              <Icon name="stop" size={16} /> <span>{stopping ? t('job.stopping') : t('job.stop')}</span>
             </button>
           )}
-        </div>
-      )}
-      {status === 'queued' && <p className="board-note">{t('job.queued')}</p>}
-      {lost && live && <p className="board-note">{t('job.reconnecting')}</p>}
-      <p className="visually-hidden" aria-live="polite">
-        {latest
-          ? `${stageLabel(latest.stage, i18n)} ${latest.status === 'beat' ? `${(latest.index ?? 0) + 1}/${latest.total}` : ''}`
-          : ''}
-        {status && !live ? ` ${t(`job.status.${status}` as MsgKey)}` : ''}
-      </p>
-      {!!rows.length && (
-        <ol className="job-rows">
-          {rows.map((r) => (
-            <RowView key={r.key} r={r} live={live} />
-          ))}
-        </ol>
-      )}
-      {info?.error && (
-        <p className="board-error" role="alert">
-          <bdi>{info.error}</bdi>
+          <button type="button" className="btn btn-quiet" onClick={() => setView('pill')}>
+            <Icon name="down" size={16} /> <span>{t('tray.hide')}</span>
+          </button>
+          {!live && (
+            <button type="button" className="icon-btn" aria-label={t('common.close')} onClick={() => setView('hidden')}>
+              <Icon name="close" />
+            </button>
+          )}
+        </span>
+      </header>
+      <div className="tray-body">
+        {live && <p className="tray-note">{t('tray.keeps')}</p>}
+        {status === 'queued' && <p className="tray-note">{t('job.queued')}</p>}
+        {lost && live && <p className="tray-note">{t('job.reconnecting')}</p>}
+        <p className="visually-hidden" aria-live="polite">
+          {latest
+            ? `${stageLabel(latest.stage, i18n)} ${latest.status === 'beat' ? `${(latest.index ?? 0) + 1}/${latest.total}` : ''}`
+            : ''}
+          {!live ? ` ${t(`job.status.${status}` as MsgKey)}` : ''}
         </p>
-      )}
-      {status === 'done' && result?.url && (
-        <a className="board-link" href={result.url} target="_blank" rel="noreferrer">
-          <Icon name="open" size={16} /> {t('export.open')}
-        </a>
-      )}
-      {!!lines.length && (
-        <details className="board-log" open={live}>
-          <summary>{t('job.log')}</summary>
-          <ol ref={logRef}>
-            {lines.map((e) => (
-              <li key={e.seq} className={`log-${e.kind === 'error' ? 'error' : (e.level ?? 'info')}`}>
-                <bdi>{e.message ?? e.error}</bdi>
-              </li>
+        {!!rows.length && (
+          <ol className="job-rows">
+            {rows.map((r) => (
+              <RowView key={r.key} r={r} live={live} />
             ))}
           </ol>
-        </details>
-      )}
-      {!!earlier.length && (
-        <details className="board-earlier">
-          <summary>{t('job.earlier')}</summary>
-          <ul>
-            {earlier.map((j) => (
-              <li key={j.id}>
-                <button type="button" onClick={() => onSelect(j.id)}>
-                  <span>{jobLabel(j.type, i18n)}</span>
-                  <span className={`pill pill-${j.status}`}>{t(`job.status.${j.status}` as MsgKey)}</span>
-                  <span className="muted">{ago(j.created)}</span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        </details>
-      )}
+        )}
+        {info?.error && (
+          <p className="tray-error" role="alert">
+            <bdi>{info.error}</bdi>
+          </p>
+        )}
+        {status === 'done' && result?.url && (
+          <a className="btn btn-primary tray-link" href={result.url} target="_blank" rel="noreferrer">
+            <Icon name="open" size={16} /> <span>{t('export.open')}</span>
+          </a>
+        )}
+        {!!lines.length && (
+          <details className="tray-log" open={live}>
+            <summary>{t('job.log')}</summary>
+            <ol ref={logRef}>
+              {lines.map((e) => (
+                <li key={e.seq} className={`log-${e.kind === 'error' ? 'error' : (e.level ?? 'info')}`}>
+                  <bdi>{e.message ?? e.error}</bdi>
+                </li>
+              ))}
+            </ol>
+          </details>
+        )}
+        {!!earlier.length && (
+          <details className="tray-earlier">
+            <summary>{t('job.earlier')}</summary>
+            <ul>
+              {earlier.map((j) => (
+                <li key={j.id}>
+                  <button type="button" onClick={() => onSelect(j.id)}>
+                    <span>{jobLabel(j.type, i18n)}</span>
+                    <span className={`pill pill-${j.status}`}>{t(`job.status.${j.status}` as MsgKey)}</span>
+                    <span className="muted">{ago(j.created)}</span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </details>
+        )}
+      </div>
     </section>
   );
 }

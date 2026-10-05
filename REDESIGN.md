@@ -19,7 +19,7 @@ Warqa serves **three audiences**:
   change any of them)
 - [x] Phase 1: foundation (tokens, fonts, logo, icons)
 - [x] Phase 2: the player and the exported book
-- [ ] Phase 3: the studio's frame (interaction system)
+- [x] Phase 3: the studio's frame (interaction system)
 - [ ] Phase 4: the studio's screens
   - [x] 4a1 the `learn` job and `warqa learn` (backend for self-learners)
   - [ ] 4a2 first visit (I teach / I'm learning for myself), the learner path, What I'm learning, Your
@@ -105,6 +105,13 @@ Some numbers and chapter titles on the canvas are illustrative (costs, the plan'
 ---
 
 ## Design system specification
+
+> **Since Phase 1, the code wins over this section.** The values live in `packages/brand/src/tokens.ts`
+> (the build writes `dist/tokens.css`), and the Decisions log records every change from the tables below:
+> - three colours moved slightly to pass contrast (`text-3` light, the dark input border, Sheet coral text);
+> - the easing variables are `--wq-ease-settle/lift/ink`, because `--wq-ink` is the colour.
+>
+> Use the tokens and icons from `@warqa/brand`; never copy hex values from these tables into new code.
 
 ### Idea
 
@@ -701,7 +708,17 @@ Tasks:
   - the new Check step and the `export` alias;
   - the keys page moved to `/ai`;
   - fonts.
+- Fix the known issues below, or record why they stay.
 - Release per `docs/en/release.md`.
+
+### Known issues (carried forward)
+
+- `warqa qa` without `--shots` on the fox book reports an image overflow on the finish step. The image is
+  measured before it has loaded, so it is a timing problem, not a layout one. It predates the redesign
+  (Phase 1's code shows it too). Fix it by waiting for images to load before measuring.
+- Left for later on purpose:
+  - Chapter thumbnails on the book home: a number badge stands in.
+  - The phone "Listening" sheet: Phase 5; until then phones use buttons under the stage.
 
 ## Vision backlog (after the redesign)
 
@@ -771,6 +788,18 @@ session. Order and what each builds on:
 | 2026-10-05 | Book home per BookHome without chapter thumbnails (optional in the spec; a number badge stands in). Chapter progress comes from the step reached, now saved with the progress (`at`), and the first-try score from the saved scores. "Install for offline use" shows only when the browser fires `beforeinstallprompt` | default |
 | 2026-10-05 | Player strings: new keys for the strip, speed, themes, transcript hint and book home in en/fr/ar/ary; `bar.home` now reads "All lessons"; the four unused keys (`lesson.loading`, `lesson.error`, `book.back`, `quiz.option`) are removed, and `bar.restart` and `book.open`, unused by the new chrome | default |
 | 2026-10-05 | Player details from the review: the stage's margin line sits outside the slots (x 38, or 1562 in right-to-left), clear of the content; translucent colours are generated as `rgba()` variables at build (no `color-mix()`, which the player's Safari 15 target lacks); a band card puts its key hints and action on one row so it stays below the picture; without the strip (`head: false`) the rating and transcript buttons move into the bar; every player sets its own palette before drawing, so two players with different themes can share a page | default |
+| 2026-10-05 | Studio routes stay as they were (tests and bookmarks); `/ai` is added and `/settings` shows the same page. The top bar is the same everywhere: the mark (Your books), Go to, the book's spend chip (when a book is open; it opens the tray when that book has work), AI and voices, the interface-language menu and a two-state Sheet/Board button (the first visit follows the computer) | default |
+| 2026-10-05 | Stack strips replace breadcrumbs. They come from the route plus a small "place" each screen publishes (`place.tsx`: the book with its step and spend, the lesson with its beats); the farther place sits further in. Alt+↑ goes to the nearest strip. A new place arrives with the Stack motion (32 px and a fade, `--wq-t-place`) | default |
+| 2026-10-05 | Esc closes the topmost open tool (Go to, a menu, the side sheet, Lift) through one stack (`components/tools.ts`); a modal dialog handles its own Esc; Esc never leaves a place. Closing a dialog, Go to or Lift gives the focus back to what opened it | default |
+| 2026-10-05 | Keys: ⌘ K on a Mac, Ctrl K elsewhere, matched on the physical key (`e.code`) so an Arabic layout works and the Mac's Ctrl K stays in text fields. Alt+↑ does nothing in a text field or list box, or while a tool or dialog is open | default |
+| 2026-10-05 | Unsaved work (a lesson, the plan, the book's settings) asks before an in-app link, a strip, Alt+↑ or Go to leaves the screen (the loss dialog: Stay, or Leave without saving); closing the tab gets the browser's own question. Moving inside the screen (`?beat`, `?step`) never asks. The browser's Back button cannot be asked | default |
+| 2026-10-05 | The tray: job state lives above the routes (`JobsProvider`), so it follows navigation. It opens once per job (at most 45 % of the height); Hide folds it into a pill in the bottom inline-end corner; when a job it followed while running ends, the open tray folds to its pill with a check and a toast offers Open (unless you are working inside it); opening an earlier task from its list announces nothing. The toast host is a live region, and toasts sit above the tray. The page keeps room under its last line for the tray (`--tray-space`). Earlier tasks come from `GET /api/projects/:id/jobs`. Per-beat content in the tray is 4c | default |
+| 2026-10-05 | Check is optional: it is never the next step, and it is done once the book has a `qa/` folder. QA, Improve and the rating panel moved there from Export; Share holds the export | default |
+| 2026-10-05 | Dialogs replace the six `confirm()`s (draft a new plan, make a lesson again, forget the keys, approve the shown strings, delete everything in the browser, delete a book). The safe choice has the focus and answers Esc; the action button says what happens; loss is red. The two `alert()`s of the web app become `warqa:notice` window events shown as toasts | default |
+| 2026-10-05 | Web app: the status line ("Runs in this browser · Your data") sits in the studio's top bar through `extras.topbarStatus`; warnings wait in its status menu, which shows their count. The test-mode chip is short ("Test mode", the whole sentence in its tooltip and the menu) and hidden on phones. The menu's explanation and warnings are outside `role="menu"` and describe it (`aria-describedby`); a menu moves itself back inside the window on phones. "Your data" is a side sheet | default |
+| 2026-10-05 | Side sheets push the place at 1280 px and wider, cover it with a veil below that, and come up from the bottom on phones; they are rendered on `<body>` because the top bar's backdrop blur would otherwise contain them | default |
+| 2026-10-05 | Lift (Phase 3 version): the lesson editor's preview grows into a full-window frame with a strip (Preview · title · language · Close); the same player moves, so closing returns to the beat reached. The editor's new layout is 4d1. `?beat=N` (1-based) opens that beat | default |
+| 2026-10-05 | Go to indexes the book's six steps, chapters, the open lesson's beats, other books, Your books, settings and AI and voices, then actions (run through the job API). Nothing is chosen until you type or press an arrow, and places come before actions, so Enter never starts work by accident. Actions show what they spend (Make the estimate, Plan and Read the AI service) and appear only when they make sense here: Read with a PDF, Plan only before a plan exists (drafting again replaces it, so only the Plan step offers it, behind its dialog), Make once the plan is approved, Check and Export with lessons, none the host cannot run. Search ignores accents and Arabic vowel marks | default |
 
 ## Session prompts
 

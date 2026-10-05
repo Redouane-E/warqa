@@ -266,13 +266,15 @@ function steps(
     plan: plan?.status === 'approved' ? 'done' : plan ? 'partial' : doc ? 'ready' : hasLessons ? 'skipped' : 'blocked',
     make: madeAll ? 'done' : built.length ? 'partial' : plan?.status === 'approved' ? 'ready' : 'blocked',
     voice: voicedAll ? 'done' : voicedSome ? 'partial' : hasLessons ? 'ready' : 'blocked',
-    export: exported ? 'done' : hasLessons ? 'ready' : 'blocked',
+    // checking is optional: done once the lessons were looked at (QA shots), never the next step
+    check: hasLessons ? (existsSync(p.path('qa')) ? 'done' : 'ready') : 'blocked',
+    share: exported ? 'done' : hasLessons ? 'ready' : 'blocked',
   };
 }
 
 export function nextStep(s: Record<StepId, StepState>): StepId {
-  const order: StepId[] = ['read', 'plan', 'make', 'voice', 'export'];
-  return order.find((k) => s[k] !== 'done' && s[k] !== 'skipped') ?? 'export';
+  const order: StepId[] = ['read', 'plan', 'make', 'voice', 'share'];
+  return order.find((k) => s[k] !== 'done' && s[k] !== 'skipped') ?? 'share';
 }
 
 export function projectSummary(id: string, p: P.Project): ProjectSummary {

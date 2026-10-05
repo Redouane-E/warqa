@@ -1,6 +1,6 @@
 // What is saved in the browser survives a reload: books (IndexedDB) and keys, and "forget my keys" forgets.
 import { expect, test } from '@playwright/test';
-import { openStudio } from './helpers';
+import { confirmDialog, openStudio } from './helpers';
 
 test('books and keys survive a reload; keys can be forgotten', async ({ page }) => {
   await openStudio(page);
@@ -39,8 +39,8 @@ test('books and keys survive a reload; keys can be forgotten', async ({ page }) 
 
   // forget all keys
   await page.goto('settings');
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Forget all my keys' }).click();
+  await confirmDialog(page, 'Remove every key');
   await expect(page.locator('.key-row', { hasText: 'MISTRAL_API_KEY' })).toContainText('not set');
   await page.reload();
   await expect(page.locator('.key-row', { hasText: 'MISTRAL_API_KEY' })).toContainText('not set');
@@ -60,8 +60,8 @@ test('a backup imports back as a book', async ({ page }) => {
     return btoa(s);
   });
   await page.goto('project/integers');
-  page.once('dialog', (d) => d.accept());
   await page.getByRole('button', { name: 'Delete this book from this browser' }).click();
+  await confirmDialog(page, 'Delete the book');
   await expect(page).toHaveURL(/\/warqa\/$/);
   await expect(page.locator('.book-card')).toHaveCount(0);
   await page.getByTestId('import-input').setInputFiles({

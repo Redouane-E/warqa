@@ -47,7 +47,7 @@ test.describe('on a phone', () => {
       await expect(page.locator('.welcome-card')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
       await page.getByRole('button', { name: lang === 'ar' ? 'تخطَّ الدليل' : 'Skip the guide' }).click();
-      await expect(page.locator('.web-banner')).toBeVisible();
+      await expect(page.locator('.web-status')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     });
   }

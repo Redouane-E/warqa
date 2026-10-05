@@ -6,6 +6,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/server/app.js';
+import { nextStep } from '../src/server/projects.js';
 import { zipPath } from '../src/server/zip.js';
 
 const here = dirname(fileURLToPath(import.meta.url));
@@ -63,6 +64,15 @@ describe('projects', () => {
     const p = r.projects.find((x) => x.id === id)!;
     expect(p.hasPdf).toBe(true);
     expect(p.steps.read).toBe('ready');
+    // with a lesson, Check and Share are open; Check stays optional
+    expect(p.steps.check).toBe('ready');
+    expect(p.steps.share).toBe('ready');
+  });
+
+  it('never makes the optional Check step the next one', () => {
+    const s = { read: 'done', plan: 'done', make: 'done', voice: 'skipped', check: 'ready', share: 'ready' } as const;
+    expect(nextStep(s)).toBe('share');
+    expect(nextStep({ ...s, share: 'done' })).toBe('share');
   });
 
   it('rejects a file that is not a PDF', async () => {
@@ -301,6 +311,8 @@ describe('jobs', () => {
     expect(await book.text()).toContain('WARQA_BOOK');
     expect((await app.request(`/books/${id}/ch05/audio/en/intro.mp3`, { headers: { range: 'bytes=0-9' } })).status).toBe(206);
     expect((await app.request(`/books/${id}/..%2fwarqa.json`)).status).toBe(403);
+    const after = (await (await app.request(`/api/projects/${id}`)).json()) as { steps: Record<string, string> };
+    expect(after.steps.share).toBe('done');
   });
 
   it('queues jobs one at a time per project and can cancel a queued job', async () => {

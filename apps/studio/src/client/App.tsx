@@ -10,16 +10,22 @@ import {
 } from 'react';
 import type { StatusInfo } from '../shared/types';
 import { api } from './api';
-import { Icon, Mark } from './components/ui';
+import { GoTo } from './components/GoTo';
+import { JobsProvider } from './components/JobBoard';
+import { OverlayProvider } from './components/overlays';
+import { applyTheme, StackStrips, TopBar, useStrips } from './components/TopBar';
+import { inField, toolOpen } from './components/tools';
+import { Icon } from './components/ui';
 import { ExtrasContext, type StudioExtras } from './extras';
-import { getLang, I18nContext, makeI18n, setLang, subscribeLang, UI_LANGS, type UiLang, useI18n } from './i18n';
+import { getLang, I18nContext, makeI18n, subscribeLang } from './i18n';
 import { HomePage } from './pages/Home';
 import { KeysPage } from './pages/Keys';
 import { LessonPage } from './pages/Lesson';
 import { ProjectPage } from './pages/Project';
 import { ReviewPage } from './pages/Review';
 import { SettingsPage } from './pages/Settings';
-import { Link, match, useLocation } from './router';
+import { PlaceProvider } from './place';
+import { go, match, useLocation } from './router';
 
 /* ---------- server status (providers, presets, engines) shared by every screen ---------- */
 
@@ -30,83 +36,6 @@ interface StatusCtx {
 const StatusContext = createContext<StatusCtx>({ status: null, reload: async () => {} });
 export const useStatus = () => useContext(StatusContext);
 
-/* ---------- theme ---------- */
-
-type Theme = 'auto' | 'light' | 'dark';
-const THEME_KEY = 'warqa-studio:theme';
-function readTheme(): Theme {
-  try {
-    const v = localStorage.getItem(THEME_KEY);
-    return v === 'light' || v === 'dark' ? v : 'auto';
-  } catch {
-    return 'auto';
-  }
-}
-function applyTheme(t: Theme) {
-  if (t === 'auto') delete document.documentElement.dataset.theme;
-  else document.documentElement.dataset.theme = t;
-}
-
-function TopBar({ theme, onTheme }: { theme: Theme; onTheme: (t: Theme) => void }) {
-  const { t, lang } = useI18n();
-  const { path } = useLocation();
-  const next: Record<Theme, Theme> = { auto: 'light', light: 'dark', dark: 'auto' };
-  const short: Record<UiLang, string> = { ar: 'عربي', fr: 'FR', en: 'EN' };
-  const full: Record<UiLang, string> = { ar: 'العربية', fr: 'Français', en: 'English' };
-  return (
-    <header className="topbar">
-      <a className="skip" href="#main">
-        {t('nav.skip')}
-      </a>
-      <Link to="/" className="brand" aria-label={t('app.name')}>
-        <Mark />
-        <span className="brand-latin" lang="en">
-          Warqa
-        </span>
-        <span className="brand-ar" lang="ar">
-          ورقة
-        </span>
-        <span className="brand-studio">{lang === 'ar' ? 'استوديو' : 'studio'}</span>
-      </Link>
-      <nav aria-label={t('nav.main')} className="topnav">
-        <Link to="/" aria-current={path === '/' || path.startsWith('/project') ? 'page' : undefined}>
-          {t('nav.books')}
-        </Link>
-        <Link to="/settings" aria-current={path === '/settings' ? 'page' : undefined}>
-          <Icon name="key" size={16} /> {t('nav.keys')}
-        </Link>
-      </nav>
-      <div className="topbar-tools">
-        {/* biome-ignore lint/a11y/useSemanticElements: a segmented control, not a form group */}
-        <div className="seg" role="group" aria-label={t('ui.language')}>
-          {UI_LANGS.map((l) => (
-            <button
-              key={l}
-              type="button"
-              lang={l}
-              aria-pressed={lang === l}
-              title={full[l]}
-              aria-label={full[l]}
-              onClick={() => setLang(l)}
-            >
-              {short[l]}
-            </button>
-          ))}
-        </div>
-        <button
-          type="button"
-          className="icon-btn"
-          onClick={() => onTheme(next[theme])}
-          aria-label={t(`theme.${theme}`)}
-          title={t(`theme.${theme}`)}
-        >
-          <Icon name={theme === 'auto' ? 'auto-theme' : theme === 'light' ? 'sheet-theme' : 'board-theme'} />
-        </button>
-      </div>
-    </header>
-  );
-}
-
 function Routes() {
   const { path } = useLocation();
   let m: Record<string, string> | null;
@@ -115,15 +44,16 @@ function Routes() {
   if ((m = match('/project/:id/settings', path))) return <SettingsPage key={m.id} id={m.id!} />;
   if ((m = match('/project/:id/review', path))) return <ReviewPage key={m.id} id={m.id!} />;
   if ((m = match('/project/:id', path))) return <ProjectPage key={m.id} id={m.id!} />;
-  if (path === '/settings') return <KeysPage />;
+  // AI and voices: /ai (the old /settings address still works)
+  if (path === '/ai' || path === '/settings') return <KeysPage />;
   return <HomePage />;
 }
 
 export function App({ extras = {} }: { extras?: StudioExtras } = {}) {
   const lang = useSyncExternalStore(subscribeLang, getLang);
   const i18n = useMemo(() => makeI18n(lang), [lang]);
-  const [theme, setTheme] = useState<Theme>(readTheme);
   const [status, setStatus] = useState<StatusInfo | null>(null);
+  const [goto, setGoto] = useState(false);
   const { path } = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const first = useRef(true);
@@ -138,17 +68,24 @@ export function App({ extras = {} }: { extras?: StudioExtras } = {}) {
   useEffect(() => {
     void reload();
   }, [reload]);
+  useEffect(() => applyTheme(), []);
 
+  // ⌘ K (Ctrl K elsewhere) opens Go to, from anywhere. The physical key counts, so an Arabic layout works too;
+  // on a Mac, Ctrl K stays the text fields' "delete to the end of the line".
   useEffect(() => {
-    applyTheme(theme);
-    try {
-      localStorage.setItem(THEME_KEY, theme);
-    } catch {
-      /* storage unavailable */
-    }
-  }, [theme]);
+    const mac = /Mac|iPhone|iPad/.test(navigator.platform);
+    const key = (e: KeyboardEvent) => {
+      const mod = mac ? e.metaKey && !e.ctrlKey : e.ctrlKey && !e.metaKey;
+      if (mod && !e.altKey && !e.shiftKey && (e.code === 'KeyK' || e.key.toLowerCase() === 'k')) {
+        e.preventDefault();
+        setGoto((v) => !v);
+      }
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, []);
 
-  // move focus to the new screen after navigation (screen readers announce it)
+  // move focus to the new place after navigation (screen readers announce it)
   // biome-ignore lint/correctness/useExhaustiveDependencies: runs on purpose after each navigation
   useEffect(() => {
     if (first.current) {
@@ -163,18 +100,55 @@ export function App({ extras = {} }: { extras?: StudioExtras } = {}) {
     <I18nContext.Provider value={i18n}>
       <StatusContext.Provider value={ctx}>
         <ExtrasContext.Provider value={extras}>
-          <TopBar theme={theme} onTheme={setTheme} />
-          {status && !status.localOnly && (
-            <div className="remote-warning" role="alert">
-              <Icon name="warn" /> {i18n.t('settings.remote', { host: status.host })}
-            </div>
-          )}
-          {extras.banner}
-          <main id="main" ref={mainRef} tabIndex={-1}>
-            <Routes />
-          </main>
+          <OverlayProvider>
+            <JobsProvider>
+              <PlaceProvider>
+                <TopBar onGoTo={() => setGoto(true)} />
+                {status && !status.localOnly && (
+                  <div className="remote-warning" role="alert">
+                    <Icon name="warn" /> {i18n.t('settings.remote', { host: status.host })}
+                  </div>
+                )}
+                {extras.banner}
+                <Places mainRef={mainRef} />
+                <GoTo open={goto} onClose={() => setGoto(false)} />
+              </PlaceProvider>
+            </JobsProvider>
+          </OverlayProvider>
         </ExtrasContext.Provider>
       </StatusContext.Provider>
     </I18nContext.Provider>
+  );
+}
+
+/** The place you are on, laid on the strips of the places under it (Alt+↑ goes up one). */
+function Places({ mainRef }: { mainRef: React.RefObject<HTMLElement | null> }) {
+  const { path } = useLocation();
+  const strips = useStrips();
+  useEffect(() => {
+    const key = (e: KeyboardEvent) => {
+      if (!e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || e.key !== 'ArrowUp' || !strips.length) return;
+      // in a text field Option+↑ moves the caret, in a list box Alt+↑ closes it; an open tool or dialog comes first
+      if (e.defaultPrevented || inField(e) || toolOpen()) return;
+      e.preventDefault();
+      void go(strips[strips.length - 1]!.to);
+    };
+    window.addEventListener('keydown', key);
+    return () => window.removeEventListener('keydown', key);
+  }, [strips]);
+  // the place's key: a new place lays a new sheet on top (the Stack motion)
+  const level = path.startsWith('/project/')
+    ? path
+        .split('/')
+        .slice(0, path.includes('/lesson/') ? 5 : 3)
+        .join('/')
+    : path;
+  return (
+    <div className="places">
+      <StackStrips />
+      <main id="main" ref={mainRef} tabIndex={-1} key={level} className="place">
+        <Routes />
+      </main>
+    </div>
   );
 }

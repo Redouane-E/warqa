@@ -6,7 +6,7 @@ import { Button, Mark } from '../../../studio/src/client/components/ui';
 import { getLang, I18nContext, makeI18n, subscribeLang } from '../../../studio/src/client/i18n';
 import { useLocation } from '../../../studio/src/client/router';
 import type { Bridge } from '../bridge/client';
-import { Banner, HomeActions, ProjectActions } from './Chrome';
+import { HomeActions, ProjectActions, WebStatus } from './Chrome';
 import { useW } from './i18n';
 import { Onboarding } from './Onboarding';
 import { onboarded } from './prefs';
@@ -102,7 +102,7 @@ export function WebApp({ bridge, serviceWorker }: { bridge: Bridge; serviceWorke
 
   const extras = useMemo(
     () => ({
-      banner: <Banner bridge={bridge} serviceWorker={sw} />,
+      topbarStatus: <WebStatus bridge={bridge} serviceWorker={sw} />,
       homeActions: <HomeActions />,
       projectActions: (id: string) => <ProjectActions id={id} />,
     }),

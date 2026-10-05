@@ -7,19 +7,21 @@ import { useExtras } from '../extras';
 import { BOOK_LANGS, useI18n } from '../i18n';
 import { Link, navigate } from '../router';
 
-const STEP_KEYS: Record<StepId, 'step.read' | 'step.plan' | 'step.make' | 'step.voice' | 'step.export'> = {
-  read: 'step.read',
-  plan: 'step.plan',
-  make: 'step.make',
-  voice: 'step.voice',
-  export: 'step.export',
-};
+const STEP_KEYS: Record<StepId, 'step.read' | 'step.plan' | 'step.make' | 'step.voice' | 'step.check' | 'step.share'> =
+  {
+    read: 'step.read',
+    plan: 'step.plan',
+    make: 'step.make',
+    voice: 'step.voice',
+    check: 'step.check',
+    share: 'step.share',
+  };
 
 export const bookTitle = (title: Record<string, string> | string, ui: string, fallback: string): string =>
   typeof title === 'string' ? title : (title[ui] ?? title[fallback] ?? Object.values(title)[0] ?? '');
 
 function nextOf(p: ProjectListItem): StepId | null {
-  const order: StepId[] = ['read', 'plan', 'make', 'voice', 'export'];
+  const order: StepId[] = ['read', 'plan', 'make', 'voice', 'share'];
   return order.find((k) => p.steps[k] && p.steps[k] !== 'done' && p.steps[k] !== 'skipped') ?? null;
 }
 

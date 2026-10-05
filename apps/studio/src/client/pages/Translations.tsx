@@ -3,7 +3,8 @@ import { dirOf } from '@warqa/i18n';
 import { useMemo, useState } from 'react';
 import type { LessonDetail, StringEntry } from '../../shared/types';
 import { api, errorText } from '../api';
-import { Button, Notice, Toast } from '../components/ui';
+import { Toast } from '../components/overlays';
+import { Button, Notice } from '../components/ui';
 import { useI18n } from '../i18n';
 
 type Value = string | { text: string; speak?: string };

@@ -20,7 +20,9 @@ test('a PDF becomes a planned, built and exported book (test model)', async ({ p
 
   // read: the guide started it
   await expect(page).toHaveURL(/\/warqa\/project\/textbook-en/);
-  await expect(page.getByText('Test mode: scripted model, no network')).toBeVisible();
+  // a short chip in the top bar; the whole sentence is its tooltip
+  await expect(page.locator('.web-chip-test')).toHaveText('Test mode');
+  await expect(page.locator('.web-chip-test')).toHaveAttribute('title', 'Test mode: scripted model, no network');
   await expect(page.getByRole('cell', { name: 'Chapter 1: Integers' })).toBeVisible({ timeout: 60_000 });
 
   // plan

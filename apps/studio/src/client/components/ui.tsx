@@ -164,11 +164,3 @@ export function IssueList({ issues, empty }: { issues: Issue[]; empty?: ReactNod
     </ul>
   );
 }
-
-export function Toast({ children }: { children: ReactNode }) {
-  return (
-    <div className="toast" role="status">
-      <Icon name="check" /> {children}
-    </div>
-  );
-}

@@ -242,7 +242,9 @@ export function installLinkFallback(explain: () => void) {
       if (!a || !isServerUrl(a.href)) return;
       e.preventDefault();
       if (a.hasAttribute('download'))
-        void download(a.href, 'warqa.zip').catch((err: Error) => window.alert(err.message));
+        void download(a.href, 'warqa.zip').catch((err: Error) =>
+          window.dispatchEvent(new CustomEvent('warqa:notice', { detail: { text: err.message, tone: 'error' } })),
+        );
       else explain();
     },
     true,

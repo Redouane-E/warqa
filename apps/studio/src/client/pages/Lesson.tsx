@@ -3,8 +3,11 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Issue, JobInfo, LessonDetail } from '../../shared/types';
 import { api, errorText } from '../api';
 import { stageLabel, useJobStream } from '../components/JobBoard';
-import { Button, Field, Icon, IssueList, Loading, Notice, Toast } from '../components/ui';
+import { Toast, useUnsavedGuard } from '../components/overlays';
+import { trapTab, useEscape } from '../components/tools';
+import { Button, Field, Icon, IssueList, Loading, Notice } from '../components/ui';
 import { useI18n } from '../i18n';
+import { usePublishBook } from '../place';
 import { loadPacks, loadPlayer, type WarqaPlayer } from '../player';
 import { Link, navigate, useLocation } from '../router';
 import { Translations } from './Translations';
@@ -43,9 +46,12 @@ function Preview({
   beatId,
   reloadKey,
   stale,
+  title,
 }: {
   id: string;
   lid: string;
+  /** The lesson's title, on the strip of the lifted preview. */
+  title: string;
   /** The rating mode files ratings under the book (the kit) and the lesson (its code). */
   bookId: string;
   langs: string[];
@@ -63,6 +69,22 @@ function Preview({
   const [error, setError] = useState('');
   const [ready, setReady] = useState(false);
   const [rating, setRating] = useState(false);
+  // Lift: the preview grows to the full window; Close (or Esc) returns to the beat reached
+  const [lifted, setLifted] = useState(false);
+  useEscape(lifted, () => setLifted(false));
+  const box = useRef<HTMLElement>(null);
+  const wasLifted = useRef(false);
+  // lifted, it covers the window: the focus moves to Close and Tab stays inside; closing gives it back
+  useEffect(() => {
+    const el = box.current;
+    if (lifted) el?.querySelector<HTMLElement>('.lift-strip button')?.focus();
+    else if (wasLifted.current) el?.querySelector<HTMLElement>('.lift-btn')?.focus();
+    wasLifted.current = lifted;
+    if (!lifted || !el) return;
+    const trap = (e: KeyboardEvent) => trapTab(e, el);
+    el.addEventListener('keydown', trap);
+    return () => el.removeEventListener('keydown', trap);
+  }, [lifted]);
   const beatRef = useRef(beatId);
   beatRef.current = beatId;
   const langRef = useRef(lang);
@@ -120,7 +142,17 @@ function Preview({
   }, [lang, ready]);
 
   return (
-    <section className="preview" aria-labelledby="preview-title">
+    <section ref={box} className={`preview${lifted ? ' is-lifted' : ''}`} aria-labelledby="preview-title">
+      {lifted && (
+        <div className="lift-strip">
+          <span className="lift-strip-text">
+            <strong>{t('editor.preview')}</strong> · <bdi>{title}</bdi> · {langName(lang)}
+          </span>
+          <Button icon="close" onClick={() => setLifted(false)}>
+            {t('common.close')}
+          </Button>
+        </div>
+      )}
       <div className="preview-bar">
         <h2 id="preview-title" className="small-title">
           {t('editor.preview')}
@@ -150,6 +182,14 @@ function Preview({
           aria-label={t('editor.reload')}
           title={t('editor.reload')}
           onClick={onReload}
+        />
+        <Button
+          variant="quiet"
+          icon="fullscreen"
+          className="lift-btn"
+          aria-label={t('editor.lift')}
+          title={t('editor.lift')}
+          onClick={() => setLifted(true)}
         />
       </div>
       {stale && <p className="preview-stale">{t('editor.previewStale')}</p>}
@@ -397,6 +437,9 @@ function Regenerate({
 
 /* ---------- the editor ---------- */
 
+/** `?beat=3` is the third beat (index 2); anything else is the first. */
+const beatOf = (v: string | null) => Math.max(0, (Number.parseInt(v ?? '', 10) || 1) - 1);
+
 export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const i18n = useI18n();
   const { t, lang: ui } = i18n;
@@ -406,7 +449,21 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
   const [issues, setIssues] = useState<Issue[]>([]);
-  const [sel, setSel] = useState(0);
+  // ?beat=3 shows the third beat (Go to links here); the address follows the beat shown
+  const beatParam = query.get('beat');
+  const [sel, setSelState] = useState(() => beatOf(beatParam));
+  useEffect(() => {
+    if (beatParam) setSelState(beatOf(beatParam));
+  }, [beatParam]);
+  const setSel = (k: number) => {
+    setSelState(k);
+    const q = new URLSearchParams(location.search);
+    q.set('beat', String(k + 1));
+    navigate(`/project/${encodeURIComponent(id)}/lesson/${encodeURIComponent(lid)}?${q}`, {
+      replace: true,
+      keepScroll: true,
+    });
+  };
   const [saving, setSaving] = useState(false);
   const [blocked, setBlocked] = useState(0);
   const [saveError, setSaveError] = useState('');
@@ -414,6 +471,17 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [previewLang, setPreviewLang] = useState<string>('');
   const tab = query.get('tab') === 'translations' ? 'translations' : 'beats';
+  usePublishBook(
+    id,
+    'make',
+    lesson
+      ? {
+          id: lid,
+          title: String(lesson.title ?? lid),
+          beats: (lesson.beats as { id: string; title?: string }[]).map((b) => ({ id: b.id, title: b.title ?? b.id })),
+        }
+      : undefined,
+  );
   const uiRef = useRef({ t, ui });
   uiRef.current = { t, ui };
 
@@ -449,12 +517,7 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
     return () => clearTimeout(h);
   }, [lesson, dirty, id, lid]);
 
-  useEffect(() => {
-    if (!dirty) return;
-    const warn = (e: BeforeUnloadEvent) => e.preventDefault();
-    window.addEventListener('beforeunload', warn);
-    return () => window.removeEventListener('beforeunload', warn);
-  }, [dirty]);
+  useUnsavedGuard(dirty);
 
   const save = useCallback(
     async (force = false) => {
@@ -542,17 +605,12 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const general = issues.filter((x) => !x.beat);
   const setTab = (tb: 'beats' | 'translations') =>
     navigate(
-      `/project/${encodeURIComponent(id)}/lesson/${encodeURIComponent(lid)}${tb === 'translations' ? '?tab=translations' : ''}`,
+      `/project/${encodeURIComponent(id)}/lesson/${encodeURIComponent(lid)}${tb === 'translations' ? '?tab=translations' : `?beat=${i + 1}`}`,
       { replace: true },
     );
 
   return (
     <div className="page page-lesson">
-      <nav className="crumbs" aria-label="breadcrumb">
-        <Link to="/">{t('project.books')}</Link>
-        <span aria-hidden="true">/</span>
-        <Link to={`/project/${encodeURIComponent(id)}?step=make`}>{t('editor.back')}</Link>
-      </nav>
       <header className="lesson-head">
         <h1 className="display" lang={lessonLang}>
           <bdi>{lesson.title}</bdi>
@@ -683,6 +741,7 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
               beatId={beat.id}
               reloadKey={reloadKey}
               stale={dirty}
+              title={String(lesson.title ?? lid)}
             />
 
             <section className="inspector sheet" aria-labelledby="inspector-title">
