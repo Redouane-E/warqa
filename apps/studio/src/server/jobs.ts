@@ -347,6 +347,34 @@ export const RUNNERS: Record<JobType, Runner> = {
     ctx.progress({ stage: 'panel', status: 'done', detail: `${ids.length} lessons` });
     return { kit, lessons: ids };
   },
+
+  /**
+   * A self-learner's "one go": read the PDF (text layer, then the vision model for the chapter's scanned
+   * pages), plan at the learner's level and approve it, make the chapter (narrated when a voice works).
+   * args: level (beginner | some | advanced; default: the book's, else beginner), chapter (default: the
+   * first). Stop keeps what is finished; running again reuses it.
+   */
+  async learn(ctx) {
+    const p = ctx.project;
+    const level = P.isLearnLevel(ctx.args.level) ? ctx.args.level : (p.book.learn?.level ?? 'beginner');
+    if (p.book.learn?.level !== level || p.config.budget.usd === undefined) P.startLearning(p, level);
+    const r = await P.learnFromPdf(p, {
+      llm: ctx.llm(),
+      ...(typeof ctx.args.chapter === 'string' && ctx.args.chapter ? { chapter: ctx.args.chapter } : {}),
+      ...(typeof ctx.args.narrate === 'boolean' ? { narrate: ctx.args.narrate } : {}),
+      onProgress: (e) => ctx.progress(e),
+    });
+    if (r.narrationError)
+      ctx.log(`The voice did not work, so the lesson plays with captions: ${r.narrationError}`, 'warn');
+    return {
+      chapter: r.chapter,
+      level,
+      chapters: r.plan.chapters.filter((c) => c.include).map((c) => ({ id: c.id, title: c.title })),
+      visionPages: r.visionPages,
+      usd: r.report.usd,
+      ...(r.narrationError ? { narrationError: r.narrationError } : {}),
+    };
+  },
 };
 
 const clamp = (v: unknown, lo: number, hi: number, dflt: number) => {
@@ -575,6 +603,7 @@ export class Jobs {
           status: e.status,
           ...(e.detail !== undefined ? { detail: e.detail } : {}),
           ...('index' in e && e.index !== undefined ? { index: e.index, total: e.total } : {}),
+          ...('usd' in e && typeof e.usd === 'number' ? { usd: e.usd } : {}),
           ...(chapter ? { chapter } : {}),
         });
         if (e.status === 'done' || e.status === 'skip') checkpoint();

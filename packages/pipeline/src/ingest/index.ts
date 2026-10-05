@@ -4,6 +4,7 @@ import { createHash } from 'node:crypto';
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { hasArabic, normalizeDigits } from '@warqa/i18n';
+import { BudgetError } from '../models/llm.js';
 import {
   type Block,
   DOCUMENT_SCHEMA,
@@ -97,6 +98,13 @@ function markPageFurniture(blocks: Block[], pages: PageInfo[], body: number): vo
 }
 
 /** Extract text, OCR what needs it, and map chapters. */
+/** The book's sections: from the PDF's bookmarks when they make a valid split, else from the headings found. */
+export function chooseSections(outline: OutlineItem[], blocks: Block[], total: number, level?: number): Section[] {
+  const lvl = level ?? outlineSummary(outline).suggested;
+  const sections = lvl ? sectionsFromOutline(outline, total, lvl) : [];
+  return !sections.length || validateSections(sections, total).length ? detectSections(blocks, total) : sections;
+}
+
 export async function ingestPdf(file: string | Uint8Array, opts: IngestOptions = {}): Promise<SourceDocument> {
   const bytes = typeof file === 'string' ? new Uint8Array(readFileSync(file)) : file;
   const pdf = await openPdf(bytes);
@@ -132,6 +140,7 @@ export async function ingestPdf(file: string | Uint8Array, opts: IngestOptions =
             error = undefined;
             break;
           } catch (e) {
+            if (e instanceof BudgetError) throw e; // the spending limit stops the run, not just this page
             error = e instanceof Error ? e.message : String(e);
           }
         }
@@ -163,9 +172,7 @@ export async function ingestPdf(file: string | Uint8Array, opts: IngestOptions =
 
     const outline = repairOutline(await getOutline(pdf), blocks);
     const lang = pageLang(blocks) ?? 'en';
-    const level = opts.level ?? outlineSummary(outline).suggested;
-    let sections: Section[] = level ? sectionsFromOutline(outline, total, level) : [];
-    if (!sections.length || validateSections(sections, total).length) sections = detectSections(blocks, total);
+    const sections = chooseSections(outline, blocks, total, opts.level);
 
     const heading = (page: number) =>
       blocks.filter((b) => b.page === page && b.kind === 'heading').sort((a, b) => (b.size ?? 0) - (a.size ?? 0))[0]

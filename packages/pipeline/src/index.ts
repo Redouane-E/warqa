@@ -20,6 +20,7 @@ export * from './qa/panel.js';
 export * from './stages/build.js';
 export * from './stages/geo.js';
 export * from './stages/illustrate.js';
+export * from './stages/learn.js';
 export * from './stages/memory.js';
 export * from './stages/plan.js';
 export * from './stages/storyboard.js';

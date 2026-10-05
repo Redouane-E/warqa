@@ -224,6 +224,8 @@ export function describeScene(st: SceneState): string {
 
 export interface WriteOptions {
   llm: Llm;
+  /** Audience for this chapter (a learner's current level), instead of the plan's. */
+  audience?: string;
   /** Rewrite beats even if lesson.json exists. */
   force?: boolean;
   onBeat?: (e: { id: string; index: number; total: number; repairs: number; usd: number }) => void;
@@ -312,7 +314,7 @@ export async function writeChapter(
     const storyLines = story.beats
       .map((b, k) => `${k === i ? '→' : ' '} ${b.id} [${b.move}] ${b.title} — ${b.idea}`)
       .join('\n');
-    const context = `Chapter ${chapter.id}: ${chapter.title}. Audience: ${plan.audience}.
+    const context = `Chapter ${chapter.id}: ${chapter.title}. Audience: ${opts.audience ?? plan.audience}.
 Conventions: ${plan.conventions.notation} ${plan.conventions.colors} ${plan.conventions.tone}
 Glossary (use these terms):
 ${gloss || '(none)'}

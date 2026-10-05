@@ -9,6 +9,27 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
 
 ## [Unreleased]
 
+### Added
+
+- **Learning on your own** (backend): `warqa learn <pdf> --lang <code> --level beginner|some|advanced` and a
+  `learn` job in the studio and the web app. In one go it reads the PDF, plans it at your level (approved
+  automatically) and makes chapter 1, narrated when a voice is available; run it again for the next
+  chapter. It shows the time and cost first, keeps a $1 spending limit by default (`--limit` changes it),
+  reads scanned pages with the vision model only for the chapter being made (a scanned book's first pages
+  before its plan), and keeps what is finished when stopped. Books record it in an optional
+  `learn: { level }` field of `warqa.json`.
+
+### Changed
+
+- Cost estimates no longer ask for a translator model when a book has a single language.
+
+### Fixed
+
+- The spending limit now also covers reading scanned pages with the vision model: a run stops at the limit
+  instead of reading past it, and `ingest` no longer skips pages silently once the limit is reached.
+- `warqa init` no longer fails on folder names longer than 32 characters or with accents: the book id is
+  shortened and the accents dropped.
+
 ## [0.1.0] - 2026-10-04
 
 The first public release: turn a PDF into animated, narrated, interactive lessons in Arabic, French and

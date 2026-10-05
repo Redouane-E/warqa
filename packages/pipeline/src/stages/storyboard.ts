@@ -44,6 +44,8 @@ export type Storyboard = z.infer<typeof Storyboard>;
 export interface StoryboardOptions {
   llm: Llm;
   maxChars?: number;
+  /** Audience for this chapter (a learner's current level), instead of the plan's. */
+  audience?: string;
 }
 
 export function storyboardProblems(sb: Pick<Storyboard, 'beats'>, allowed: string[]): string[] {
@@ -86,7 +88,7 @@ export async function storyboardChapter(
   });
   const allowed = comps.map((c) => c.type);
   const text = sectionText(doc, chapter.pages[0], chapter.pages[1], { maxChars: opts.maxChars ?? 60_000 });
-  const prompt = `Book: ${plan.title}. Audience: ${plan.audience}.
+  const prompt = `Book: ${plan.title}. Audience: ${opts.audience ?? plan.audience}.
 Chapter ${chapter.id}: ${chapter.title}${chapter.unit ? ` (unit: ${chapter.unit})` : ''}, about ${chapter.minutes} minutes.
 Objectives:
 ${chapter.objectives.map((o) => `- ${o}`).join('\n')}

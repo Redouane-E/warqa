@@ -6,7 +6,7 @@ import { createRequire } from 'node:module';
 import { tmpdir } from 'node:os';
 import { basename, dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { LANGS } from '@warqa/i18n';
+import { CONTENT_LANGS, LANGS } from '@warqa/i18n';
 import { checkStrings, localize, validateLesson } from '@warqa/lesson';
 import * as P from '@warqa/pipeline';
 import { Command, Option } from 'commander';
@@ -76,6 +76,18 @@ program
   .description('Turn PDFs into animated, narrated, interactive books — Arabic, French, English; any AI model.')
   .version(VERSION);
 
+/** A book id from a file or folder name: lowercase ASCII from a letter, at most 32 characters (the format's rule). */
+const bookId = (name: string) =>
+  name
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/\.(warqa|pdf)$/, '')
+    .replace(/[^a-z0-9_-]+/g, '-')
+    .replace(/^[^a-z]+/, '')
+    .slice(0, 32)
+    .replace(/[-_]+$/, '') || 'book';
+
 program
   .command('init')
   .argument('<dir>', 'folder for the new book project')
@@ -98,13 +110,13 @@ program
       .map((s: string) => s.trim())
       .filter(Boolean);
     const title = o.title ?? (o.pdf ? basename(o.pdf, '.pdf') : basename(root));
-    const id =
-      basename(root)
-        .toLowerCase()
-        .replace(/\.warqa$/, '')
-        .replace(/[^a-z0-9_-]+/g, '-')
-        .replace(/^[^a-z]+/, '') || 'book';
-    const p = P.Project.create(root, { id, title, langs, defaultLang: o.default ?? langs[0], audience: o.audience });
+    const p = P.Project.create(root, {
+      id: bookId(basename(root)),
+      title,
+      langs,
+      defaultLang: o.default ?? langs[0],
+      audience: o.audience,
+    });
     p.config.tts.provider = o.tts;
     if (o.preset) p.config.preset = o.preset;
     p.config.audience = o.audience;
@@ -117,6 +129,106 @@ program
     console.log(
       `Next: ${c.b(`cd ${dir}`)} then ${c.b('warqa ingest')} → ${c.b('warqa plan')} → ${c.b('warqa build --chapter ch01')} → ${c.b('warqa preview')}`,
     );
+  });
+
+program
+  .command('learn')
+  .argument('<pdf>', 'the PDF you want to understand')
+  .option('--lang <code>', 'the language to learn in: ar, ary (Darija), fr or en', 'ar')
+  .option('--level <level>', "beginner, some (I know some) or advanced (default: beginner, or the book's level)")
+  .option('--out <dir>', 'folder for the book (default: next to the PDF, <name>.warqa)')
+  .option('--preset <id>', `model preset: ${P.PRESETS.map((x) => x.id).join(', ')}`)
+  .option('--tts <engine>', `speech engine: ${P.TTS_IDS.join(', ')}`, 'edge')
+  .option('--chapter <id>', 'make this chapter (default: the next one not made yet)')
+  .option('--limit <usd>', 'spending limit of this book in US dollars (default: 1)')
+  .option('--yes', 'do not ask before spending')
+  .description(
+    'learn on your own: read the PDF, plan it at your level and make chapter 1 in one go; run it again for the next chapter',
+  )
+  .action(async (pdf: string, o) => {
+    if (o.level !== undefined && !P.isLearnLevel(o.level))
+      throw new Error('--level must be beginner, some or advanced');
+    const limit = o.limit === undefined ? undefined : Number(o.limit);
+    if (limit !== undefined && !(limit > 0)) throw new Error('--limit must be an amount in US dollars, e.g. 2');
+    if (!(CONTENT_LANGS as readonly string[]).includes(o.lang))
+      throw new Error(`--lang must be one of ${CONTENT_LANGS.join(', ')}`);
+    if (!existsSync(pdf)) throw new Error(`no such PDF: ${pdf}`);
+    const name = basename(pdf).replace(/\.pdf$/i, '');
+    const root = resolve(o.out ?? join(dirname(resolve(pdf)), `${name}.warqa`));
+    const fresh = !P.Project.isProject(root);
+    const p = !fresh
+      ? project(root)
+      : P.Project.create(root, {
+          id: bookId(name),
+          title: name,
+          langs: [o.lang],
+          defaultLang: o.lang,
+        });
+    if (!p.sourcePdf()) copyFileSync(resolve(pdf), p.path('source', basename(pdf)));
+    if (fresh) p.config.tts.provider = o.tts;
+    if (o.preset) p.config.preset = o.preset;
+    if (limit !== undefined) p.config.budget.usd = limit;
+    // a book keeps the level "Too easy / Too hard" gave it unless --level says otherwise
+    P.startLearning(p, o.level ?? p.book.learn?.level ?? 'beginner');
+    console.log(c.dim(`Book: ${root}`));
+
+    // free: the text layer gives the page count, the PDF's language and the estimate
+    const doc = P.loadDocument(p) ?? (await P.readTextLayer(p));
+    const est = P.estimateLearn(p, o.chapter ? { chapter: o.chapter } : {});
+    const minutes = Math.max(1, Math.round(est.seconds / 60));
+    const lang = P.documentLang(doc);
+    console.log(
+      [
+        `${doc.source.pages} pages`,
+        lang ? `PDF in ${lang}` : 'scanned PDF',
+        ...(lang !== o.lang ? [`teaching you in ${o.lang}`] : []),
+        ...(est.chapter ? [`making ${est.chapter}`] : []),
+        ...(est.visionPages ? [`${est.visionPages} scanned pages to read`] : []),
+      ].join(' · '),
+    );
+    const money =
+      est.limit === undefined
+        ? ''
+        : est.spent
+          ? ` · $${est.spent.toFixed(2)} spent of your $${est.limit.toFixed(2)} limit`
+          : ` · your limit $${est.limit.toFixed(2)}`;
+    console.log(
+      `About ${minutes} minute${minutes > 1 ? 's' : ''} · about $${est.usd.p50.toFixed(2)} (up to $${est.usd.p90.toFixed(2)})${money}`,
+    );
+    if (est.limit !== undefined && est.spent + est.usd.p50 > est.limit)
+      console.log(c.warn(`This may go past your spending limit and stop halfway. Raise it with --limit <usd>.`));
+    console.log(c.dim('Lessons made from a PDF are for your own use, unless you have the right to share them.'));
+    if (!o.yes) {
+      const { createInterface } = await import('node:readline/promises');
+      const rl = createInterface({ input: process.stdin, output: process.stdout });
+      const answer = (await rl.question('Teach me? [Y/n] ')).trim().toLowerCase();
+      rl.close();
+      if (answer && !['y', 'yes', 'o', 'oui', 'نعم'].includes(answer)) {
+        console.log(c.dim('Nothing was spent.'));
+        return;
+      }
+    }
+    const r = await P.learnFromPdf(p, {
+      llm: P.projectLlm(p, { onEvent: llmEvents }),
+      ...(o.chapter ? { chapter: o.chapter } : {}),
+      onProgress: (e) => {
+        const usd = e.usd !== undefined ? c.dim(` · $${e.usd.toFixed(3)}`) : '';
+        if (e.status === 'beat') {
+          if (e.stage === 'write') console.log(`  ${c.dim(`${e.index + 1}/${e.total}`)} ${e.detail}${usd}`);
+        } else if (e.status !== 'skip')
+          console.log(
+            `${e.status === 'error' ? c.err(e.stage) : c.b(e.stage)} ${e.status}${e.detail ? ` · ${e.detail}` : ''}${usd}`,
+          );
+      },
+    });
+    if (r.narrationError)
+      console.log(c.warn(`The voice did not work, so the lesson plays with captions: ${r.narrationError}`));
+    console.log(c.ok(`Chapter ${r.chapter} is ready ($${r.report.usd.toFixed(3)}).`));
+    console.log(`Open it: ${c.b(`warqa preview ${root}`)}`);
+    const next = r.plan.chapters.filter((x) => x.include).map((x) => x.id);
+    const after = next[next.indexOf(r.chapter) + 1];
+    if (after && !p.hasLesson(after))
+      console.log(c.dim(`Next chapter when you want it: run the same command again (it makes ${after}).`));
   });
 
 program

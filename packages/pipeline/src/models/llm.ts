@@ -126,6 +126,14 @@ export class Llm {
     }
   }
 
+  /** Stop before a paid call once the book's spending limit is reached (cached answers stay free). */
+  private checkBudget(): void {
+    if (this.opts.budgetUsd !== undefined && this.spent >= this.opts.budgetUsd)
+      throw new BudgetError(
+        `budget reached: $${this.spent.toFixed(2)} of $${this.opts.budgetUsd.toFixed(2)} (raise pipeline.budget.usd to continue)`,
+      );
+  }
+
   /** Total spent so far (from the ledger). */
   get totalUsd(): number {
     return this.spent;
@@ -181,11 +189,7 @@ export class Llm {
     let usage = { input: 0, output: 0 };
     let usd = 0;
     for (let attempt = 0; attempt <= maxRepairs; attempt++) {
-      if (this.opts.budgetUsd !== undefined && this.spent >= this.opts.budgetUsd) {
-        throw new BudgetError(
-          `budget reached: $${this.spent.toFixed(2)} of $${this.opts.budgetUsd.toFixed(2)} (raise pipeline.budget.usd to continue)`,
-        );
-      }
+      this.checkBudget();
       const t0 = Date.now();
       let raw = '';
       let value: unknown;
@@ -342,6 +346,7 @@ export class Llm {
     );
     const cachePath = this.opts.cacheDir ? join(this.opts.cacheDir, `${key}.txt`) : undefined;
     if (cachePath && !call.fresh && existsSync(cachePath)) return readFileSync(cachePath, 'utf8');
+    this.checkBudget();
     const t0 = Date.now();
     let text: string;
     let inTok = 0;

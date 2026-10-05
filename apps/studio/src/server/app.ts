@@ -479,8 +479,36 @@ export function createApp(opts: AppOptions) {
     return c.json({ plan });
   });
 
-  app.get('/api/projects/:id/estimate', (c) => {
+  app.get('/api/projects/:id/estimate', async (c) => {
     const p = project(c.req.param('id'));
+    // ?learn=1[&chapter=ch02]: the learner's summary. Reads the PDF's text layer first if needed (free, no
+    // model): it gives the page count and the PDF's language ("Your PDF is in French").
+    if (c.req.query('learn')) {
+      let doc: P.SourceDocument;
+      try {
+        doc = P.loadDocument(p) ?? (await P.readTextLayer(p));
+      } catch (e) {
+        throw new ApiError(422, (e as Error).message);
+      }
+      const chapter = c.req.query('chapter');
+      try {
+        const sourceLang = P.documentLang(doc); // unknown for a scan nobody has read yet
+        return c.json({ ...P.estimateLearn(p, chapter ? { chapter } : {}), ...(sourceLang ? { sourceLang } : {}) });
+      } catch (e) {
+        // no AI service connected yet: the summary still shows the PDF, and asks to connect one
+        const sourceLang = P.documentLang(doc);
+        return c.json({
+          pages: doc.source.pages,
+          ...(sourceLang ? { sourceLang } : {}),
+          visionPages: 0,
+          usd: { p50: 0, p90: 0 },
+          seconds: 0,
+          ...(p.config.budget.usd !== undefined ? { limit: p.config.budget.usd } : {}),
+          spent: P.ledgerSummary(p.path('.ledger.jsonl')).total,
+          error: (e as Error).message,
+        });
+      }
+    }
     try {
       return c.json(P.estimateBuild(p));
     } catch (e) {
@@ -511,7 +539,7 @@ export function createApp(opts: AppOptions) {
         throw new ApiError(400, `the "${engine}" voice needs the desktop version of Warqa: choose another voice`, {
           desktopOnly: true,
         });
-      if (body.type === 'build') args.narrate = false;
+      if (body.type === 'build' || body.type === 'learn') args.narrate = false;
     }
     const job = jobs.enqueue(id, body.type as JobType, args);
     return c.json({ jobId: job.id, job }, 202);

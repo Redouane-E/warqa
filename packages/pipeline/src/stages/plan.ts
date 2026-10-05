@@ -6,6 +6,7 @@ import type { Llm } from '../models/llm.js';
 import { resolveRole } from '../models/presets.js';
 import type { Project } from '../project/index.js';
 import { langName, PLAN_SYSTEM } from '../prompts/index.js';
+import { learnerAudience } from './levels.js';
 
 export const PlanChapter = z.object({
   id: z.string().regex(/^[a-z][a-z0-9_-]{0,31}$/),
@@ -83,7 +84,8 @@ export interface PlanOptions {
 export async function planBook(project: Project, doc: SourceDocument, opts: PlanOptions): Promise<BookPlan> {
   const book = project.book;
   const lang = book.defaultLang ?? book.langs[0]!;
-  const audience = opts.audience ?? book.audience ?? project.config.audience ?? 'secondary-school students';
+  const audience =
+    opts.audience ?? learnerAudience(book) ?? book.audience ?? project.config.audience ?? 'secondary-school students';
   const sections = doc.sections.length
     ? doc.sections
     : [{ id: 'all', title: doc.source.title ?? 'Book', start: 1, end: doc.source.pages }];

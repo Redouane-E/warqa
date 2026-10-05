@@ -158,6 +158,8 @@ export const Book = z.object({
   digits: z.enum(['latn', 'arab']).default('latn'),
   theme: z.string().default('chalk'),
   audience: z.string().optional(),
+  /** A self-learner's book: made in one go for one person, at a level that can change chapter by chapter. */
+  learn: z.object({ level: z.enum(['beginner', 'some', 'advanced']) }).optional(),
   units: z.array(z.object({ title: LText, chapters: z.array(z.string()).min(1) })).default([]),
   /** Where the content comes from and under which licence (shown in exports). */
   source: z

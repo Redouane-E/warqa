@@ -1,16 +1,18 @@
 // End-to-end pipeline test with a scripted fake model: plan → storyboard → write (with a repair) →
 // translate → export, all validated by the real validators.
-import { mkdtempSync, readFileSync } from 'node:fs';
+import { copyFileSync, mkdtempSync, readFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
-import { join } from 'node:path';
+import { join, resolve } from 'node:path';
 import { validateLesson } from '@warqa/lesson';
 import { describe, expect, it } from 'vitest';
 import { exportSite } from '../export/site.js';
 import type { SourceDocument } from '../ingest/document.js';
-import { extractJson, type FakeModel, Llm } from '../models/llm.js';
+import { BudgetError, extractJson, type FakeModel, Llm } from '../models/llm.js';
 import { Project } from '../project/index.js';
 import { improveLesson } from '../qa/judge.js';
-import { buildChapter, ensurePlan, estimateBuild } from './build.js';
+import type { TtsProvider } from '../tts/types.js';
+import { buildChapter, ensurePlan, estimateBuild, type ProgressEvent } from './build.js';
+import { adjustLevel, documentLang, estimateLearn, learnFromPdf, readTextLayer, startLearning } from './learn.js';
 import { liteToBeat } from './write.js';
 
 const doc: SourceDocument = {
@@ -294,5 +296,198 @@ describe('normalizeDraft', () => {
     expect((d.cues as { at: unknown; args?: { id: string } }[])[0]).toMatchObject({ at: 'a', args: { id: 'arc-1r' } });
     expect((d.cues as { at: unknown }[])[1]!.at).toBe(1.5);
     expect((d.questions as Record<string, unknown>[])[0]).toMatchObject({ kind: 'choice', id: 'q1' });
+  });
+});
+
+describe('learning on your own (the one go)', () => {
+  const pdfs = resolve(import.meta.dirname, '../../../../examples/pdfs');
+  const scanned = resolve(import.meta.dirname, '../../test-fixtures/scanned.pdf');
+  const learner = (pdf: string, lang = 'en') => {
+    const project = Project.create(mkdtempSync(join(tmpdir(), 'warqa-learn-')), {
+      id: 'mine',
+      title: 'Mine',
+      langs: [lang],
+      defaultLang: lang,
+    });
+    project.config.models = {
+      planner: 'anthropic:claude-sonnet-5-5',
+      storyboard: 'anthropic:claude-sonnet-5-5',
+      writer: 'anthropic:claude-sonnet-5-5',
+      vision: 'google:gemini-3.8-flash',
+    };
+    project.saveBook();
+    copyFileSync(pdf, project.path('source', pdf.split('/').pop()!));
+    return project;
+  };
+  /** The scripted model, planning every chapter section of the document and recording each prompt. */
+  const recording = (project: Project, extra: FakeModel = () => undefined as unknown as string) => {
+    const prompts: { name: string; prompt: string }[] = [];
+    const llm = new Llm({
+      fake: (call) => {
+        prompts.push({ name: call.name, prompt: call.prompt });
+        const own = extra(call);
+        if (own !== undefined) return own;
+        if (call.name === 'plan') {
+          const sections = JSON.parse(readFileSync(project.path('source', 'document.json'), 'utf8')).sections as {
+            id: string;
+            title: string;
+          }[];
+          const plan = JSON.parse(String(fake(call)));
+          plan.chapters = sections.map((x) => ({
+            ...plan.chapters[1],
+            section: x.id,
+            title: x.title,
+            include: x.id.startsWith('ch'),
+          }));
+          return JSON.stringify(plan);
+        }
+        return fake(call);
+      },
+      cacheDir: project.path('cache', 'llm'),
+    });
+    return { llm, prompts, of: (name: string) => prompts.filter((x) => x.name.startsWith(name)).map((x) => x.prompt) };
+  };
+
+  it('reads, plans at the level, approves and makes chapter 1 in one go', async () => {
+    const project = learner(join(pdfs, 'science-water-cycle-fr.pdf'));
+    startLearning(project, 'beginner');
+    expect(project.book.learn).toEqual({ level: 'beginner' });
+    expect(project.config.budget.usd).toBe(1);
+
+    // the summary: a free read of the text layer, the PDF's language, the estimate
+    const doc = await readTextLayer(project);
+    expect(documentLang(doc)).toBe('fr');
+    expect(project.book.sourceLang).toBe('fr');
+    const est = estimateLearn(project);
+    expect(est).toMatchObject({ pages: 4, visionPages: 0, limit: 1, spent: 0 });
+    expect(est.usd.p50).toBeGreaterThan(0);
+    expect(est.seconds).toBeGreaterThan(60);
+
+    const { llm, of } = recording(project);
+    const events: ProgressEvent[] = [];
+    const r = await learnFromPdf(project, { llm, onProgress: (e) => events.push(e) });
+    expect(r.chapter).toBe('ch01');
+    expect(r.plan.status).toBe('approved');
+    expect(validateLesson(project.loadLesson('ch01')).ok).toBe(true);
+    // the beginner's audience, and the French words kept for an English lesson made from a French PDF
+    expect(of('plan')[0]).toContain('new to this subject: explain every term');
+    expect(of('plan')[0]).toContain('The PDF is in French: keep the French words they need');
+    expect(of('storyboard')[0]).toContain('new to this subject');
+    expect(of('beat')[0]).toContain('new to this subject');
+    // the one-go screen: stages in order, beats with their titles, and the spend so far
+    expect(events.map((e) => `${e.stage}:${e.status}`)).toEqual(
+      expect.arrayContaining(['read:skip', 'plan:start', 'plan:done', 'storyboard:done', 'write:beat', 'write:done']),
+    );
+    expect(events.filter((e) => e.stage === 'write' && e.status === 'beat').map((e) => e.detail)).toContain('rule');
+    expect(events.every((e) => typeof e.usd === 'number')).toBe(true);
+    // the money spent is the book's: the next estimate counts it against the limit
+    expect(estimateLearn(project).spent).toBeCloseTo(llm.totalUsd, 6);
+  });
+
+  it('makes the next chapter at the new level after "Too easy"', async () => {
+    const project = learner(join(pdfs, 'maths-college-ar.pdf'), 'fr');
+    startLearning(project, 'beginner');
+    const first = recording(project);
+    expect((await learnFromPdf(project, { llm: first.llm })).chapter).toBe('ch01');
+    expect(first.of('storyboard')[0]).toContain('new to this subject');
+    expect(first.of('storyboard')[0]).toContain('The PDF is in Arabic: keep the Arabic words they need');
+
+    // the estimate and the run agree on the chapter: the next one not made yet
+    expect(estimateLearn(project).chapter).toBe('ch02');
+    expect(adjustLevel(project, 'too-easy')).toBe('some');
+    const next = recording(project);
+    expect((await learnFromPdf(project, { llm: next.llm })).chapter).toBe('ch02');
+    expect(next.of('plan')).toEqual([]); // the plan is kept
+    expect(next.of('storyboard')[0]).toContain('knows the basics: short reminders');
+    expect(next.of('storyboard')[0]).not.toContain('new to this subject');
+    expect(next.of('beat')[0]).toContain('knows the basics');
+
+    expect(adjustLevel(project, 'too-hard')).toBe('beginner');
+    expect(adjustLevel(project, 'too-hard')).toBe('beginner'); // already the easiest
+    expect(adjustLevel(project, 'right')).toBe('beginner');
+  });
+
+  it('reads a scanned book’s pages with the vision model before planning it', async () => {
+    const project = learner(scanned);
+    startLearning(project, 'some');
+    const doc = await readTextLayer(project);
+    expect(documentLang(doc)).toBeUndefined(); // no text yet: no language guessed
+    expect(project.book.sourceLang).toBeUndefined();
+    expect(estimateLearn(project).visionPages).toBe(2); // pages 2–3 have no text layer
+    let vision = 0;
+    const page = 'Negative numbers are below zero, positive numbers are above it. '.repeat(4);
+    const { llm, of } = recording(project, (call) => {
+      if (call.name !== 'text') return undefined as unknown as string;
+      vision++;
+      return `# Integers\n\n${page}`;
+    });
+    const r = await learnFromPdf(project, { llm });
+    expect(vision).toBe(2);
+    expect(r.visionPages).toBe(2);
+    expect(of('plan')[0]).toContain('Negative numbers are below zero');
+    const read = JSON.parse(readFileSync(project.path('source', 'document.json'), 'utf8')) as SourceDocument;
+    expect(read.pages.map((p) => `${p.n}:${p.method}`)).toEqual(['1:text', '2:ocr-vision', '3:ocr-vision']);
+    // a second run reads nothing again
+    await learnFromPdf(project, { llm });
+    expect(vision).toBe(2);
+  });
+
+  it('stops with a clear message when the scans can’t be read, before paying for a plan', async () => {
+    const project = learner(scanned);
+    startLearning(project, 'some');
+    const { llm, of } = recording(project, (call) => {
+      if (call.name === 'text') throw new Error('this model does not read images');
+      return undefined as unknown as string;
+    });
+    await expect(learnFromPdf(project, { llm })).rejects.toThrow(
+      /Pages 1–3 of this PDF are scanned images, and the AI could not read them \(this model does not read images\)/,
+    );
+    expect(of('plan')).toEqual([]);
+  });
+
+  it('keeps to the spending limit while reading scans', async () => {
+    const project = learner(scanned);
+    startLearning(project, 'some');
+    const calls: string[] = [];
+    const llm = new Llm({
+      fake: (call) => {
+        calls.push(call.name);
+        return 'text';
+      },
+      budgetUsd: 0,
+      cacheDir: project.path('cache', 'llm'),
+    });
+    await expect(learnFromPdf(project, { llm })).rejects.toBeInstanceOf(BudgetError);
+    expect(calls).toEqual([]); // stopped before the first paid call, not after a page
+  });
+
+  it('keeps the lesson when the voice fails, and lets Stop stop', async () => {
+    const project = learner(join(pdfs, 'maths-college-ar.pdf'), 'fr');
+    startLearning(project, 'beginner');
+    const broken: TtsProvider = {
+      id: 'broken',
+      wordTimes: false,
+      defaultVoice: () => 'voice',
+      synth: async () => {
+        throw new Error('no voice here');
+      },
+    };
+    const { llm } = recording(project);
+    const events: ProgressEvent[] = [];
+    const r = await learnFromPdf(project, { llm, narrate: true, tts: broken, onProgress: (e) => events.push(e) });
+    expect(project.hasLesson('ch01')).toBe(true);
+    expect(r.narrationError).toBe('no voice here'); // once, not once per beat
+    expect(events.find((e) => e.stage === 'narrate:fr')?.status).toBe('start');
+    expect(events.filter((e) => e.stage === 'narrate:fr' && e.status === 'error')).toHaveLength(1);
+
+    // Stop (thrown by the job's progress checkpoint) is never taken for a voice failure
+    class Stop extends Error {}
+    const stop = (e: ProgressEvent) => {
+      if (e.stage === 'write' && e.status === 'done') throw new Stop('cancelled');
+    };
+    await expect(learnFromPdf(project, { llm, narrate: true, tts: broken, onProgress: stop })).rejects.toBeInstanceOf(
+      Stop,
+    );
+    expect(project.hasLesson('ch02')).toBe(true); // what was finished is kept
   });
 });

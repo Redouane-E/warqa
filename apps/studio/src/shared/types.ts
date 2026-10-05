@@ -14,7 +14,8 @@ export type JobType =
   | 'estimate'
   | 'improve'
   | 'geo'
-  | 'panel';
+  | 'panel'
+  | 'learn';
 export const JOB_TYPES: JobType[] = [
   'ingest',
   'plan',
@@ -28,6 +29,7 @@ export const JOB_TYPES: JobType[] = [
   'improve',
   'geo',
   'panel',
+  'learn',
 ];
 
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled';
@@ -44,6 +46,8 @@ export interface JobEvent {
   /** Beat progress (write and narrate stages). */
   index?: number;
   total?: number;
+  /** Model spend of the job so far in USD (the learn job reports it). */
+  usd?: number;
   /** Chapter the event belongs to (build, translate, narrate). */
   chapter?: string;
   message?: string;

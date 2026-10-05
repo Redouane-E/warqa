@@ -9,15 +9,20 @@ import { Llm, type LlmOptions } from '../models/llm.js';
 import { resolveRole } from '../models/presets.js';
 import type { Project } from '../project/index.js';
 import { type NarrateReport, narrateLesson } from '../tts/narrate.js';
+import { learnerAudience } from './levels.js';
 import { applyPlan, type BookPlan, loadPlan, planBook } from './plan.js';
 import { type Storyboard, storyboardChapter } from './storyboard.js';
 import { translateLesson } from './translate.js';
 import { writeChapter } from './write.js';
 
-export type ProgressEvent =
+export type ProgressEvent = (
   | { stage: string; status: 'start' | 'done' | 'skip'; detail?: string }
-  | { stage: 'write'; status: 'beat'; detail: string; index: number; total: number }
-  | { stage: string; status: 'error'; detail: string };
+  | { stage: string; status: 'beat'; detail: string; index: number; total: number }
+  | { stage: string; status: 'error'; detail: string }
+) & {
+  /** Model spend of the run so far, in USD (the learner's one-go screen shows it). */
+  usd?: number;
+};
 
 export function projectLlm(project: Project, extra: Partial<LlmOptions> = {}): Llm {
   return new Llm({
@@ -94,12 +99,14 @@ export async function buildChapter(
   if (!chapter) throw new Error(`no chapter "${chapterId}" in the plan (${plan.chapters.map((c) => c.id).join(', ')})`);
   const force = new Set(opts.force ?? []);
   const p = opts.onProgress ?? (() => {});
+  // a learner's book follows the current level ("Too easy" / "Too hard" changes it between chapters)
+  const audience = learnerAudience(project.book);
 
   // storyboard
   let story = project.readJson<Storyboard | undefined>(`lessons/${chapterId}/storyboard.json`, undefined);
   if (!story || force.has('storyboard')) {
     p({ stage: 'storyboard', status: 'start', detail: resolveRole('storyboard', project.config) });
-    story = await storyboardChapter(project, doc, plan, chapter, { llm });
+    story = await storyboardChapter(project, doc, plan, chapter, { llm, ...(audience ? { audience } : {}) });
     p({ stage: 'storyboard', status: 'done', detail: `${story.beats.length} beats` });
   } else p({ stage: 'storyboard', status: 'skip' });
 
@@ -109,6 +116,7 @@ export async function buildChapter(
     p({ stage: 'write', status: 'start', detail: resolveRole('writer', project.config) });
     lesson = await writeChapter(project, doc, plan, chapter, story, {
       llm,
+      ...(audience ? { audience } : {}),
       force: force.has('write') || force.has('storyboard'),
       onBeat: (e) =>
         p({
@@ -189,8 +197,10 @@ export function estimateBuild(
     ['plan', role('planner'), 20000, 4000],
     ['storyboard', role('storyboard'), (4000 + tok(Math.min(chars, 60000))) * chapters, 3500 * chapters],
     ['write', role('writer'), writerIn * beats * 1.4 * chapters, 1600 * beats * 1.4 * chapters],
-    ['translate', role('translator'), 9000 * (langs - 1) * chapters, 7000 * (langs - 1) * chapters],
   ];
+  // a one-language book (a learner's book) needs no translator model
+  if (langs > 1)
+    rows.push(['translate', role('translator'), 9000 * (langs - 1) * chapters, 7000 * (langs - 1) * chapters]);
   let total = 0;
   const lines = rows.map(([stage, model, i, o]) => {
     const usd = costOf(model, i, o);
