@@ -1,4 +1,4 @@
-// Model providers as the web app presents them: which work from a browser tab, the key they need, the ready-made
+// Model providers as the start guide presents them (desktop and web app): the key they need, the ready-made
 // model set (preset) to use, and how to check a key without spending anything (listing models is free).
 //
 // CORS (can a web page call the API directly?) was checked for each provider: a preflight from another origin
@@ -18,7 +18,7 @@ export type ProviderId =
   | 'ollama'
   | 'fake';
 
-export interface WebProvider {
+export interface GuideProvider {
   id: ProviderId;
   name: string;
   /** Environment variable the key goes into (the pipeline reads it). */
@@ -37,7 +37,7 @@ export interface WebProvider {
 
 const bearer = (key: string) => ({ authorization: `Bearer ${key}` });
 
-export const PROVIDERS: WebProvider[] = [
+export const PROVIDERS: GuideProvider[] = [
   {
     id: 'google',
     name: 'Google Gemini',
@@ -127,9 +127,9 @@ export const PROVIDERS: WebProvider[] = [
 ];
 
 /** Test-only scripted model (no network), shown only in test mode. */
-export const FAKE_PROVIDER: WebProvider = { id: 'fake', name: 'Test model (no network)', env: 'WARQA_FAKE_KEY' };
+export const FAKE_PROVIDER: GuideProvider = { id: 'fake', name: 'Test model (no network)', env: 'WARQA_FAKE_KEY' };
 
-export const providerById = (id: string, fake = false): WebProvider | undefined =>
+export const providerById = (id: string, fake = false): GuideProvider | undefined =>
   id === 'fake' ? (fake ? FAKE_PROVIDER : undefined) : PROVIDERS.find((p) => p.id === id);
 
 export type KeyCheck =

@@ -1,6 +1,5 @@
 // Calls to the web app's own routes (/api/web/*, served by the worker: worker/routes.ts).
 import { withBase } from '../../../studio/src/client/base';
-import type { KeyCheck } from '../providers';
 
 async function call<T>(method: string, path: string, body?: unknown): Promise<T> {
   const res = await fetch(withBase(path), {
@@ -24,7 +23,6 @@ export const webApi = {
     return call<{ id: string }>('POST', '/api/web/import', form);
   },
   remove: (id: string) => call<{ deleted: string }>('DELETE', `/api/web/projects/${encodeURIComponent(id)}`),
-  checkKey: (provider: string, key: string) => call<KeyCheck>('POST', '/api/web/check-key', { provider, key }),
   storage: () =>
     call<{ books: number; usage: number | null; quota: number | null; pending: number }>('GET', '/api/web/storage'),
   reset: () => call<{ reset: boolean }>('POST', '/api/web/reset'),

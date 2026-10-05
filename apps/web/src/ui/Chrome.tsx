@@ -7,10 +7,10 @@ import { useConfirm, useToast } from '../../../studio/src/client/components/over
 import { SideSheet } from '../../../studio/src/client/components/SideSheet';
 import { Button, Icon, Notice } from '../../../studio/src/client/components/ui';
 import { useI18n } from '../../../studio/src/client/i18n';
+import { setOnboarded } from '../../../studio/src/client/prefs';
 import { navigate } from '../../../studio/src/client/router';
 import { type Bridge, download } from '../bridge/client';
 import { useW } from './i18n';
-import { setOnboarded } from './prefs';
 import { webApi } from './webApi';
 
 /** Your data, in a side sheet: what is stored where, how much, and how to delete it all. */

@@ -4,7 +4,15 @@ import { Player, type PlayerData, type PlayerOptions } from './player.js';
 export { runPacks } from '../packs.js';
 export { type BookPageData, bootBook, renderBook } from './book.js';
 export { kit } from './kit.js';
-export { Player, type PlayerData, type PlayerEvent, type PlayerOptions } from './player.js';
+export {
+  type LearnerFeedback,
+  type LearnerNextState,
+  type LearnerOptions,
+  Player,
+  type PlayerData,
+  type PlayerEvent,
+  type PlayerOptions,
+} from './player.js';
 export { registerView, slotBoxes, VIEWS } from './scene.js';
 export { setAssetBase } from './views/map.js';
 export type { Box, View, ViewCtx, ViewFactory } from './views/types.js';

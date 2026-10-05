@@ -7,7 +7,6 @@ import { basename, dirname, join } from 'pathe';
 import type { Jobs } from '../../../studio/src/server/jobs';
 import { keysFile, loadKeys, saveKeys } from '../../../studio/src/server/keys';
 import { Registry } from '../../../studio/src/server/projects';
-import { type KeyCheck, providerById } from '../providers';
 import { vfs } from './vfs';
 
 interface Options {
@@ -79,24 +78,7 @@ function write(dir: string, prefix: string, names: string[], files: Record<strin
   new P.Project(dir); // throws on a broken warqa.json (or a book that needs the desktop version)
 }
 
-async function checkKey(url: string, headers: Record<string, string>): Promise<KeyCheck> {
-  let res: Response;
-  try {
-    res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
-  } catch (e) {
-    return { ok: false, reason: 'network', message: (e as Error).message };
-  }
-  if (res.ok) return { ok: true };
-  const text = (await res.text().catch(() => '')).slice(0, 300);
-  if (res.status === 429) return { ok: true, warning: 'rate' };
-  // Gemini and xAI answer a wrong key with 400 ("API key not valid", "Incorrect API key")
-  if (res.status === 401 || res.status === 403 || (res.status === 400 && /api[ _-]?key/i.test(text)))
-    return { ok: false, reason: 'key', status: res.status, message: text };
-  if (res.status === 402) return { ok: false, reason: 'credits', status: res.status, message: text };
-  return { ok: false, reason: 'http', status: res.status, message: text };
-}
-
-export function webRoutes({ root, base, fake, jobs }: Options): Hono {
+export function webRoutes({ root, base, jobs }: Options): Hono {
   const registry = new Registry(root, 'none');
   const app = new Hono().basePath('/api/web');
 
@@ -156,18 +138,6 @@ export function webRoutes({ root, base, fake, jobs }: Options): Hono {
       throw new Error('this book has work in progress: stop it first');
     await vfs.wipe(dir);
     return c.json({ deleted: id });
-  });
-
-  /** Check a provider key without spending anything (the key is not stored by this call). */
-  app.post('/check-key', async (c) => {
-    const { provider, key } = (await c.req.json()) as { provider?: string; key?: string };
-    const p = providerById(String(provider ?? ''), fake);
-    if (!p) throw new Error(`unknown provider "${provider}"`);
-    if (p.id === 'fake') return c.json({ ok: true } satisfies KeyCheck);
-    const value = String(key ?? '').trim();
-    if (!value && !p.local) return c.json({ ok: false, reason: 'key', message: 'empty key' } satisfies KeyCheck);
-    const req = p.check!(value);
-    return c.json(await checkKey(req.url, req.headers));
   });
 
   /** How much this browser stores for Warqa. */

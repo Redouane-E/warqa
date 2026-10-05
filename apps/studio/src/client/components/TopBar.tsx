@@ -5,6 +5,7 @@ import { useExtras } from '../extras';
 import { setLang, UI_LANGS, type UiLang, useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
 import { STEPS, usePlace } from '../place';
+import { mode } from '../prefs';
 import { Link, match, useLocation } from '../router';
 import { useJobs } from './JobBoard';
 import { Menu } from './Menu';
@@ -61,12 +62,19 @@ export function TopBar({ onGoTo }: { onGoTo: () => void }) {
   const theme = useSyncExternalStore(subscribeTheme, effectiveTheme);
   const book = place.book;
   const ai = path === '/ai' || path === '/settings';
+  const learner = mode() === 'learn';
   return (
     <header className="topbar">
       <a className="skip" href="#main">
         {t('nav.skip')}
       </a>
-      <Link to="/" className="brand" aria-label={t('nav.homeName')} title={t('nav.books')}>
+      {/* someone learning on their own comes home to What I'm learning */}
+      <Link
+        to={learner ? '/learn' : '/'}
+        className="brand"
+        aria-label={learner ? t('learn.home.title') : t('nav.homeName')}
+        title={learner ? t('learn.home.title') : t('nav.books')}
+      >
         <Mark />
         <span className="brand-latin" lang="en">
           Warqa
@@ -147,6 +155,9 @@ export function useStrips(): Strip[] {
   const { t, num } = useI18n();
   const { path } = useLocation();
   const place = usePlace();
+  // a learner's course and chapter lie on What I'm learning
+  if (path !== '/learn/new' && (match('/learn/:id', path) || match('/learn/:id/:lid', path)))
+    return [{ to: '/learn', title: t('learn.home.title') }];
   const m = match('/project/:id', path) ?? match('/project/:id/:sub', path) ?? match('/project/:id/lesson/:lid', path);
   if (!m) return [];
   const strips: Strip[] = [{ to: '/', title: t('nav.books') }];

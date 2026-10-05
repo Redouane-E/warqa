@@ -1014,6 +1014,413 @@
   }
 }
 
+/* ---------- the learner's finish card (the studio, learning on your own): two columns over the stage, in stage
+   units like the other cards. Column A: the score on the highlighter; column B: how it was, what to review, the
+   next chapter. Exported books never show it. ---------- */
+.wq-finish-learn {
+  --wq-fin-band: var(--wq-fluo);
+  inset: 32px 48px;
+  padding: 44px 52px;
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(520px, 100%), 1fr));
+  /* centred when there is room; "safe" keeps the top reachable when it scrolls */
+  align-content: safe center;
+  align-items: start;
+  justify-content: stretch;
+  gap: 36px 64px;
+  text-align: start;
+  font-size: 24px;
+  animation: wq-rise var(--wq-t-place) var(--wq-ease-settle) both;
+}
+/* on the Board the band sits under light digits: a lighter stroke keeps them readable */
+.wq-theme-board .wq-finish-learn {
+  --wq-fin-band: var(--wq-fluo-a35);
+}
+.wq-finish-learn p {
+  margin: 0;
+}
+.wq-fin-a,
+.wq-fin-b {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+.wq-fin-head {
+  display: flex;
+  align-items: center;
+  gap: 26px;
+}
+/* the mark on a ruled tile; its fold flips once, as on the plain card */
+.wq-fin-tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 136px;
+  height: 136px;
+  border-radius: 8px;
+  background-color: var(--wq-ground);
+  background-image: repeating-linear-gradient(to bottom, transparent 0 16px, var(--wq-seyes) 16px 17px);
+}
+.wq-fin-titles {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.wq-finish-learn h2 {
+  margin: 0;
+  font-size: 54px;
+  line-height: 1.2;
+  letter-spacing: -0.01em;
+  font-variation-settings: "HEXP" 100;
+  font-weight: 650;
+}
+.wq-finish-learn h2:lang(ar),
+.wq-finish-learn h2:lang(ary) {
+  line-height: 1.45;
+  letter-spacing: 0;
+}
+.wq-fin-sub {
+  color: var(--wq-text-2);
+  font-size: 24px;
+}
+.wq-fin-score {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 18px;
+}
+/* the number on the highlighter, swept in from the reading start */
+.wq-fin-num {
+  padding: 0 0.12em;
+  font-size: 72px;
+  font-weight: 600;
+  line-height: 1.1;
+  white-space: nowrap;
+  background-image: linear-gradient(var(--wq-fin-band), var(--wq-fin-band));
+  background-repeat: no-repeat;
+  background-position: left bottom;
+  background-size: 100% 40%;
+  animation: wq-sweep 1.2s var(--wq-ease-ink) 0.45s both;
+}
+.wq-rtl .wq-fin-num {
+  background-position: right bottom;
+}
+.wq-fin-num .wq-mono {
+  font-size: 1em;
+}
+.wq-fin-label {
+  font-size: 24px;
+}
+.wq-fin-stats {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 28px;
+  color: var(--wq-text-2);
+  font-size: 21px;
+}
+.wq-fin-stats li {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+}
+/* the question diamond, as on the timeline: filled for quick checks */
+.wq-fin-stats li::before {
+  content: "";
+  flex: none;
+  width: 12px;
+  height: 12px;
+  margin-inline-end: 4px;
+  border: 2.5px solid var(--wq-ink);
+  border-radius: 2px;
+  transform: rotate(45deg);
+}
+.wq-fin-check::before {
+  background: var(--wq-ink);
+}
+.wq-fin-stats bdi {
+  color: var(--wq-text);
+}
+/* "How was this chapter?" (the floated legend sits inside the box, as a grid item) */
+.wq-feel {
+  min-width: 0;
+  margin: 0;
+  display: grid;
+  gap: 14px;
+  padding: 22px 26px;
+  border: 1.5px solid var(--wq-line);
+  border-radius: 8px;
+}
+.wq-feel legend {
+  float: left;
+  width: 100%;
+  padding: 0;
+  font-size: 26px;
+  font-weight: 600;
+}
+.wq-feel-opts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.wq-feel-btn {
+  min-height: 64px;
+  padding: 8px 12px;
+  border: 1.5px solid var(--wq-control-border);
+  border-radius: 13px;
+  background: var(--wq-sheet);
+  color: var(--wq-text);
+  font-size: 22px;
+  font-weight: 500;
+  line-height: 1.25;
+  cursor: pointer;
+  transition:
+    background-color var(--wq-t-menu) var(--wq-ease-settle),
+    border-color var(--wq-t-menu) var(--wq-ease-settle);
+}
+.wq-feel-btn:hover {
+  border-color: var(--wq-input-border);
+}
+/* chosen: a 2px ink edge drawn inside, so nothing moves */
+.wq-feel-btn[aria-pressed="true"] {
+  border-color: var(--wq-ink);
+  box-shadow: inset 0 0 0 1.5px var(--wq-ink);
+  background: var(--wq-ink-tint);
+  color: var(--wq-ink);
+  font-weight: 600;
+}
+.wq-feel-foot {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 2px 20px;
+  color: var(--wq-text-2);
+  font-size: 20px;
+}
+.wq-feel-level {
+  color: var(--wq-text);
+  font-weight: 500;
+}
+/* review what was missed: a row with the notebook tile */
+.wq-review {
+  width: 100%;
+  min-height: 84px;
+  display: flex;
+  align-items: center;
+  gap: 18px;
+  padding: 12px 22px;
+  border: 1.5px solid var(--wq-line);
+  border-radius: 8px;
+  background: var(--wq-sheet);
+  color: var(--wq-text);
+  text-align: start;
+  line-height: 1.35;
+  cursor: pointer;
+}
+.wq-review:hover {
+  border-color: var(--wq-control-border);
+  background: var(--wq-ground);
+}
+.wq-review-tile {
+  flex: none;
+  display: grid;
+  place-items: center;
+  width: 50px;
+  height: 56px;
+  border-radius: 8px;
+  background: var(--wq-ink);
+  color: var(--wq-on-ink);
+  line-height: 0;
+}
+.wq-review-t {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.wq-review-t strong {
+  font-size: 22px;
+  font-weight: 600;
+}
+.wq-review-t small {
+  color: var(--wq-text-2);
+  font-size: 19px;
+}
+.wq-review > .wq-i {
+  flex: none;
+  width: 28px;
+  height: 28px;
+  color: var(--wq-ink);
+}
+.wq-feel-btn:focus-visible,
+.wq-review:focus-visible {
+  outline: 3px solid var(--wq-ink);
+  outline-offset: 3px;
+}
+/* the next chapter: make it (at the stated cost), then follow its making */
+.wq-nextch {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 22px 26px;
+  border-radius: 8px;
+  background: var(--wq-ground);
+}
+.wq-nextch-k {
+  color: var(--wq-text-2);
+  font-size: 18px;
+}
+.wq-nextch-t {
+  font-size: 27px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+.wq-nextch-n {
+  color: var(--wq-text-2);
+  font-weight: 500;
+}
+.wq-nextch-act {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 12px;
+}
+.wq-nextch-hint {
+  color: var(--wq-text-2);
+  font-size: 18px;
+}
+.wq-finish-learn .wq-btn {
+  min-height: 56px;
+  padding: 8px 24px;
+  gap: 12px;
+  border-width: 1.5px;
+  border-radius: 13px;
+  font-size: 21px;
+  font-weight: 500;
+  line-height: 1.3;
+}
+.wq-finish-learn .wq-btn .wq-i {
+  width: 24px;
+  height: 24px;
+  flex: none;
+}
+.wq-finish-learn .wq-nextch-go {
+  min-height: 68px;
+  padding: 10px 28px;
+  font-size: 23px;
+}
+.wq-btn-text,
+.wq-btn-text:hover {
+  border-color: transparent;
+  background: transparent;
+  color: var(--wq-ink);
+}
+.wq-btn-text:hover {
+  background: var(--wq-ink-tint);
+}
+.wq-nextch-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 22px;
+  font-weight: 600;
+}
+/* it only keeps the focus where the button was while the chapter is written: no ring on plain text */
+.wq-nextch .wq-nextch-status:focus {
+  outline: none;
+}
+.wq-nextch-status .wq-i {
+  flex: none;
+  width: 26px;
+  height: 26px;
+}
+.wq-nextch-ok {
+  color: var(--wq-good);
+}
+.wq-nextch-err {
+  color: var(--wq-pen);
+  font-weight: 500;
+}
+.wq-nextch-bar {
+  position: relative;
+  width: 100%;
+  max-width: 460px;
+  height: 10px;
+  border-radius: 999px;
+  background: var(--wq-seyes);
+  overflow: hidden;
+}
+.wq-nextch-bar i {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  width: 0;
+  border-radius: inherit;
+  background: var(--wq-ink);
+  transition: width var(--wq-t-place) linear;
+}
+/* no percentage yet: a stretch of ink runs along in the reading direction */
+.wq-nextch-bar.wq-indet i {
+  width: 35%;
+  animation: wq-indet 1.4s var(--wq-ease-ink) infinite;
+}
+.wq-rtl .wq-nextch-bar.wq-indet i {
+  animation-name: wq-indet-rtl;
+}
+.wq-fin-more {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 14px;
+}
+@keyframes wq-rise {
+  from {
+    opacity: 0;
+    transform: translateY(24px);
+  }
+}
+@keyframes wq-sweep {
+  from {
+    background-size: 0% 40%;
+  }
+}
+@keyframes wq-indet {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(290%);
+  }
+}
+@keyframes wq-indet-rtl {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(-290%);
+  }
+}
+/* reduced motion: the card, the band and the fold are simply there; a still, faint bar while making */
+@media (prefers-reduced-motion: reduce) {
+  .wq-finish-learn,
+  .wq-fin-num,
+  .wq-nextch-bar i {
+    animation: none;
+    transition: none;
+  }
+  .wq-nextch-bar.wq-indet i {
+    width: 100%;
+    opacity: 0.35;
+  }
+}
+
 /* embedded in a page that has its own title (the studio's preview): no strip, a tighter page */
 .wq-nohead .wq-head {
   display: none !important;
@@ -1546,10 +1953,12 @@
     max-width: 96px;
     font-size: 14px;
   }
+  /* a card under the picture can be taller than the screen: the page scrolls instead of cutting it off */
   .wq-main {
     padding: 0 12px 12px;
     flex-direction: column;
     gap: 0;
+    overflow-y: auto;
   }
   .wq-stagecol {
     gap: 12px;
@@ -1749,6 +2158,143 @@
   .wq-cards-out .wq-mascot svg {
     width: 56px;
     height: 64px;
+  }
+  /* the learner's finish card on a phone: one column at reading size; no stats, no "Next chapter" label and no
+     hints; buttons full width */
+  .wq-cards-out .wq-finish-learn {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 16px;
+    padding: 16px;
+    font-size: 15px;
+  }
+  .wq-cards-out .wq-fin-a,
+  .wq-cards-out .wq-fin-b {
+    gap: 12px;
+  }
+  .wq-cards-out .wq-fin-head {
+    gap: 12px;
+  }
+  .wq-cards-out .wq-fin-tile {
+    width: 60px;
+    height: 60px;
+    border-radius: 6px;
+    background-image: repeating-linear-gradient(to bottom, transparent 0 9px, var(--wq-seyes) 9px 10px);
+  }
+  .wq-cards-out .wq-fin-tile svg {
+    width: 35px;
+    height: 40px;
+  }
+  .wq-cards-out .wq-finish-learn h2 {
+    font-size: 22px;
+  }
+  .wq-cards-out .wq-fin-sub,
+  .wq-cards-out .wq-fin-label {
+    font-size: 14px;
+  }
+  .wq-cards-out .wq-fin-num {
+    font-size: 36px;
+  }
+  .wq-cards-out .wq-fin-stats,
+  .wq-cards-out .wq-nextch-k,
+  .wq-cards-out .wq-nextch-hint,
+  .wq-cards-out .wq-review-t small {
+    display: none;
+  }
+  .wq-cards-out .wq-feel {
+    gap: 8px;
+    padding: 12px;
+    border-width: 1px;
+    border-radius: 10px;
+  }
+  .wq-cards-out .wq-feel legend {
+    font-size: 15px;
+  }
+  .wq-cards-out .wq-feel-opts {
+    gap: 6px;
+  }
+  .wq-cards-out .wq-feel-btn {
+    min-height: 44px;
+    padding: 4px 6px;
+    border-width: 1px;
+    border-radius: 10px;
+    font-size: 13px;
+  }
+  .wq-cards-out .wq-feel-btn[aria-pressed="true"] {
+    box-shadow: inset 0 0 0 1px var(--wq-ink);
+  }
+  .wq-cards-out .wq-feel-foot {
+    font-size: 12px;
+  }
+  .wq-cards-out .wq-review {
+    min-height: 48px;
+    gap: 12px;
+    padding: 8px 12px;
+    border-width: 1px;
+    border-radius: 10px;
+  }
+  .wq-cards-out .wq-review-tile {
+    width: 26px;
+    height: 30px;
+    border-radius: 5px;
+  }
+  .wq-cards-out .wq-review-tile svg {
+    width: 16px;
+    height: 18px;
+  }
+  .wq-cards-out .wq-review-t strong {
+    font-size: 14px;
+  }
+  .wq-cards-out .wq-review > .wq-i {
+    width: 20px;
+    height: 20px;
+  }
+  .wq-cards-out .wq-nextch {
+    align-items: stretch;
+    gap: 8px;
+    padding: 0;
+    background: transparent;
+  }
+  .wq-cards-out .wq-nextch-t {
+    color: var(--wq-text-2);
+    font-size: 12px;
+    font-weight: 400;
+  }
+  .wq-cards-out .wq-nextch-act {
+    align-items: stretch;
+    gap: 8px;
+  }
+  .wq-cards-out .wq-nextch-status {
+    font-size: 14px;
+  }
+  .wq-cards-out .wq-nextch-status .wq-i {
+    width: 18px;
+    height: 18px;
+  }
+  .wq-cards-out .wq-nextch-bar {
+    max-width: none;
+    height: 6px;
+  }
+  .wq-cards-out .wq-fin-more {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .wq-cards-out .wq-finish-learn .wq-btn {
+    width: 100%;
+    min-height: 44px;
+    justify-content: center;
+    padding: 8px 16px;
+    border-width: 1px;
+    border-radius: 10px;
+    font-size: 14px;
+  }
+  .wq-cards-out .wq-finish-learn .wq-nextch-go {
+    min-height: 52px;
+    font-size: 15px;
+  }
+  .wq-cards-out .wq-finish-learn .wq-btn .wq-i {
+    width: 18px;
+    height: 18px;
   }
   .wq-speedmenu {
     inset-inline-end: auto;

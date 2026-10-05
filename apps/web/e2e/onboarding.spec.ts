@@ -1,23 +1,30 @@
-// The start guide: English and Arabic (right to left), the provider step's key guide and privacy note, and no
-// sideways scrolling on a phone.
+// The first visit: the welcome page and the start guide in English and Arabic (right to left), the provider
+// step's key guide and privacy note, and no sideways scrolling on a phone.
 import { expect, test } from '@playwright/test';
 
-test('the start guide is in English, and in Arabic from right to left', async ({ page }) => {
+test('the first visit is in English, and in Arabic from right to left', async ({ page }) => {
   await page.goto('./');
-  await expect(page.getByRole('heading', { level: 1, name: 'Welcome to Warqa' })).toBeVisible();
+  // no books yet: the welcome page
+  await expect(page).toHaveURL(/\/warqa\/welcome$/);
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('Turn a PDF into a lesson that');
   await expect(page.locator('html')).toHaveAttribute('dir', 'ltr');
   await expect(page.getByRole('button', { name: 'English' })).toHaveAttribute('aria-pressed', 'true');
 
   await page.getByRole('button', { name: 'العربية' }).click();
   await expect(page.locator('html')).toHaveAttribute('dir', 'rtl');
   await expect(page.locator('html')).toHaveAttribute('lang', 'ar');
-  await expect(page.getByRole('heading', { level: 1, name: 'مرحبًا بك في ورقة' })).toBeVisible();
-  // the card's text starts on the right
+  await expect(page.getByRole('heading', { level: 1 })).toContainText('حوّل ملف PDF إلى درس');
+
+  // the guide's first question, its cards starting on the right
+  await page.getByRole('button', { name: 'أنشئ كتابي الأول' }).click();
+  await expect(page.getByRole('heading', { level: 1, name: 'كيف ستستعمل ورقة؟' })).toBeVisible();
   const card = await page.locator('.welcome-card').boundingBox();
   const title = await page.getByRole('heading', { level: 1 }).boundingBox();
   expect(card && title && card.x + card.width - (title.x + title.width)).toBeLessThan(60);
+  await expect(page.getByRole('button', { name: 'متابعة' })).toBeDisabled();
+  await page.getByRole('radio', { name: 'أُدرّس' }).check();
+  await page.getByRole('button', { name: 'متابعة' }).click();
 
-  await page.getByRole('button', { name: 'التالي' }).click();
   await expect(page.getByRole('heading', { level: 1, name: 'اربط نموذج ذكاء اصطناعي' })).toBeVisible();
   await page.getByRole('radio', { name: /Google Gemini/ }).check();
   await expect(page.getByRole('link', { name: /aistudio\.google\.com/ })).toHaveAttribute(
@@ -44,7 +51,7 @@ test.describe('on a phone', () => {
     test(`nothing scrolls sideways (${lang})`, async ({ page }) => {
       await page.addInitScript((l) => localStorage.setItem('warqa-studio:lang', l), lang);
       await page.goto('./');
-      await expect(page.locator('.welcome-card')).toBeVisible();
+      await expect(page.locator('.welcome-hero')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
       await page.getByRole('button', { name: lang === 'ar' ? 'تخطَّ الدليل' : 'Skip the guide' }).click();
       await expect(page.locator('.web-status')).toBeVisible();

@@ -1,6 +1,6 @@
-// Small preferences of the web app, kept in this browser (localStorage; never needed for anything to work).
+// Small preferences of the web app, kept in this browser (never needed for anything to work). Whether the start
+// guide was done is the studio's (client/prefs.ts).
 
-const ONBOARDED = 'warqa-web:onboarded';
 const FAKE = 'warqa-web:fake';
 
 const read = (store: () => Storage, key: string): string | null => {
@@ -18,9 +18,6 @@ const write = (store: () => Storage, key: string, value: string | null) => {
     /* storage unavailable */
   }
 };
-
-export const onboarded = () => read(() => localStorage, ONBOARDED) === '1';
-export const setOnboarded = (v: boolean) => write(() => localStorage, ONBOARDED, v ? '1' : null);
 
 /**
  * Test mode (scripted model, no network): ?warqa-fake=1 in the address turns it on for this tab (it survives

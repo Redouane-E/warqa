@@ -66,6 +66,9 @@ describe('projects', () => {
     expect(p.steps.read).toBe('ready');
     // with a lesson, Check and Share are open; Check stays optional
     expect(p.steps.check).toBe('ready');
+    // a teacher's book: no learner level; the lesson made is listed
+    expect((p as { learn?: unknown }).learn).toBeUndefined();
+    expect((p as { made?: { id: string }[] }).made?.map((m) => m.id)).toEqual(['ch05']);
     expect(p.steps.share).toBe('ready');
   });
 
@@ -158,6 +161,22 @@ describe('keys', () => {
     await app.request('/api/keys', json('PUT', { MISTRAL_API_KEY: null }));
     expect(process.env.MISTRAL_API_KEY).toBeUndefined();
     expect((await app.request('/api/keys', json('PUT', { 'bad name': 'x' }))).status).toBe(400);
+  });
+
+  it('checks a key only for a known provider (and never stores it)', async () => {
+    const res = await app.request('/api/keys/check', json('POST', { provider: 'nobody', key: 'x' }));
+    expect(res.status).toBe(400);
+    // an empty key is answered without a network call
+    const empty = await app.request('/api/keys/check', json('POST', { provider: 'openai', key: ' ' }));
+    expect(await empty.json()).toMatchObject({ ok: false, reason: 'key' });
+    // a local server's address must be a plain http(s) address
+    const odd = await app.request('/api/keys/check', json('POST', { provider: 'ollama', key: 'file:///etc/passwd' }));
+    expect(await odd.json()).toMatchObject({ ok: false, reason: 'network' });
+    const query = await app.request('/api/keys/check', json('POST', { provider: 'ollama', key: 'http://x.test/a?' }));
+    expect(await query.json()).toMatchObject({ ok: false, reason: 'network' });
+    // the test model exists only where the server runs with it (the web app's test mode)
+    expect((await app.request('/api/keys/check', json('POST', { provider: 'fake', key: '' }))).status).toBe(400);
+    expect(process.env.OPENAI_API_KEY).toBeUndefined();
   });
 
   it('refuses requests from other sites', async () => {

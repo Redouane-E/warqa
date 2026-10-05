@@ -36,6 +36,7 @@ import type {
 import { JOB_TYPES } from '../shared/types.js';
 import { safeJoin, sendFile } from './files.js';
 import { ingestAvailable, Jobs, type Runner } from './jobs.js';
+import { checkKey } from './keycheck';
 import { keysFile, maskedKeys, saveKeys } from './keys.js';
 import { lessonLangs, projectDetail, projectSummary, Registry } from './projects.js';
 import { panelDir, panelKeyPath, panelZipPath, zipPath, zipReady } from './zip.js';
@@ -275,6 +276,13 @@ export function createApp(opts: AppOptions) {
     }
     return c.json({ keys: maskedKeys(), file: keysFile() });
   });
+  /** The start guide checks a key without spending anything before saving it (this call stores nothing). */
+  app.post('/api/keys/check', async (c) => {
+    const body = (await jsonBody(c)) as { provider?: string; key?: string } | null;
+    const r = await checkKey(String(body?.provider ?? ''), String(body?.key ?? ''), !!opts.llm?.fake);
+    if (!r) throw new ApiError(400, `unknown provider "${body?.provider}"`);
+    return c.json(r);
+  });
 
   /* ---------- projects ---------- */
 
@@ -296,6 +304,7 @@ export function createApp(opts: AppOptions) {
           hasPdf: false,
           exported: false,
           steps: {},
+          spent: 0,
         });
       }
     }
@@ -483,6 +492,20 @@ export function createApp(opts: AppOptions) {
     p.writeJson('plan.json', plan);
     P.applyPlan(p, plan);
     return c.json({ plan });
+  });
+
+  // "How was this chapter?" on the learner's finish card: too easy or too hard moves the level one step for the
+  // next chapters (the book must be a learner's book)
+  app.post('/api/projects/:id/learn/feedback', async (c) => {
+    const p = project(c.req.param('id'));
+    // `from`: the level the chapter was made at, so a changed answer moves from there (never two steps)
+    const body = (await jsonBody(c)) as { feedback?: string; from?: string } | null;
+    const feedback = body?.feedback;
+    if (feedback !== 'too-easy' && feedback !== 'right' && feedback !== 'too-hard')
+      throw new ApiError(400, 'feedback must be too-easy, right or too-hard');
+    const level = P.adjustLevel(p, feedback, P.isLearnLevel(body?.from) ? body.from : undefined);
+    if (!level) throw new ApiError(409, "this book is not a learner's book");
+    return c.json({ level });
   });
 
   app.get('/api/projects/:id/estimate', async (c) => {

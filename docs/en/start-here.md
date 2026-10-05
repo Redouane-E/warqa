@@ -1,6 +1,6 @@
 # Start here
 
-**For teachers and parents.** No programming needed. [العربية](../ar/start-here.md) · [Français](../fr/start-here.md)
+**For teachers, students, and anyone learning on their own.** No programming needed. [العربية](../ar/start-here.md) · [Français](../fr/start-here.md)
 
 ## What Warqa does
 
@@ -72,6 +72,39 @@ Then, in Warqa, open **Keys**, paste the key and click **Save keys**.
 Nothing to pay at all, and nothing leaving your computer: Warqa can also use models that run on your own
 computer with Ollama (you need a recent, powerful computer). See [models.md](models.md).
 
+## Learning on your own
+
+Warqa can also teach you. Drop a PDF you want to understand, pick your language and your level, and chapter 1
+is ready in a few minutes. There is no plan to approve.
+
+1. The first time you open Warqa, it asks **How will you use Warqa?** Choose **I'm learning for myself**.
+   (Teachers choose **I teach** and follow [Your first book, step by step](#your-first-book-step-by-step).)
+   Later, start a new course with **Learn something new** on **What I'm learning**.
+2. **Drop the PDF** you want to understand. Lessons made from it are for your own use unless you have the
+   right to share them.
+3. **Pick the language Warqa teaches you in:** **العربية**, **الدارجة**, **Français** or **English**. Warqa
+   tells you which language the PDF is in, and keeps its key terms.
+4. **Pick your level:** **Beginner**, **I know some** or **Advanced**.
+5. If no AI service is connected yet, Warqa asks you to connect one (see [Get an AI key](#get-an-ai-key)).
+6. Before anything is spent, Warqa shows the time and the cost, for example "About 3 minutes · about $0.03 ·
+   your limit $1.00". Click **Teach me**: Warqa reads the PDF, plans the chapters and makes chapter 1 in one
+   go, then opens it. **Stop** keeps what is finished. In the browser version, keep the tab open while
+   Warqa works.
+7. At the end of a chapter:
+   - **How was this chapter?** **Too easy**, **About right** or **Too hard** changes the level of the next
+     chapters;
+   - **Review what you missed** takes you back to the questions you missed;
+   - **Make chapter 2 · about $0.04** makes the next chapter, only when you ask. You never pay for chapters
+     you don't read.
+
+Your courses are listed on **What I'm learning**. A course is an ordinary book: **Open as a teacher** shows
+every step if you want to change something. If you would rather check the plan yourself, click **I'd rather
+review the plan first** instead of **Teach me**, and you follow the teacher's path.
+
+A new course has a spending limit of $1. Change it in the book's **Settings → Budget and tools → Spending
+limit (USD)**. On the command line: `warqa learn my.pdf --lang ar --level beginner` (levels: `beginner`,
+`some`, `advanced`).
+
 ## Your first book, step by step
 
 Start small: one chapter of 10 to 20 pages.
@@ -118,3 +151,5 @@ No code needed, and you can write in Arabic, French or English. **Never paste yo
 Use PDFs you are allowed to use. Your PDF stays on your computer (or in your browser); parts of it are
 sent to the AI service you chose, to read and write the lessons. Never put personal information about
 students into Warqa. The books you make are yours.
+
+Lessons made from a PDF are for your own use unless you have the right to share them.

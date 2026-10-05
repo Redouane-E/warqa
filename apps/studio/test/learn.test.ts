@@ -189,6 +189,39 @@ describe('learning on your own', () => {
     expect(progress.every((e) => typeof e.usd === 'number')).toBe(true);
   });
 
+  it('lists the book as a learner\'s book with its chapters made, and moves the level on feedback', async () => {
+    const { projects } = (await (await app.request('/api/projects')).json()) as {
+      projects: { id: string; learn?: { level: string }; made?: { id: string }[] }[];
+    };
+    const mine = projects.find((x) => x.id === 'mine')!;
+    expect(mine.learn).toEqual({ level: 'beginner' });
+    expect(mine.made?.map((m) => m.id)).toEqual(['ch01']);
+
+    const send = (feedback: string) =>
+      app.request('/api/projects/mine/learn/feedback', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ feedback }),
+      });
+    expect(await (await send('too-easy')).json()).toEqual({ level: 'some' });
+    expect(await (await send('right')).json()).toEqual({ level: 'some' });
+    expect(await (await send('too-hard')).json()).toEqual({ level: 'beginner' });
+    // answers about one chapter move from the level it was made at: a double click or a changed answer never
+    // moves two steps
+    const about = (feedback: string) =>
+      app.request('/api/projects/mine/learn/feedback', {
+        method: 'POST',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ feedback, from: 'beginner' }),
+      });
+    expect(await (await about('too-easy')).json()).toEqual({ level: 'some' });
+    expect(await (await about('too-easy')).json()).toEqual({ level: 'some' });
+    expect(await (await about('right')).json()).toEqual({ level: 'beginner' });
+    expect((await send('boring')).status).toBe(400);
+    const book = JSON.parse(readFileSync(join(root, 'mine.warqa', 'warqa.json'), 'utf8'));
+    expect(book.learn).toEqual({ level: 'beginner' });
+  });
+
   it('makes the lesson without a voice where the voice cannot run (Edge voices in the web app)', async () => {
     const p = new P.Project(join(root, 'mine.warqa'));
     p.config.tts.provider = 'edge';

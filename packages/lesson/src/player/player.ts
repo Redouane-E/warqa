@@ -70,8 +70,39 @@ export interface PlayerOptions {
   bare?: boolean;
   /** Show the strip above the stage (default true; a host page that has its own title turns it off). */
   head?: boolean;
+  /**
+   * Someone learning on their own, in the studio: the finish card asks how the chapter was (the host moves the
+   * level of the next chapters), offers to review what was missed and the next chapter, made on demand. Exported
+   * books leave it out and keep the plain finish card.
+   */
+  learner?: LearnerOptions;
   onEvent?: (e: PlayerEvent) => void;
 }
+
+export type LearnerFeedback = 'too-easy' | 'right' | 'too-hard';
+
+export interface LearnerOptions {
+  /** The learner's level now, in words ("I know some"), shown under the feel question ("Your level now: …"). */
+  level?: string;
+  /** A choice in "How was this chapter?". The host saves it and may resolve to the new level's words. */
+  // biome-ignore lint/suspicious/noConfusingVoidType: an async host that returns nothing gives a Promise<void>
+  onFeedback?: (f: LearnerFeedback) => void | string | undefined | Promise<string | undefined | void>;
+  /**
+   * The next chapter of the course. made: true → a "Next chapter" button that just opens it (run()).
+   * made: false → the costed "Make chapter {n} · about {cost}" button (nothing is spent before the click), run()
+   * starts it; the host then reports progress with Player.learnerNext().
+   */
+  next?: { n: number; title: string; cost?: string; made?: boolean; run: () => void };
+  /** "All chapters" / the learner's home (What I'm learning). */
+  home?: () => void;
+}
+
+/** The next chapter being made from the finish card, as the host reports it (Player.learnerNext). */
+export type LearnerNextState =
+  | { status: 'idle' }
+  | { status: 'making'; pct?: number }
+  | { status: 'ready'; open: () => void }
+  | { status: 'error'; message: string };
 
 export type PlayerEvent =
   | { type: 'beat'; index: number; id: string }
@@ -145,6 +176,13 @@ export class Player {
   private cardShown = false;
   private finished = false;
   scores: Record<string, Score> = {};
+  /** The learner's finish card: the answer to "How was this chapter?" and the level it led to, kept if it redraws. */
+  private feel: LearnerFeedback | null = null;
+  private feelLevel: string | undefined;
+  private feelAsk = 0;
+  /** The next chapter's state, and where the shown finish card draws it. */
+  private nextState: LearnerNextState = { status: 'idle' };
+  private nextEl: HTMLElement | null = null;
   private captionsOn = false;
   /** Caption being shown (beat:sentence) and its word spans, for the word-by-word highlight. */
   private capKey = '';
@@ -1143,57 +1181,80 @@ export class Player {
       all.filter((s) => s.kind === k).reduce((a, s) => ({ r: a.r + s.right, n: a.n + s.total }), { r: 0, n: 0 });
     const right = all.reduce((a, s) => a + s.right, 0);
     const total = all.reduce((a, s) => a + s.total, 0);
-    const lesson = this.lesson;
-    const next = this.data.book?.next;
-    const home = this.data.book?.home;
-    const card = h(
-      'section',
-      { class: 'wq-card wq-card-screen wq-finish', role: 'region', 'aria-label': t('finish.titleNoChapter') },
-      h('div', { class: 'wq-mascot', 'aria-hidden': 'true' }, markIcon(120)),
-      h('h2', {}, lesson.number !== undefined ? t('finish.title', { n: lesson.number }) : t('finish.titleNoChapter')),
-      h('p', { class: 'wq-finish-sub' }, lesson.title),
-      total
-        ? h('p', { class: 'wq-finish-score' }, t('finish.score', { right, total }))
-        : h('p', {}, t('finish.noScore')),
-      total
-        ? h(
-            'ul',
-            { class: 'wq-finish-list' },
-            (['check', 'practice'] as const).map((k) => {
-              const s = sum(k);
-              return s.n
-                ? h(
-                    'li',
-                    {},
-                    `${t(k === 'check' ? 'finish.checks' : 'finish.practice')}: ${t('quiz.progress', { k: s.r, n: s.n })}`,
-                  )
-                : null;
-            }),
-          )
-        : null,
-      h(
-        'div',
-        { class: 'wq-actions' },
-        next
+    const learner = this.opts.learner;
+    let card: HTMLElement;
+    /** What Enter does on the card when no button has the focus. */
+    let enter: (() => void) | null = null;
+    if (learner) {
+      card = this.learnerCard(learner, right, total, sum);
+      // never the costed "Make chapter": nothing is spent without a click on that very button
+      enter = () => {
+        const go = card.querySelector<HTMLElement>('.wq-nextch-go[aria-keyshortcuts]');
+        go?.click();
+      };
+    } else {
+      const lesson = this.lesson;
+      const next = this.data.book?.next;
+      const home = this.data.book?.home;
+      card = h(
+        'section',
+        { class: 'wq-card wq-card-screen wq-finish', role: 'region', 'aria-label': t('finish.titleNoChapter') },
+        h('div', { class: 'wq-mascot', 'aria-hidden': 'true' }, markIcon(120)),
+        h('h2', {}, lesson.number !== undefined ? t('finish.title', { n: lesson.number }) : t('finish.titleNoChapter')),
+        h('p', { class: 'wq-finish-sub' }, lesson.title),
+        total
+          ? h('p', { class: 'wq-finish-score' }, t('finish.score', { right, total }))
+          : h('p', {}, t('finish.noScore')),
+        total
           ? h(
-              'a',
-              { class: 'wq-btn wq-primary', href: next, 'aria-keyshortcuts': 'Enter' },
-              t('finish.next'),
-              icon('next'),
+              'ul',
+              { class: 'wq-finish-list' },
+              (['check', 'practice'] as const).map((k) => {
+                const s = sum(k);
+                return s.n
+                  ? h(
+                      'li',
+                      {},
+                      `${t(k === 'check' ? 'finish.checks' : 'finish.practice')}: ${t('quiz.progress', { k: s.r, n: s.n })}`,
+                    )
+                  : null;
+              }),
             )
           : null,
         h(
-          'button',
-          { type: 'button', class: 'wq-btn', onclick: () => this.restart(), 'aria-keyshortcuts': 'R' },
-          icon('restart'),
-          t('finish.again'),
+          'div',
+          { class: 'wq-actions' },
+          next
+            ? h(
+                'a',
+                { class: 'wq-btn wq-primary', href: next, 'aria-keyshortcuts': 'Enter' },
+                t('finish.next'),
+                icon('next'),
+              )
+            : null,
+          h(
+            'button',
+            { type: 'button', class: 'wq-btn', onclick: () => this.restart(), 'aria-keyshortcuts': 'R' },
+            icon('restart'),
+            t('finish.again'),
+          ),
+          home ? h('a', { class: 'wq-btn', href: home }, icon('book'), t('finish.contents')) : null,
         ),
-        home ? h('a', { class: 'wq-btn', href: home }, icon('book'), t('finish.contents')) : null,
-      ),
-    );
+      );
+      if (next)
+        enter = () => {
+          location.href = next;
+        };
+    }
     this.cardHost.replaceChildren(card);
     this.live.textContent = `${t('finish.titleNoChapter')}. ${total ? t('finish.score', { right, total }) : ''}`;
-    (card.querySelector('.wq-primary') as HTMLElement | null)?.focus();
+    // the learner's card takes the focus on its title, or on a button that costs nothing (open a chapter already
+    // made): a key pressed as the lesson ends must never press "Make chapter · about $x"
+    const focusTo = learner
+      ? (card.querySelector<HTMLElement>('.wq-nextch-go[aria-keyshortcuts]') ?? card.querySelector<HTMLElement>('h2'))
+      : card.querySelector<HTMLElement>('.wq-primary');
+    if (focusTo?.tagName === 'H2') focusTo.tabIndex = -1;
+    focusTo?.focus();
     if (!this.finished) {
       this.finished = true;
       this.markDone();
@@ -1206,18 +1267,373 @@ export class Player {
           this.restart();
           return true;
         }
-        if (
-          (e.code === 'Enter' || e.code === 'NumpadEnter') &&
-          next &&
-          (e.target as HTMLElement)?.tagName !== 'BUTTON'
-        ) {
-          location.href = next;
+        const target = e.target as HTMLElement | null;
+        const onControl = learner
+          ? !!target?.closest?.('button, a, input, select, textarea')
+          : target?.tagName === 'BUTTON';
+        if ((e.code === 'Enter' || e.code === 'NumpadEnter') && enter && !onControl) {
+          enter();
           return true;
         }
         return false;
       },
-      destroy: () => card.remove(),
+      destroy: () => {
+        card.remove();
+        if (this.nextEl && card.contains(this.nextEl)) this.nextEl = null;
+      },
     };
+  }
+
+  /**
+   * The finish card of someone learning on their own (the studio): the score on the highlighter, "How was this
+   * chapter?", the questions to review, and the next chapter (open it, or make it at a stated cost).
+   */
+  private learnerCard(
+    learner: LearnerOptions,
+    right: number,
+    total: number,
+    sum: (k: 'check' | 'practice') => { r: number; n: number },
+  ): HTMLElement {
+    const t = this.t;
+    const lesson = this.lesson;
+    const fmt = (n: number) => formatNumber(n, this.lang, { digits: this.data.book?.digits ?? 'latn' });
+    // questions answered wrong on the first try, and the first step that asks one of them
+    let missed = 0;
+    let missedAt = -1;
+    this.compiled.beats.forEach((b, i) => {
+      for (const q of b.beat.questions ?? []) {
+        const s = this.scores[q.id];
+        if (!s || s.right >= s.total) continue;
+        missed++;
+        if (missedAt < 0) missedAt = i;
+      }
+    });
+    const head = h(
+      'div',
+      { class: 'wq-fin-head' },
+      h('div', { class: 'wq-fin-tile wq-mascot', 'aria-hidden': 'true' }, markIcon(96)),
+      h(
+        'div',
+        { class: 'wq-fin-titles' },
+        h('h2', {}, lesson.number !== undefined ? t('finish.title', { n: lesson.number }) : t('finish.titleNoChapter')),
+        h('p', { class: 'wq-fin-sub', dir: 'auto' }, lesson.title),
+      ),
+    );
+    const score = total
+      ? h(
+          'p',
+          { class: 'wq-fin-score' },
+          // the numbers in the mono font; the word between them ("من") in the interface font
+          h(
+            'span',
+            { class: 'wq-fin-num' },
+            this.tNodes(
+              'finish.scoreNum',
+              {},
+              {
+                right: h('span', { class: 'wq-mono' }, fmt(right)),
+                total: h('span', { class: 'wq-mono' }, fmt(total)),
+              },
+            ),
+          ),
+          h('span', { class: 'wq-fin-label' }, t('finish.scoreLabel')),
+        )
+      : h('p', { class: 'wq-fin-score' }, h('span', { class: 'wq-fin-label' }, t('finish.noScore')));
+    const stats = total
+      ? h(
+          'ul',
+          { class: 'wq-fin-stats' },
+          (['check', 'practice'] as const).map((k) => {
+            const s = sum(k);
+            return s.n
+              ? h(
+                  'li',
+                  { class: `wq-fin-${k}` },
+                  t(k === 'check' ? 'finish.checks' : 'finish.practice'),
+                  ' ',
+                  h('bdi', { class: 'wq-mono', dir: 'ltr' }, `${fmt(s.r)}/${fmt(s.n)}`),
+                )
+              : null;
+          }),
+        )
+      : null;
+    const review =
+      missed > 0
+        ? h(
+            'button',
+            {
+              type: 'button',
+              class: 'wq-review',
+              onclick: () => {
+                this.root.focus({ preventScroll: true });
+                this.seek(missedAt, true);
+              },
+            },
+            h('span', { class: 'wq-review-tile', 'aria-hidden': 'true' }, markIcon(30)),
+            h(
+              'span',
+              { class: 'wq-review-t' },
+              h('strong', {}, t('finish.review', { n: missed })),
+              h('small', {}, t('finish.reviewHint', { n: missed })),
+            ),
+            icon('next', 24),
+          )
+        : null;
+    const more = h(
+      'div',
+      { class: 'wq-fin-more' },
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'wq-btn',
+          onclick: () => {
+            this.root.focus({ preventScroll: true });
+            this.restart();
+          },
+          'aria-keyshortcuts': 'R',
+        },
+        icon('restart'),
+        t('finish.again'),
+      ),
+      learner.home
+        ? h(
+            'button',
+            { type: 'button', class: 'wq-btn wq-btn-text', onclick: () => learner.home?.() },
+            icon('book'),
+            t('finish.allChapters'),
+          )
+        : null,
+    );
+    return h(
+      'section',
+      {
+        class: 'wq-card wq-card-screen wq-finish wq-finish-learn',
+        role: 'region',
+        'aria-label': t('finish.titleNoChapter'),
+      },
+      h('div', { class: 'wq-fin-a' }, head, score, stats),
+      h(
+        'div',
+        { class: 'wq-fin-b' },
+        learner.onFeedback ? this.feelBox(learner) : null,
+        review,
+        learner.next ? this.nextPanel(learner.next) : null,
+        more,
+      ),
+    );
+  }
+
+  /** "How was this chapter?": too easy, about right or too hard (one choice; it can be changed). */
+  private feelBox(learner: LearnerOptions): HTMLElement {
+    const t = this.t;
+    const choices: [LearnerFeedback, MessageKey, MessageKey][] = [
+      ['too-easy', 'finish.feel.easy', 'finish.feel.easyDone'],
+      ['right', 'finish.feel.right', 'finish.feel.rightDone'],
+      ['too-hard', 'finish.feel.hard', 'finish.feel.hardDone'],
+    ];
+    const note = h('span', { class: 'wq-feel-note' });
+    const level = h('span', { class: 'wq-feel-level' });
+    const show = () => {
+      const said = choices.find(([f]) => f === this.feel);
+      note.textContent = t(said ? said[2] : 'finish.feel.pending');
+      const words = this.feelLevel ?? learner.level;
+      level.hidden = !words;
+      level.textContent = words ? t('finish.feel.levelNow', { level: words }) : '';
+    };
+    const buttons: HTMLButtonElement[] = choices.map(([f, key]) =>
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'wq-feel-btn',
+          'aria-pressed': String(this.feel === f),
+          onclick: () => {
+            this.feel = f;
+            buttons.forEach((b, k) => {
+              b.setAttribute('aria-pressed', String(choices[k]![0] === f));
+            });
+            show();
+            // the host may answer with the new level's words, now or later; only the last choice counts
+            const ask = ++this.feelAsk;
+            let answer: ReturnType<NonNullable<LearnerOptions['onFeedback']>>;
+            try {
+              answer = learner.onFeedback?.(f);
+            } catch (err) {
+              console.warn('[warqa] learner.onFeedback failed', err);
+              return;
+            }
+            Promise.resolve(answer).then(
+              (words) => {
+                if (ask !== this.feelAsk || typeof words !== 'string' || !words) return;
+                this.feelLevel = words;
+                show();
+              },
+              (err) => console.warn('[warqa] learner.onFeedback failed', err),
+            );
+          },
+        },
+        t(key),
+      ),
+    );
+    show();
+    return h(
+      'fieldset',
+      { class: 'wq-feel' },
+      h('legend', {}, t('finish.feel.title')),
+      h('div', { class: 'wq-feel-opts' }, buttons),
+      h('p', { class: 'wq-feel-foot', 'aria-live': 'polite' }, note, level),
+    );
+  }
+
+  /**
+   * A message with elements in place of some placeholders: a number in the mono font, a title in its own
+   * direction, a price that stays left to right. The words around them stay in the catalog's order.
+   */
+  private tNodes(key: MessageKey, params: Params, nodes: Record<string, Node>): (string | Node)[] {
+    const names = Object.keys(nodes);
+    const marked: Params = { ...params };
+    // private-use characters stand for the elements while the catalog fills in the rest
+    names.forEach((name, k) => {
+      marked[name] = String.fromCharCode(0xe000 + k);
+    });
+    const out: (string | Node)[] = [];
+    let run = '';
+    for (const ch of this.t(key, marked)) {
+      const k = ch.charCodeAt(0) - 0xe000;
+      if (k >= 0 && k < names.length) {
+        if (run) out.push(run);
+        run = '';
+        out.push(nodes[names[k]!]!);
+      } else run += ch;
+    }
+    if (run) out.push(run);
+    return out;
+  }
+
+  /** The next chapter: its number and title, then make it (or open it), and how its making goes. */
+  private nextPanel(next: NonNullable<LearnerOptions['next']>): HTMLElement {
+    const t = this.t;
+    const fmt = (n: number) => formatNumber(n, this.lang, { digits: this.data.book?.digits ?? 'latn' });
+    const kid = `wq-nextch-k-${this.uid}`;
+    const tid = `wq-nextch-t-${this.uid}`;
+    const act = h('div', { class: 'wq-nextch-act', 'aria-live': 'polite' });
+    const panel = h(
+      'div',
+      { class: 'wq-nextch', role: 'group', 'aria-labelledby': next.made ? tid : `${kid} ${tid}` },
+      // a chapter already made: the button says "Next chapter", the label above would repeat it
+      next.made ? null : h('p', { class: 'wq-nextch-k', id: kid }, t('finish.nextKicker')),
+      h(
+        'p',
+        { class: 'wq-nextch-t', id: tid },
+        this.tNodes(
+          'finish.nextTitle',
+          {},
+          {
+            n: h('bdi', { class: 'wq-mono wq-nextch-n', dir: 'ltr' }, fmt(next.n)),
+            title: h('bdi', { dir: 'auto' }, next.title),
+          },
+        ),
+      ),
+      act,
+      next.made ? null : h('p', { class: 'wq-nextch-hint' }, t('finish.makeHint')),
+    );
+    this.nextEl = act;
+    this.renderNext(null);
+    return panel;
+  }
+
+  /** The host reports the next chapter being made from the finish card. */
+  learnerNext(state: LearnerNextState): void {
+    const was = this.nextState.status;
+    this.nextState = state;
+    this.renderNext(was);
+  }
+
+  /** Draw the next chapter's action for its state; `was` is the state it replaces (null: a new card). */
+  private renderNext(was: LearnerNextState['status'] | null) {
+    const act = this.nextEl;
+    const next = this.opts.learner?.next;
+    if (!act || !next || this.destroyed) return;
+    const t = this.t;
+    const s = this.nextState;
+    const pct = s.status === 'making' && typeof s.pct === 'number' ? Math.max(0, Math.min(100, s.pct)) : undefined;
+    // progress only moves the bar: the words (and what a screen reader says) change with the state alone
+    if (s.status === 'making' && was === 'making') {
+      const bar = act.querySelector<HTMLElement>('.wq-nextch-bar');
+      if (bar) {
+        bar.classList.toggle('wq-indet', pct === undefined);
+        if (pct === undefined) bar.removeAttribute('aria-valuenow');
+        else bar.setAttribute('aria-valuenow', String(Math.round(pct)));
+        (bar.firstElementChild as HTMLElement).style.width = pct === undefined ? '' : `${pct}%`;
+        return;
+      }
+    }
+    const active = act.ownerDocument.activeElement;
+    const hadFocus = was !== null && (act.contains(active) || !active || active === act.ownerDocument.body);
+    const hint = act.parentElement?.querySelector<HTMLElement>('.wq-nextch-hint');
+    if (hint) hint.hidden = s.status === 'making' || s.status === 'ready';
+    const go = (label: (string | Node)[], run: () => void, keyed: boolean, ico: 'play' | 'next') =>
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'wq-btn wq-primary wq-nextch-go',
+          'aria-keyshortcuts': keyed ? 'Enter' : undefined,
+          onclick: run,
+        },
+        ico === 'play' ? icon('play') : null,
+        h('span', {}, label),
+        ico === 'next' ? icon('next') : null,
+      );
+    const start = () =>
+      next.made
+        ? go([t('finish.next')], () => next.run(), true, 'next')
+        : go(
+            next.cost
+              ? this.tNodes(
+                  'finish.make',
+                  { n: next.n },
+                  { cost: h('bdi', { class: 'wq-mono', dir: 'ltr' }, next.cost) },
+                )
+              : [t('finish.makeNoCost', { n: next.n })],
+            () => next.run(),
+            false,
+            'play',
+          );
+    act.dataset.status = s.status;
+    if (s.status === 'making') {
+      const fill = h('i', {});
+      if (pct !== undefined) fill.style.width = `${pct}%`;
+      act.replaceChildren(
+        h('p', { class: 'wq-nextch-status', tabindex: '-1' }, t('finish.making', { n: next.n })),
+        h(
+          'div',
+          {
+            class: `wq-nextch-bar${pct === undefined ? ' wq-indet' : ''}`,
+            role: 'progressbar',
+            'aria-label': t('finish.making', { n: next.n }),
+            'aria-valuemin': '0',
+            'aria-valuemax': '100',
+            'aria-valuenow': pct === undefined ? undefined : String(Math.round(pct)),
+          },
+          fill,
+        ),
+      );
+    } else if (s.status === 'ready') {
+      act.replaceChildren(
+        h('p', { class: 'wq-nextch-status wq-nextch-ok' }, icon('check'), t('finish.ready', { n: next.n })),
+        go([t('finish.open')], () => s.open(), true, 'next'),
+      );
+    } else if (s.status === 'error') {
+      act.replaceChildren(
+        h('p', { class: 'wq-nextch-status wq-nextch-err' }, icon('error'), h('span', { dir: 'auto' }, s.message)),
+        start(),
+      );
+    } else act.replaceChildren(start());
+    // the button that had the focus is gone: keep it on what replaced it
+    if (hadFocus && act.isConnected)
+      (act.querySelector('button') ?? act.querySelector<HTMLElement>('[tabindex]'))?.focus({ preventScroll: true });
   }
 
   /* ---------- chrome toggles ---------- */

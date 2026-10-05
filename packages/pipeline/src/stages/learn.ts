@@ -279,13 +279,21 @@ function storyboardTitles(project: Project, chapterId: string): Record<string, s
   return Object.fromEntries((story?.beats ?? []).map((b) => [b.id, b.title]));
 }
 
-/** "Too easy" / "Too hard" after a chapter: move the level one step for the next chapters. */
-export function adjustLevel(project: Project, feedback: 'too-easy' | 'right' | 'too-hard'): LearnLevel | undefined {
-  const level = project.book.learn?.level;
-  if (!level) return undefined;
+/**
+ * "Too easy" / "Too hard" after a chapter: move the level one step for the next chapters. `from` is the level
+ * the chapter was made at: answering again (or changing the answer) moves from there, never two steps.
+ */
+export function adjustLevel(
+  project: Project,
+  feedback: 'too-easy' | 'right' | 'too-hard',
+  from?: LearnLevel,
+): LearnLevel | undefined {
+  const current = project.book.learn?.level;
+  if (!current) return undefined;
+  const level = from ?? current;
   const i = LEARN_LEVELS.indexOf(level) + (feedback === 'too-easy' ? 1 : feedback === 'too-hard' ? -1 : 0);
   const next = LEARN_LEVELS[Math.max(0, Math.min(LEARN_LEVELS.length - 1, i))]!;
-  if (next !== level) {
+  if (next !== current) {
     project.book.learn = { level: next };
     project.saveBook();
   }

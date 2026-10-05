@@ -1,4 +1,6 @@
 // The studio API from the browser.
+
+import type { KeyCheck } from '../shared/providers';
 import type {
   BookPlan,
   EstimateInfo,
@@ -8,6 +10,8 @@ import type {
   JobInfo,
   JobType,
   KeyInfo,
+  LearnEstimateInfo,
+  LearnLevel,
   LessonDetail,
   ProjectDetail,
   ProjectSummary,
@@ -86,6 +90,18 @@ export const api = {
   saveSettings: (id: string, s: Record<string, unknown>) =>
     req<ProjectDetail>('PUT', `/api/projects/${encodeURIComponent(id)}/settings`, s),
   estimate: (id: string) => req<EstimateInfo>('GET', `/api/projects/${encodeURIComponent(id)}/estimate`),
+  learnEstimate: (id: string, chapter?: string) =>
+    req<LearnEstimateInfo>(
+      'GET',
+      `/api/projects/${encodeURIComponent(id)}/estimate?learn=1${chapter ? `&chapter=${encodeURIComponent(chapter)}` : ''}`,
+    ),
+  checkKey: (provider: string, key: string) => req<KeyCheck>('POST', '/api/keys/check', { provider, key }),
+  /** `from`: the level the chapter was made at (a changed answer moves from there, never two steps). */
+  learnFeedback: (id: string, feedback: 'too-easy' | 'right' | 'too-hard', from?: LearnLevel) =>
+    req<{ level: LearnLevel }>('POST', `/api/projects/${encodeURIComponent(id)}/learn/feedback`, {
+      feedback,
+      ...(from ? { from } : {}),
+    }),
   savePlan: (id: string, plan: BookPlan) =>
     req<{ plan: BookPlan }>('PUT', `/api/projects/${encodeURIComponent(id)}/plan`, plan),
   approvePlan: (id: string) => req<{ plan: BookPlan }>('POST', `/api/projects/${encodeURIComponent(id)}/plan/approve`),

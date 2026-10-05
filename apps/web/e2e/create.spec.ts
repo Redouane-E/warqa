@@ -6,8 +6,9 @@ import { fixture, jobDone, openStudio, step } from './helpers';
 
 test('a PDF becomes a planned, built and exported book (test model)', async ({ page }) => {
   await page.goto('./?warqa-fake=1');
-  await expect(page.getByRole('heading', { level: 1, name: 'Welcome to Warqa' })).toBeVisible();
-  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: 'Make my first book' }).click();
+  await page.getByRole('radio', { name: 'I teach' }).check();
+  await page.getByRole('button', { name: 'Continue' }).click();
   await page.getByRole('radio', { name: /Test model/ }).check();
   await page.getByRole('button', { name: 'Next' }).click();
   await page.getByTestId('pdf-input').setInputFiles(fixture('textbook-en.pdf'));
@@ -67,7 +68,8 @@ test('a PDF becomes a planned, built and exported book (test model)', async ({ p
 
 test('a scanned PDF is rendered in the browser and read by the (test) vision model', async ({ page }) => {
   await openStudio(page, { fake: true });
-  // with no book yet, the new-book form is already open
+  // a new book opens in a side sheet
+  await page.getByRole('button', { name: 'New book', exact: true }).click();
   await expect(page.locator('.new-book')).toBeVisible();
   await page.locator('.new-book input[type=file]').setInputFiles(fixture('scanned.pdf'));
   await page.locator('.new-book').getByRole('checkbox', { name: 'Arabic' }).uncheck();

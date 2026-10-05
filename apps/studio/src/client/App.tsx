@@ -20,10 +20,12 @@ import { ExtrasContext, type StudioExtras } from './extras';
 import { getLang, I18nContext, makeI18n, subscribeLang } from './i18n';
 import { HomePage } from './pages/Home';
 import { KeysPage } from './pages/Keys';
+import { LearnCoursePage, LearnHomePage, LearnNewPage, LearnPlayerPage } from './pages/Learn';
 import { LessonPage } from './pages/Lesson';
 import { ProjectPage } from './pages/Project';
 import { ReviewPage } from './pages/Review';
 import { SettingsPage } from './pages/Settings';
+import { WelcomePage } from './pages/Welcome';
 import { PlaceProvider } from './place';
 import { go, match, useLocation } from './router';
 
@@ -44,6 +46,11 @@ function Routes() {
   if ((m = match('/project/:id/settings', path))) return <SettingsPage key={m.id} id={m.id!} />;
   if ((m = match('/project/:id/review', path))) return <ReviewPage key={m.id} id={m.id!} />;
   if ((m = match('/project/:id', path))) return <ProjectPage key={m.id} id={m.id!} />;
+  // learning on your own
+  if (path === '/learn') return <LearnHomePage />;
+  if (path === '/learn/new') return <LearnNewPage />;
+  if ((m = match('/learn/:id/:lid', path))) return <LearnPlayerPage key={`${m.id}/${m.lid}`} id={m.id!} lid={m.lid!} />;
+  if ((m = match('/learn/:id', path))) return <LearnCoursePage key={m.id} id={m.id!} />;
   // AI and voices: /ai (the old /settings address still works)
   if (path === '/ai' || path === '/settings') return <KeysPage />;
   return <HomePage />;
@@ -103,15 +110,22 @@ export function App({ extras = {} }: { extras?: StudioExtras } = {}) {
           <OverlayProvider>
             <JobsProvider>
               <PlaceProvider>
-                <TopBar onGoTo={() => setGoto(true)} />
-                {status && !status.localOnly && (
-                  <div className="remote-warning" role="alert">
-                    <Icon name="warn" /> {i18n.t('settings.remote', { host: status.host })}
-                  </div>
+                {path === '/welcome' || path === '/welcome/start' ? (
+                  // the first visit: the welcome page and the start guide, full window
+                  <WelcomePage />
+                ) : (
+                  <>
+                    <TopBar onGoTo={() => setGoto(true)} />
+                    {status && !status.localOnly && (
+                      <div className="remote-warning" role="alert">
+                        <Icon name="warn" /> {i18n.t('settings.remote', { host: status.host })}
+                      </div>
+                    )}
+                    {extras.banner}
+                    <Places mainRef={mainRef} />
+                    <GoTo open={goto} onClose={() => setGoto(false)} />
+                  </>
                 )}
-                {extras.banner}
-                <Places mainRef={mainRef} />
-                <GoTo open={goto} onClose={() => setGoto(false)} />
               </PlaceProvider>
             </JobsProvider>
           </OverlayProvider>

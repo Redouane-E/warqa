@@ -4,12 +4,11 @@ import { type ReactNode, useEffect, useMemo, useState, useSyncExternalStore } fr
 import { App } from '../../../studio/src/client/App';
 import { Button, Mark } from '../../../studio/src/client/components/ui';
 import { getLang, I18nContext, makeI18n, subscribeLang } from '../../../studio/src/client/i18n';
-import { useLocation } from '../../../studio/src/client/router';
 import type { Bridge } from '../bridge/client';
+import { FAKE_MODEL } from '../worker/fake';
 import { HomeActions, ProjectActions, WebStatus } from './Chrome';
 import { useW } from './i18n';
-import { Onboarding } from './Onboarding';
-import { onboarded } from './prefs';
+import { webApi } from './webApi';
 
 const TAKEOVER = 'warqa-web:takeover';
 
@@ -79,9 +78,8 @@ export function WebApp({ bridge, serviceWorker }: { bridge: Bridge; serviceWorke
   const state = useSyncExternalStore(bridge.subscribe, () => bridge.state);
   const lang = useSyncExternalStore(subscribeLang, getLang);
   const i18n = useMemo(() => makeI18n(lang), [lang]);
-  const { path } = useLocation();
-  const [guide, setGuide] = useState(() => !onboarded());
   const [sw, setSw] = useState(true);
+  const fake = state === 'ready' && !!bridge.info?.fake;
 
   useEffect(() => {
     void serviceWorker.then(setSw);
@@ -105,20 +103,23 @@ export function WebApp({ bridge, serviceWorker }: { bridge: Bridge; serviceWorke
       topbarStatus: <WebStatus bridge={bridge} serviceWorker={sw} />,
       homeActions: <HomeActions />,
       projectActions: (id: string) => <ProjectActions id={id} />,
+      // the start guide (now in the studio): the test model in test mode, and the bundled example book
+      guide: {
+        ...(fake ? { fakeModel: FAKE_MODEL } : {}),
+        example: async () => {
+          const r = await webApi.demo();
+          return `/project/${encodeURIComponent(r.id)}/lesson/ch05`;
+        },
+      },
     }),
-    [bridge, sw],
+    // the bridge's info (test mode) arrives once the in-browser server is ready
+    [bridge, sw, fake],
   );
 
   if (state !== 'ready')
     return (
       <I18nContext.Provider value={i18n}>
         <Boot bridge={bridge} />
-      </I18nContext.Provider>
-    );
-  if (path === '/welcome' || (guide && path === '/'))
-    return (
-      <I18nContext.Provider value={i18n}>
-        <Onboarding fake={!!bridge.info?.fake} onDone={() => setGuide(false)} />
       </I18nContext.Provider>
     );
   return <App extras={extras} />;

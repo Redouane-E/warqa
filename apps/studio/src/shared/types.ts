@@ -224,7 +224,11 @@ export interface BookInfo {
   digits: 'latn' | 'arab';
   audience?: string;
   units: { title: string | LTextMap; chapters: string[] }[];
+  /** A self-learner's book: the level its next chapters are made at. */
+  learn?: { level: LearnLevel };
 }
+
+export type LearnLevel = 'beginner' | 'some' | 'advanced';
 
 /** The six steps of a book. "check" is optional (never the next step); "?step=export" is an alias of "share". */
 export type StepId = 'read' | 'plan' | 'make' | 'voice' | 'check' | 'share';
@@ -241,6 +245,14 @@ export interface ProjectSummary {
   hasPdf: boolean;
   exported: boolean;
   steps: Record<StepId, StepState>;
+  /** A self-learner's book ("What I'm learning"): its level. */
+  learn?: { level: LearnLevel };
+  /** The chapters made, in plan order, with their titles (the learner's home and player). */
+  made?: { id: string; title: LTextMap }[];
+  /** Spent on this book (USD), for sorting Your books. */
+  spent: number;
+  /** The PDF once read: its pages and language ("From a French PDF · 64 pages"). */
+  source?: { pages: number; lang: string };
 }
 
 export interface ProjectDetail extends ProjectSummary {
@@ -296,6 +308,22 @@ export interface EstimateInfo {
   p50: number;
   p90: number;
   lines: string[];
+  error?: string;
+}
+
+/** The learner's summary ("About 3 minutes · about $0.03 · your limit $1.00"): GET estimate?learn=1. */
+export interface LearnEstimateInfo {
+  usd: { p50: number; p90: number };
+  seconds: number;
+  pages: number;
+  /** The chapter the run will make, once there is a plan. */
+  chapter?: string;
+  visionPages: number;
+  limit?: number;
+  spent: number;
+  /** The PDF's language, when its text says so. */
+  sourceLang?: string;
+  /** No AI service connected yet (the PDF facts are still there). */
   error?: string;
 }
 

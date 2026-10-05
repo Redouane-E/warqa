@@ -314,7 +314,23 @@ function summaryFrom(
     hasPdf: !!p.sourcePdf(),
     exported,
     steps: steps(p, plan, doc, lessons, exported),
+    ...(p.book.learn ? { learn: { level: p.book.learn.level } } : {}),
+    made: madeInOrder(plan, lessons),
+    spent: P.ledgerSummary(p.path('.ledger.jsonl')).total,
+    ...(doc ? { source: { pages: doc.pages, lang: doc.lang } } : {}),
   };
+}
+
+/** The lessons made, in the plan's order (lessons outside the plan last). */
+function madeInOrder(plan: BookPlan | null, lessons: LessonSummary[]): { id: string; title: LTextMap }[] {
+  const order = plan ? plan.chapters.map((c) => c.id) : [];
+  const rank = (id: string) => {
+    const i = order.indexOf(id);
+    return i < 0 ? order.length : i;
+  };
+  return [...lessons]
+    .sort((a, b) => rank(a.id) - rank(b.id) || a.id.localeCompare(b.id))
+    .map((l) => ({ id: l.id, title: l.title }));
 }
 
 export function projectDetail(id: string, p: P.Project, jobs: ProjectDetail['jobs']): ProjectDetail {
@@ -347,6 +363,7 @@ export function projectDetail(id: string, p: P.Project, jobs: ProjectDetail['job
       digits: p.book.digits,
       ...(p.book.audience ? { audience: p.book.audience } : {}),
       units: p.book.units,
+      ...(p.book.learn ? { learn: { level: p.book.learn.level } } : {}),
     },
     config: p.config as ProjectDetail['config'],
     plan,

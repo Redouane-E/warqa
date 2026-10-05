@@ -166,6 +166,14 @@ describe('catalogs', () => {
     expect(t('ar', 'book.chapters', { n: 11 })).toBe('11 فصلًا');
     expect(t('fr', 'finish.score', { right: 3, total: 4 })).toBe('3 sur 4 justes du premier coup');
     expect(t('xx', 'quiz.check')).toBe('Check');
+    // the learner's finish card: questions missed, in every plural form that matters
+    expect(t('en', 'finish.reviewHint', { n: 1 })).toBe('One question you missed in this chapter');
+    expect(t('fr', 'finish.reviewHint', { n: 3 })).toBe('3 questions manquées dans ce chapitre');
+    expect(t('ar', 'finish.reviewHint', { n: 2 })).toBe('سؤالان فاتاك في هذا الفصل');
+    expect(t('ar', 'finish.reviewHint', { n: 4 })).toBe('4 أسئلة فاتتك في هذا الفصل');
+    expect(t('ary', 'finish.reviewHint', { n: 2 })).toBe('جوج أسئلة فاتوك فهاد الفصل');
+    expect(t('ar', 'finish.scoreNum', { right: 4, total: 5 })).toBe('4 من 5');
+    expect(t('ar', 'finish.make', { n: 2, cost: '$0.04' })).toBe('اصنع الفصل 2 · بحوالي $0.04');
   });
 });
 

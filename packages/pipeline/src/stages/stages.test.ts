@@ -405,6 +405,11 @@ describe('learning on your own (the one go)', () => {
     expect(adjustLevel(project, 'too-hard')).toBe('beginner');
     expect(adjustLevel(project, 'too-hard')).toBe('beginner'); // already the easiest
     expect(adjustLevel(project, 'right')).toBe('beginner');
+    // from the level the chapter was made at: changing the answer moves back, never two steps
+    expect(adjustLevel(project, 'too-easy', 'beginner')).toBe('some');
+    expect(adjustLevel(project, 'too-easy', 'beginner')).toBe('some');
+    expect(adjustLevel(project, 'right', 'beginner')).toBe('beginner');
+    expect(project.book.learn?.level).toBe('beginner');
   });
 
   it('reads a scanned book’s pages with the vision model before planning it', async () => {

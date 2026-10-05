@@ -1,6 +1,6 @@
 # Warqa (ورقة)
 
-**Pour les enseignants et les parents :** pas besoin de programmer. Commencez par le [guide de démarrage](start-here.md), ou essayez [l'application dans le navigateur](https://redouane-e.github.io/warqa/) sans rien installer.
+**Pour les enseignants, les élèves et toute personne qui apprend seule :** pas besoin de programmer. Commencez par le [guide de démarrage](start-here.md), ou essayez [l'application dans le navigateur](https://redouane-e.github.io/warqa/) sans rien installer.
 
 **Transformez un PDF en livre interactif animé et narré — en arabe, en français et en anglais, avec le modèle d'IA de votre choix.**
 

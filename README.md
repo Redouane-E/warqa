@@ -4,6 +4,8 @@
 
 **Turn a PDF into an animated, narrated, interactive book — in Arabic, Darija, French and English, with any AI model.**
 
+For teachers, students, and anyone learning on their own.
+
 *ورقة* is Arabic for “a sheet of paper”.
 
 [**Start here**](docs/en/start-here.md) · [ابدأ من هنا](docs/ar/start-here.md) · [Commencer ici](docs/fr/start-here.md) · [Try it in your browser](https://redouane-e.github.io/warqa/) · [Example lesson](https://redouane-e.github.io/warqa/demo/)
@@ -19,7 +21,7 @@ result is a small website that works offline: no server, no account.
 PDF → read (Arabic repairs, OCR) → plan → storyboard → write beats → translate → narrate → QA → book
 ```
 
-## For teachers and parents
+## For teachers, students, and anyone learning on their own
 
 You don't need to know how to program:
 
@@ -29,11 +31,18 @@ You don't need to know how to program:
 2. **On your computer, every feature:** download Warqa and double-click the launcher for
    [Windows, Mac or Linux](launchers/README.md).
 
+**Learning on your own?** Drop a PDF you want to understand, pick your language and your level, and click
+**Teach me**: Warqa plans the chapters and makes chapter 1 in a few minutes, with no plan to approve. The next
+chapter is made only when you ask for it, so you never pay for chapters you don't read.
+→ [learning on your own](docs/en/start-here.md#learning-on-your-own)
+
 No PDF at hand? Use one of the [sample PDFs](examples/pdfs/README.md): an Arabic maths chapter, a French
 science chapter, or an Arabic picture book.
 
 The [start-here guide](docs/en/start-here.md) walks you through your first book, in
 [Arabic](docs/ar/start-here.md), [French](docs/fr/start-here.md) and English.
+
+Lessons made from a PDF are for your own use unless you have the right to share them.
 
 ## What it does
 

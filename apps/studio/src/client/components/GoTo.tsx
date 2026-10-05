@@ -183,6 +183,7 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
           run: to(`/project/${encodeURIComponent(b.id)}`),
         });
     out.push({ id: 'g-books', group: 'books', label: t('nav.books'), icon: 'book', run: to('/') });
+    out.push({ id: 'g-learn', group: 'books', label: t('learn.home.title'), icon: 'book', run: to('/learn') });
     out.push({ id: 'g-ai', group: 'settings', label: t('nav.ai'), icon: 'key', run: to('/ai') });
     return out;
   }, [book, place.lesson, books, cost, lang, t, num, jobs, toast, onClose, status]);

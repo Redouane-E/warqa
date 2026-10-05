@@ -83,6 +83,23 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
     Your data"), with warnings in its menu; "Your data" opens as a side sheet (a bottom sheet on phones).
   - **Lesson editor:** the preview can fill the whole window (Esc or Close returns to the same step), and
     a link with `?beat=3` opens the third beat.
+- **Learning on your own, in the studio and the web app (redesign 4a2).**
+  - **First visit:** a welcome page (what Warqa does, drop a PDF, see a finished book), then the start guide,
+    which first asks **How will you use Warqa?** Teachers go on as before (AI model, PDF, languages, spending
+    limit). The desktop version now has the guide too.
+  - **I'm learning for myself:** drop a PDF, pick the language Warqa teaches you in (it says which language the
+    PDF is in) and your level (Beginner, I know some, Advanced), connect an AI service if none is, then see the
+    time and cost before **Teach me**. Warqa reads, plans and makes chapter 1 in one go, showing the chapters
+    it finds and the steps as they are written; **Stop** keeps what is done. Chapter 1 then opens by itself.
+  - **The end of a chapter** asks **How was this chapter?** (too easy or too hard moves the level of the next
+    chapters), offers **Review what you missed**, and **Make chapter N · about $x**, made only when you ask.
+  - **What I'm learning** lists your courses with Continue, the next chapter and its cost, and **Open as a
+    teacher** to edit a course like any book.
+  - **Your books:** search and sort (last changed, title, spent), a new-book tile, and New book in a side
+    sheet.
+  - The README and the start-here guides say who Warqa is for (teachers, students, and anyone learning on
+    their own), explain learning on your own, and note that lessons made from a PDF are for your own use unless
+    you have the right to share them.
 - Cost estimates no longer ask for a translator model when a book has a single language.
 
 ### Fixed

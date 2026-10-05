@@ -1,6 +1,6 @@
 # Commencer ici
 
-**Pour les enseignants et les parents.** Aucune connaissance en programmation n’est nécessaire. [العربية](../ar/start-here.md) · [English](../en/start-here.md)
+**Pour les enseignants, les élèves et toute personne qui apprend seule.** Aucune connaissance en programmation n’est nécessaire. [العربية](../ar/start-here.md) · [English](../en/start-here.md)
 
 ## Ce que fait Warqa
 
@@ -80,6 +80,42 @@ Pour ne rien payer du tout, et que rien ne quitte votre ordinateur, Warqa peut a
 qui tournent sur votre machine avec Ollama (il faut un ordinateur récent et puissant). Voir
 [models.md](../en/models.md) (en anglais).
 
+## Apprendre par soi-même
+
+Warqa peut aussi vous enseigner. Déposez un PDF que vous voulez comprendre, choisissez votre langue et votre
+niveau : le chapitre 1 est prêt en quelques minutes. Il n’y a pas de plan à valider.
+
+1. À la première ouverture, Warqa demande **Comment allez-vous utiliser Warqa ?** Choisissez **J’apprends
+   pour moi**. (Les enseignants choisissent **J’enseigne** et suivent
+   [Votre premier livre, pas à pas](#votre-premier-livre-pas-à-pas).) Plus tard, commencez un nouveau cours
+   avec **Apprendre autre chose** dans **Ce que j’apprends**.
+2. **Déposez le PDF** que vous voulez comprendre. Les leçons faites à partir de ce PDF sont pour votre usage
+   personnel, sauf si vous avez le droit de les partager.
+3. **Choisissez la langue dans laquelle Warqa vous enseigne :** **العربية**, **الدارجة**, **Français** ou
+   **English**. Warqa vous dit dans quelle langue est le PDF, et garde ses termes clés.
+4. **Choisissez votre niveau :** **Débutant**, **J’en connais un peu** ou **Avancé**.
+5. Si aucun service d’IA n’est encore connecté, Warqa vous demande d’en connecter un (voir
+   [Obtenir une clé d’IA](#obtenir-une-clé-dia)).
+6. Avant de dépenser quoi que ce soit, Warqa affiche le temps et le coût, par exemple « Environ 3 minutes ·
+   environ 0,03 $ · votre limite 1,00 $ ». Cliquez sur **Apprends-moi** : Warqa lit le PDF, prévoit les
+   chapitres et crée le chapitre 1 d’un seul coup, puis l’ouvre. **Arrêter** garde ce qui est terminé. Dans
+   la version navigateur, gardez l’onglet ouvert pendant que Warqa travaille.
+7. À la fin d’un chapitre :
+   - **Comment avez-vous trouvé ce chapitre ?** **Trop facile**, **Au bon niveau** ou **Trop difficile** change le
+     niveau des chapitres suivants ;
+   - **Réviser ce que vous avez manqué** vous ramène aux questions que vous avez manquées ;
+   - **Préparer le chapitre 2 · environ 0,04 $** crée le chapitre suivant, seulement quand vous le demandez.
+     Vous ne payez jamais pour des chapitres que vous ne lisez pas.
+
+Vos cours sont listés dans **Ce que j’apprends**. Un cours est un livre ordinaire : **Ouvrir comme
+enseignant** montre toutes les étapes si vous voulez modifier quelque chose. Si vous préférez vérifier le
+plan vous-même, cliquez sur **Je préfère revoir le plan d’abord** au lieu d’**Apprends-moi** : vous suivez
+alors le parcours de l’enseignant.
+
+Un nouveau cours a un plafond de dépense de 1 $. Modifiez-le dans les réglages du livre : **Réglages → Budget
+et outils → Plafond de dépense (USD)**. En ligne de commande : `warqa learn my.pdf --lang ar --level beginner`
+(niveaux : `beginner`, `some`, `advanced`).
+
 ## Votre premier livre, pas à pas
 
 Commencez petit : un chapitre de 10 à 20 pages.
@@ -133,3 +169,6 @@ Utilisez des PDF que vous avez le droit d’utiliser. Votre PDF reste sur votre 
 navigateur) ; des extraits sont envoyés au service d’IA que vous avez choisi, pour le lire et écrire les
 leçons. Ne saisissez jamais d’informations personnelles sur vos élèves. Les livres que vous créez vous
 appartiennent.
+
+Les leçons faites à partir d’un PDF sont pour votre usage personnel, sauf si vous avez le droit de les
+partager.

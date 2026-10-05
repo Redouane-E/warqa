@@ -2,9 +2,11 @@ import { type DragEvent, type FormEvent, useEffect, useMemo, useRef, useState } 
 import type { StepId } from '../../shared/types';
 import { useStatus } from '../App';
 import { api, errorText, type ProjectListItem } from '../api';
+import { SideSheet } from '../components/SideSheet';
 import { Button, Field, Icon, LangTag, Loading, Notice } from '../components/ui';
 import { useExtras } from '../extras';
 import { BOOK_LANGS, useI18n } from '../i18n';
+import { onboarded } from '../prefs';
 import { Link, navigate } from '../router';
 
 const STEP_KEYS: Record<StepId, 'step.read' | 'step.plan' | 'step.make' | 'step.voice' | 'step.check' | 'step.share'> =
@@ -26,7 +28,7 @@ function nextOf(p: ProjectListItem): StepId | null {
 }
 
 function BookCard({ p }: { p: ProjectListItem }) {
-  const { t, lang, ago } = useI18n();
+  const { t, lang, ago, usd } = useI18n();
   const title = bookTitle(p.title, lang, p.defaultLang);
   const next = nextOf(p);
   const ticks = Math.max(p.chapters, p.built);
@@ -37,6 +39,7 @@ function BookCard({ p }: { p: ProjectListItem }) {
           {title}
         </span>
       </Link>
+      {p.learn && <span className="book-course">{t('home.course')}</span>}
       {p.error ? (
         <p className="field-error">{t('home.broken', { error: p.error })}</p>
       ) : (
@@ -64,7 +67,10 @@ function BookCard({ p }: { p: ProjectListItem }) {
           <p className="book-next">
             {next ? t('home.next', { step: t(STEP_KEYS[next]) }) : <span className="good">{t('home.ready')}</span>}
           </p>
-          <p className="book-updated muted">{t('common.updated', { when: ago(p.updated) })}</p>
+          <p className="book-updated muted">
+            {p.spent ? <span className="book-spent">{t('home.spent', { usd: usd(p.spent) })} · </span> : null}
+            {t('common.updated', { when: ago(p.updated) })}
+          </p>
         </>
       )}
     </li>
@@ -73,7 +79,7 @@ function BookCard({ p }: { p: ProjectListItem }) {
 
 const CONTENT_LANGS = BOOK_LANGS;
 
-function NewBook({ onCancel }: { onCancel?: () => void }) {
+function NewBook({ initial }: { initial?: File | null }) {
   const { t, langName, bytes, lang: ui } = useI18n();
   const [file, setFile] = useState<File | null>(null);
   const [fileError, setFileError] = useState('');
@@ -110,6 +116,11 @@ function NewBook({ onCancel }: { onCancel?: () => void }) {
           .trim(),
       );
   };
+  // a PDF dropped on the new-book tile arrives with the sheet
+  // biome-ignore lint/correctness/useExhaustiveDependencies: once per dropped file
+  useEffect(() => {
+    if (initial) pick(initial);
+  }, [initial]);
   const onDrop = (e: DragEvent) => {
     e.preventDefault();
     setDrag(false);
@@ -140,11 +151,7 @@ function NewBook({ onCancel }: { onCancel?: () => void }) {
   };
 
   return (
-    <form className="sheet new-book" onSubmit={submit} aria-labelledby="new-book-title">
-      <div className="sheet-head">
-        <h2 id="new-book-title">{t('new.title')}</h2>
-        {onCancel && <Button variant="quiet" icon="close" aria-label={t('common.close')} onClick={onCancel} />}
-      </div>
+    <form className="new-book" onSubmit={submit}>
       <label
         className={`drop ${drag ? 'is-over' : ''} ${file ? 'has-file' : ''}`}
         onDragOver={(e) => {
@@ -178,6 +185,7 @@ function NewBook({ onCancel }: { onCancel?: () => void }) {
       <p className="hint" id="pdf-hint">
         {file ? t('new.pdfHint') : t('new.noPdf')}
       </p>
+      <p className="hint copyright">{t('pdf.copyright')}</p>
       {fileError && <p className="field-error">{fileError}</p>}
 
       <Field label={t('new.bookTitle')}>
@@ -254,58 +262,116 @@ function NewBook({ onCancel }: { onCancel?: () => void }) {
   );
 }
 
+type Sort = 'recent' | 'title' | 'spent';
+const fold = (s: string) => s.normalize('NFKD').replace(/[̀-ًͯ-ٰٟ]/g, '').toLowerCase();
+
 export function HomePage() {
-  const { t } = useI18n();
+  const { t, lang, num } = useI18n();
   const { status } = useStatus();
   const { homeActions } = useExtras();
   const inBrowser = status?.capabilities?.platform === 'browser';
   const [data, setData] = useState<{ projects: ProjectListItem[]; root: string } | null>(null);
   const [error, setError] = useState('');
   const [creating, setCreating] = useState(false);
+  const [dropped, setDropped] = useState<File | null>(null);
+  const [q, setQ] = useState('');
+  const [sort, setSort] = useState<Sort>('recent');
   const tRef = useRef(t);
   tRef.current = t;
 
   useEffect(() => {
     api
       .projects()
-      .then(setData)
+      .then((d) => {
+        // a first visit with no books starts with the guide
+        if (!d.projects.length && !onboarded()) navigate('/welcome', { replace: true });
+        else setData(d);
+      })
       .catch((e) => setError(errorText(e, tRef.current)));
   }, []);
 
-  const empty = data && !data.projects.length;
-  const showForm = creating || !!empty;
-  const sorted = useMemo(() => data?.projects ?? [], [data]);
+  const all = data?.projects ?? [];
+  const courses = all.filter((p) => p.learn && !p.error).length;
+  const books = useMemo(() => {
+    const f = fold(q.trim());
+    const title = (p: ProjectListItem) => bookTitle(p.title, lang, p.defaultLang);
+    const list = (data?.projects ?? []).filter((p) => !f || fold(title(p)).includes(f));
+    return [...list].sort((a, b) =>
+      sort === 'title'
+        ? title(a).localeCompare(title(b), lang)
+        : sort === 'spent'
+          ? (b.spent ?? 0) - (a.spent ?? 0)
+          : b.updated - a.updated,
+    );
+  }, [data, q, sort, lang]);
+  const empty = data && !all.length;
+  const open = (f: File | null) => {
+    setDropped(f);
+    setCreating(true);
+  };
 
   return (
     <div className="page page-home">
       <header className="page-head">
         <div>
-          <h1 className="display">{t('home.title')}</h1>
+          <h1 className="display">
+            {t('home.title')}{' '}
+            {data && !empty && <span className="home-count">{t('home.count', { n: all.length })}</span>}
+          </h1>
           <p className="lede">{t('home.lede')}</p>
         </div>
         <div className="page-head-actions">
           {homeActions}
-          {!showForm && (
-            <Button variant="primary" icon="plus" onClick={() => setCreating(true)}>
-              {t('home.new')}
-            </Button>
-          )}
+          <Button variant="primary" icon="plus" onClick={() => open(null)}>
+            {t('home.new')}
+          </Button>
         </div>
       </header>
       {error && <Notice tone="error">{error}</Notice>}
-      <div className={`home-grid ${showForm ? 'with-form' : ''}`}>
+      {!data && !error && <Loading />}
+      {!!courses && (
+        <Link className="home-learning" to="/learn">
+          <Icon name="book" />
+          <span>{t('home.learning')}</span>
+          <span className="muted">{num(courses)}</span>
+        </Link>
+      )}
+      {data && (
         <section aria-label={t('home.list')}>
-          {!data && !error && <Loading />}
-          {empty && <p className="empty">{t('home.empty')}</p>}
-          {!!sorted.length && (
-            <ul className="books">
-              {sorted.map((p) => (
-                <BookCard key={p.id} p={p} />
-              ))}
-            </ul>
+          {all.length > 3 && (
+            <div className="home-tools">
+              <input
+                type="search"
+                className="home-search"
+                value={q}
+                placeholder={t('home.search')}
+                aria-label={t('home.search')}
+                onChange={(e) => setQ(e.target.value)}
+              />
+              <label className="home-sort">
+                <span>{t('home.sort')}</span>
+                <select value={sort} onChange={(e) => setSort(e.target.value as Sort)}>
+                  <option value="recent">{t('home.sortRecent')}</option>
+                  <option value="title">{t('home.sortTitle')}</option>
+                  <option value="spent">{t('home.sortSpent')}</option>
+                </select>
+              </label>
+            </div>
           )}
-          {data && inBrowser && <p className="root-note muted">{t('cap.books')}</p>}
-          {data && !inBrowser && (
+          {empty && <p className="empty">{t('home.empty')}</p>}
+          <ul className="books">
+            {books.map((p) => (
+              <BookCard key={p.id} p={p} />
+            ))}
+            {!q.trim() && (
+              <li className="book-new">
+                <NewTile onFile={open} />
+              </li>
+            )}
+          </ul>
+          {!!q.trim() && !books.length && <p className="empty">{t('home.noMatch')}</p>}
+          {inBrowser && <p className="root-note muted">{t('cap.books')}</p>}
+          {!inBrowser && (
             <p className="root-note muted">
               {t('home.root', { path: '\u0000' }).split('\u0000')[0]}
               <code dir="ltr">{data.root}</code>
@@ -313,8 +379,39 @@ export function HomePage() {
             </p>
           )}
         </section>
-        {showForm && <NewBook {...(empty ? {} : { onCancel: () => setCreating(false) })} />}
-      </div>
+      )}
+      <SideSheet open={creating} onClose={() => setCreating(false)} title={t('new.title')}>
+        <NewBook initial={dropped} />
+      </SideSheet>
     </div>
+  );
+}
+
+/** The last tile of the grid: drop a PDF on it, or click it, to start a new book in the side sheet. */
+function NewTile({ onFile }: { onFile: (f: File | null) => void }) {
+  const { t } = useI18n();
+  const [over, setOver] = useState(false);
+  return (
+    <button
+      type="button"
+      className={`new-tile${over ? ' is-over' : ''}`}
+      onClick={() => onFile(null)}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        onFile(e.dataTransfer.files[0] ?? null);
+      }}
+    >
+      <span className="new-tile-mark" aria-hidden="true">
+        <Icon name="plus" size={28} />
+      </span>
+      <span className="new-tile-title">{t('home.new')}</span>
+      <span className="new-tile-hint">{t('home.newTile')}</span>
+    </button>
   );
 }
