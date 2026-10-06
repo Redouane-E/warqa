@@ -212,6 +212,12 @@ export function createApp(opts: AppOptions) {
     if (err instanceof ApiError) return c.json({ error: err.message, ...err.extra }, err.status);
     if (err instanceof z.ZodError)
       return c.json({ error: err.issues.map((i) => `${i.path.join('.') || '(root)'}: ${i.message}`).join('; ') }, 400);
+    // a full disk, or a browser's storage used up: said in words by the page
+    const code = (err as { code?: string }).code;
+    const name = (err as Error).name;
+    if (code === 'ENOSPC') return c.json({ error: (err as Error).message, code: 'disk-full' }, 507);
+    if (name === 'QuotaExceededError' || code === 'QUOTA_EXCEEDED')
+      return c.json({ error: (err as Error).message, code: 'browser-full' }, 507);
     console.error(err);
     return c.json({ error: (err as Error).message || 'server error' }, 500);
   });
@@ -731,6 +737,12 @@ export function createApp(opts: AppOptions) {
   app.post('/api/jobs/:id/cancel', (c) => {
     const j = jobs.cancel(c.req.param('id'));
     if (!j) throw new ApiError(404, 'no such job');
+    return c.json({ job: j });
+  });
+  /** "Try now": a job waiting for a service that asked to slow down tries again at once. */
+  app.post('/api/jobs/:id/retry-now', (c) => {
+    const j = jobs.retryNow(c.req.param('id'));
+    if (!j) throw new ApiError(409, 'this job is not waiting');
     return c.json({ job: j });
   });
 

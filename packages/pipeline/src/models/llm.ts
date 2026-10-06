@@ -9,6 +9,7 @@ import { generateText, type LanguageModel, type ModelMessage, NoObjectGeneratedE
 import { jsonrepair } from 'jsonrepair';
 import * as z from 'zod';
 import { costOf, modelInfo } from './catalog.js';
+import { classifyModelError, ProviderError, serviceOf } from './errors.js';
 import { type Keys, languageModel, type Role } from './providers.js';
 
 export interface ImagePart {
@@ -58,6 +59,9 @@ export interface LedgerEntry {
   name?: string;
 }
 
+/** What a fake model answers: the text, or the text and why it ended ("length": cut off). It may also throw. */
+export type FakeReply = string | { text: string; finishReason?: 'length' | 'stop' };
+
 /** Test hook: a fake model that answers prompts without any provider. */
 export type FakeModel = (call: {
   system: string;
@@ -66,9 +70,27 @@ export type FakeModel = (call: {
   name: string;
   model: string;
   attempt: number;
-}) => string | Promise<string>;
+}) => FakeReply | Promise<FakeReply>;
 
-export class BudgetError extends Error {}
+/** The book's spending limit is reached (the numbers say by how much). */
+export class BudgetError extends Error {
+  constructor(
+    readonly spent: number,
+    readonly limit: number,
+  ) {
+    super(`budget reached: $${spent.toFixed(2)} of $${limit.toFixed(2)} (raise pipeline.budget.usd to continue)`);
+    this.name = 'BudgetError';
+  }
+}
+
+/** Waits when a service asks to slow down (429): up to four, three minutes in all, per call. */
+const RATE_WAITS = 4;
+const RATE_TOTAL_MS = 180_000;
+/** Without a hint from the service. */
+const RATE_BACKOFF = [5_000, 15_000, 30_000, 60_000];
+/** A network error or a 5xx: two quiet retries. */
+const NETWORK_BACKOFF = [2_000, 4_000];
+const sleep = (ms: number) => new Promise<void>((ok) => setTimeout(ok, ms));
 
 export class GenerationError extends Error {
   constructor(
@@ -89,11 +111,18 @@ export interface LlmOptions {
   budgetUsd?: number;
   fake?: FakeModel;
   onEvent?: (e: {
-    type: 'call' | 'repair' | 'cached' | 'fallback';
+    type: 'call' | 'repair' | 'cached' | 'fallback' | 'wait';
     stage: string;
     model: string;
     detail?: string;
+    /** wait: how long (ms). */
+    ms?: number;
   }) => void;
+  /**
+   * How a wait is spent (a job makes it stoppable and ends it early on "Try now"; tests make it instant). Default:
+   * a timer.
+   */
+  wait?: (ms: number, info: { provider: string; reason: 'rate' | 'network' }) => Promise<void>;
 }
 
 const sha1 = (s: string | Uint8Array) => createHash('sha1').update(s).digest('hex');
@@ -131,9 +160,49 @@ export class Llm {
   /** Stop before a paid call once the book's spending limit is reached (cached answers stay free). */
   private checkBudget(): void {
     if (this.opts.budgetUsd !== undefined && this.spent >= this.opts.budgetUsd)
-      throw new BudgetError(
-        `budget reached: $${this.spent.toFixed(2)} of $${this.opts.budgetUsd.toFixed(2)} (raise pipeline.budget.usd to continue)`,
-      );
+      throw new BudgetError(this.spent, this.opts.budgetUsd);
+  }
+
+  /**
+   * One model call with Warqa's own retries (the SDK's are off): a "slow down" waits as long as the service asks
+   * (or 5 s, 15 s, 30 s, 60 s), at most four times or three minutes, said through `onEvent('wait')`; a network
+   * error or a 5xx is tried again twice, quietly. A refused key, no credit, a daily quota or no network stop at
+   * once, as a `ProviderError`.
+   */
+  private async attempt<T>(model: string, stage: string, fn: () => Promise<T>): Promise<T> {
+    const wait = this.opts.wait ?? ((ms: number) => sleep(ms));
+    let waits = 0;
+    let waited = 0;
+    let quiet = 0;
+    for (;;) {
+      try {
+        return await fn();
+      } catch (e) {
+        if (NoObjectGeneratedError.isInstance(e)) throw e;
+        const f = classifyModelError(e, model);
+        if (!f) throw e;
+        if (f.kind === 'rate') {
+          const ms = f.info.retryAfterMs ?? RATE_BACKOFF[waits] ?? 60_000;
+          if (waits >= RATE_WAITS || waited + ms > RATE_TOTAL_MS) throw f;
+          waits++;
+          waited += ms;
+          this.opts.onEvent?.({ type: 'wait', stage, model, ms, detail: f.info.provider });
+          await wait(ms, { provider: f.info.provider, reason: 'rate' });
+          continue;
+        }
+        if (f.kind === 'network' && quiet < NETWORK_BACKOFF.length) {
+          await wait(NETWORK_BACKOFF[quiet]!, { provider: f.info.provider, reason: 'network' });
+          quiet++;
+          continue;
+        }
+        throw f;
+      }
+    }
+  }
+
+  /** The reply was cut off (the model ran out of room): repairing would resend the same request and be cut again. */
+  private cut(model: string, name: string): ProviderError {
+    return new ProviderError('cut', `${name}: the model's answer was cut off`, { provider: serviceOf(model), model });
   }
 
   /** Total spent so far (from the ledger). */
@@ -199,27 +268,36 @@ export class Llm {
       let outTok = 0;
       try {
         if (this.opts.fake) {
-          raw = await this.opts.fake({
-            system: call.system,
-            prompt: call.prompt,
-            messages,
-            name: call.name,
-            model: call.model,
-            attempt,
-          });
+          const fake = this.opts.fake;
+          const out = await this.attempt(call.model, call.stage, async () =>
+            fake({
+              system: call.system,
+              prompt: call.prompt,
+              messages,
+              name: call.name,
+              model: call.model,
+              attempt,
+            }),
+          );
+          raw = typeof out === 'string' ? out : out.text;
+          if (typeof out !== 'string' && out.finishReason === 'length') throw this.cut(call.model, call.name);
           value = extractJson(raw);
         } else if (mode === 'native') {
           try {
-            const r = await generateText({
-              model: this.model(call.model),
-              system: call.system,
-              messages,
-              output: Output.object({ schema: call.schema as z.ZodType }),
-              ...(call.temperature !== undefined ? { temperature: call.temperature } : {}),
-              maxRetries: 2,
-            });
+            const r = await this.attempt(call.model, call.stage, () =>
+              generateText({
+                model: this.model(call.model),
+                system: call.system,
+                messages,
+                output: Output.object({ schema: call.schema as z.ZodType }),
+                ...(call.temperature !== undefined ? { temperature: call.temperature } : {}),
+                maxRetries: 0,
+              }),
+            );
             inTok = r.usage.inputTokens ?? 0;
             outTok = r.usage.outputTokens ?? 0;
+            // an answer that ended at the length limit but parsed whole is kept; one that did not parse comes as
+            // a NoObjectGeneratedError, below
             value = r.output;
             raw = JSON.stringify(value);
           } catch (e) {
@@ -227,8 +305,10 @@ export class Llm {
               raw = e.text ?? '';
               inTok = e.usage?.inputTokens ?? 0;
               outTok = e.usage?.outputTokens ?? 0;
+              if (e.finishReason === 'length') throw this.cut(call.model, call.name);
               value = extractJson(raw);
-            } else if (
+            } else if (e instanceof ProviderError) throw e;
+            else if (
               /schema|response_format|json_schema|structured|unsupported|not support/i.test(
                 String((e as Error).message),
               )
@@ -249,20 +329,23 @@ export class Llm {
           const msgs = messages.map((m, i) =>
             i === 0 ? ({ role: 'user', content: userContent(call.prompt + jsonInstruction) } as ModelMessage) : m,
           );
-          const r = await generateText({
-            model: this.model(call.model),
-            system: call.system,
-            messages: msgs,
-            maxRetries: 2,
-            ...(call.temperature !== undefined ? { temperature: call.temperature } : {}),
-          });
+          const r = await this.attempt(call.model, call.stage, () =>
+            generateText({
+              model: this.model(call.model),
+              system: call.system,
+              messages: msgs,
+              maxRetries: 0,
+              ...(call.temperature !== undefined ? { temperature: call.temperature } : {}),
+            }),
+          );
           inTok = r.usage.inputTokens ?? 0;
           outTok = r.usage.outputTokens ?? 0;
+          if (r.finishReason === 'length') throw this.cut(call.model, call.name);
           raw = r.text;
           value = extractJson(raw);
         }
       } catch (e) {
-        if (e instanceof SyntaxError || /JSON/i.test(String((e as Error).message))) {
+        if (!(e instanceof ProviderError) && (e instanceof SyntaxError || /JSON/i.test(String((e as Error).message)))) {
           problems = [`the reply was not valid JSON (${(e as Error).message.slice(0, 120)})`];
         } else {
           this.log({
@@ -356,31 +439,52 @@ export class Llm {
     let text: string;
     let inTok = 0;
     let outTok = 0;
-    if (this.opts.fake)
-      text = await this.opts.fake({
-        system: call.system,
-        prompt: call.prompt,
-        messages: [],
-        name: 'text',
-        model: call.model,
-        attempt: 0,
-      });
-    else {
+    if (this.opts.fake) {
+      const fake = this.opts.fake;
+      const out = await this.attempt(call.model, call.stage, async () =>
+        fake({
+          system: call.system,
+          prompt: call.prompt,
+          messages: [],
+          name: 'text',
+          model: call.model,
+          attempt: 0,
+        }),
+      );
+      text = typeof out === 'string' ? out : out.text;
+      if (typeof out !== 'string' && out.finishReason === 'length') throw this.cut(call.model, 'text');
+    } else {
       const content = call.images?.length
         ? [
             { type: 'text' as const, text: call.prompt },
             ...call.images.map((im) => ({ type: 'image' as const, image: im.data, mediaType: im.mediaType })),
           ]
         : call.prompt;
-      const r = await generateText({
-        model: this.model(call.model),
-        system: call.system,
-        messages: [{ role: 'user', content } as ModelMessage],
-        maxRetries: 2,
-      });
+      const r = await this.attempt(call.model, call.stage, () =>
+        generateText({
+          model: this.model(call.model),
+          system: call.system,
+          messages: [{ role: 'user', content } as ModelMessage],
+          maxRetries: 0,
+        }),
+      );
       text = r.text;
       inTok = r.usage.inputTokens ?? 0;
       outTok = r.usage.outputTokens ?? 0;
+      if (r.finishReason === 'length') {
+        this.log({
+          ts: new Date().toISOString(),
+          stage: call.stage,
+          role: call.role,
+          model: call.model,
+          input: inTok,
+          output: outTok,
+          usd: costOf(call.model, inTok, outTok),
+          ms: Date.now() - t0,
+          ok: false,
+        });
+        throw this.cut(call.model, 'text');
+      }
     }
     this.log({
       ts: new Date().toISOString(),

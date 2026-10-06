@@ -38,10 +38,34 @@ export const JOB_TYPES: JobType[] = [
 
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled';
 
+/**
+ * Why a job stopped, for a person (redesign 4h): the limit reached (with the numbers), a refused key, no credit,
+ * a service still busy, a free tier used up for the day, an answer cut off, no network; with where it stopped.
+ */
+export type JobFailure = (
+  | { kind: 'budget'; spent: number; limit: number }
+  | { kind: 'key' | 'credits'; provider: string; status?: number }
+  | { kind: 'rate'; provider: string }
+  | { kind: 'quota'; provider: string; model: string; resetAt?: number }
+  | { kind: 'cut'; model: string }
+  | { kind: 'offline' | 'network' }
+  | { kind: 'other' }
+) & {
+  /** The chapter it was working on, and the beat (1-based) it was writing. */
+  chapter?: string;
+  beat?: number;
+};
+
 export interface JobEvent {
   seq: number;
   ts: number;
-  kind: 'status' | 'progress' | 'log' | 'result' | 'error';
+  kind: 'status' | 'progress' | 'log' | 'result' | 'error' | 'wait';
+  /** wait: until when the job waits for a service that asked to slow down (0: the wait is over). */
+  until?: number;
+  /** wait: the service. */
+  provider?: string;
+  /** error: why, for a person. */
+  failure?: JobFailure;
   /** progress: pipeline stage (plan, storyboard, write, translate:fr, narrate:ar, export, …). */
   stage?: string;
   /** progress: start | done | skip | beat | error. */
@@ -80,6 +104,10 @@ export interface JobInfo {
   started?: number;
   finished?: number;
   error?: string;
+  /** Why it stopped (an error), for a person. */
+  failure?: JobFailure;
+  /** Waiting for a service until then (epoch ms). */
+  waitUntil?: number;
   result?: unknown;
   /** Last progress line, for lists. */
   last?: string;
@@ -332,7 +360,10 @@ export interface ProjectDetail extends ProjectSummary {
     byChapter?: Record<string, number>;
   };
   /** Chapters whose writing stopped partway: the beats written so far (kept) of how many. */
-  drafts?: Record<string, { written: number; total: number }>;
+  drafts?: Record<
+    string,
+    { written: number; total: number /** why it stopped, when it stopped on an error */; stop?: JobFailure }
+  >;
   /** Chapters written again whose translations into these languages are still the old beats' (a Stop came first). */
   stale?: Record<string, string[]>;
   document: DocSummary | null;

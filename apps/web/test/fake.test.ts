@@ -52,3 +52,25 @@ describe('fake model', () => {
     });
   }
 });
+
+describe('scripted failures (test mode)', () => {
+  it('fails each matching call once, as a service would answer', async () => {
+    const { withFailures } = await import('../src/worker/fake');
+    const { classifyModelError, BudgetError } = await import('@warqa/pipeline');
+    const ok = () => '{"ok":true}';
+    const fake = withFailures(ok, 'rate:storyboard,cut:beat:*:q1,budget:beat:*:rule');
+    const call = (name: string) => ({ system: '', prompt: '', messages: [], name, model: 'fake:scripted', attempt: 0 });
+    let thrown: unknown;
+    try {
+      await fake(call('storyboard:ch01'));
+    } catch (e) {
+      thrown = e;
+    }
+    expect(classifyModelError(thrown, 'fake:scripted')).toMatchObject({ kind: 'rate', info: { retryAfterMs: 3000 } });
+    // once only: the same call goes through the next time
+    expect(await fake(call('storyboard:ch01'))).toBe('{"ok":true}');
+    expect(await fake(call('beat:ch02:q1'))).toEqual({ text: '{"title": "Cut', finishReason: 'length' });
+    expect(() => fake(call('beat:ch02:rule'))).toThrow(BudgetError);
+    expect(await fake(call('beat:ch02:intro'))).toBe('{"ok":true}');
+  });
+});

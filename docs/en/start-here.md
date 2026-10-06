@@ -146,9 +146,10 @@ Start small: one chapter of 10 to 20 pages.
 | The browser does not open | Wait for the first start to finish, then open <http://127.0.0.1:5170/> yourself. |
 | "Port 5170 is in use" | Warqa is already running: open <http://127.0.0.1:5170/>. |
 | "No model yet: add a key" or "needs …_API_KEY" | Add a key in **AI and voices → Keys**, and choose a **Model set** that uses that key. |
-| "budget reached" | You hit your spending limit. Raise it in **Book settings** only if you agree. |
-| An error with 401 or 403 | The key is wrong or was deleted. Create a new one and paste it again. |
-| An error with 429, "quota" or "rate limit" | Too many requests (free tiers have limits). Wait a little and click again: finished work is kept. |
+| "Your limit of … is reached" | You hit your spending limit. **Raise the limit** (in the message, or in **Book settings**) only if you agree; the chapter goes on from where it stopped. |
+| "… refused this key (HTTP 401)" | The key was deleted or copied in part. **Paste a new key** opens AI and voices at that service. Nothing was charged. |
+| "… asked Warqa to slow down" | The service wants a short pause: Warqa waits as long as it asks, then goes on (or click **Try now**). Finished work is kept. |
+| "… free tier is used up for today" | Free tiers have a daily limit. **Use another key**, or go on tomorrow: finished work is kept. |
 | Arabic text looks broken, or the pages are photos | Click **Read again** with **Scanned or broken pages** ticked, and use a model set that reads images (Gemini). |
 | No sound | The free voices need internet. With the launcher's Node.js mode, install [uv](https://docs.astral.sh/uv/getting-started/installation/), or use Docker. |
 | A lesson is not good | **Regenerate this beat** with an instruction, or try a better model set for that chapter. |

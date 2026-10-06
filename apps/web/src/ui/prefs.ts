@@ -2,6 +2,7 @@
 // guide was done is the studio's (client/prefs.ts).
 
 const FAKE = 'warqa-web:fake';
+const FAIL = 'warqa-web:fake-fail';
 
 const read = (store: () => Storage, key: string): string | null => {
   try {
@@ -18,6 +19,13 @@ const write = (store: () => Storage, key: string, value: string | null) => {
     /* storage unavailable */
   }
 };
+
+/** Test mode only: failures the scripted model plays (?warqa-fake-fail=…; kept for the tab). */
+export function testFailures(): string | undefined {
+  const q = new URLSearchParams(location.search).get('warqa-fake-fail');
+  if (q !== null) write(() => sessionStorage, FAIL, q || null);
+  return read(() => sessionStorage, FAIL) ?? undefined;
+}
 
 /**
  * Test mode (scripted model, no network): ?warqa-fake=1 in the address turns it on for this tab (it survives

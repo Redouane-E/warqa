@@ -36,6 +36,12 @@ export interface GuideProvider {
   check?: (key: string, secret?: string) => { url: string; headers: Record<string, string> };
   /** A local server that may ask for a key of its own (in this variable). */
   secretEnv?: string;
+  /** The company, as a failure names it ("Google refused this key"). */
+  maker?: string;
+  /** Where its keys are made ("Open Google AI Studio"). */
+  keySite?: string;
+  /** Its models' family, as a daily free tier names it ("Gemini's free tier is used up"). */
+  family?: string;
 }
 
 const bearer = (key: string) => ({ authorization: `Bearer ${key}` });
@@ -43,6 +49,9 @@ const bearer = (key: string) => ({ authorization: `Bearer ${key}` });
 export const PROVIDERS: GuideProvider[] = [
   {
     id: 'google',
+    maker: 'Google',
+    keySite: 'Google AI Studio',
+    family: 'Gemini',
     name: 'Google Gemini',
     env: 'GEMINI_API_KEY',
     preset: 'google',
@@ -55,6 +64,9 @@ export const PROVIDERS: GuideProvider[] = [
   },
   {
     id: 'openrouter',
+    maker: 'OpenRouter',
+    keySite: 'OpenRouter',
+    family: 'OpenRouter',
     name: 'OpenRouter',
     env: 'OPENROUTER_API_KEY',
     preset: 'openrouter',
@@ -64,6 +76,9 @@ export const PROVIDERS: GuideProvider[] = [
   },
   {
     id: 'deepseek',
+    maker: 'DeepSeek',
+    keySite: 'DeepSeek Platform',
+    family: 'DeepSeek',
     name: 'DeepSeek',
     env: 'DEEPSEEK_API_KEY',
     preset: 'deepseek',
@@ -73,6 +88,9 @@ export const PROVIDERS: GuideProvider[] = [
   },
   {
     id: 'anthropic',
+    maker: 'Anthropic',
+    keySite: 'Anthropic Console',
+    family: 'Claude',
     name: 'Anthropic (Claude)',
     env: 'ANTHROPIC_API_KEY',
     preset: 'anthropic',
@@ -88,6 +106,9 @@ export const PROVIDERS: GuideProvider[] = [
   },
   {
     id: 'openai',
+    maker: 'OpenAI',
+    keySite: 'OpenAI Platform',
+    family: 'GPT',
     name: 'OpenAI',
     env: 'OPENAI_API_KEY',
     preset: 'openai',
@@ -96,6 +117,9 @@ export const PROVIDERS: GuideProvider[] = [
   },
   {
     id: 'mistral',
+    maker: 'Mistral',
+    keySite: 'Mistral Console',
+    family: 'Mistral',
     name: 'Mistral',
     env: 'MISTRAL_API_KEY',
     preset: 'mistral',
@@ -104,6 +128,9 @@ export const PROVIDERS: GuideProvider[] = [
   },
   {
     id: 'groq',
+    maker: 'Groq',
+    keySite: 'GroqCloud',
+    family: 'Groq',
     name: 'Groq',
     env: 'GROQ_API_KEY',
     preset: 'groq',
@@ -112,6 +139,9 @@ export const PROVIDERS: GuideProvider[] = [
   },
   {
     id: 'xai',
+    maker: 'xAI',
+    keySite: 'xAI Console',
+    family: 'Grok',
     name: 'xAI (Grok)',
     env: 'XAI_API_KEY',
     preset: 'xai',
@@ -120,6 +150,8 @@ export const PROVIDERS: GuideProvider[] = [
   },
   {
     id: 'ollama',
+    maker: 'Ollama',
+    family: 'Ollama',
     name: 'Ollama',
     env: 'OLLAMA_BASE_URL',
     preset: 'local',

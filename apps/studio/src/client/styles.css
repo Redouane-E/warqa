@@ -2839,6 +2839,7 @@ select {
   font-weight: 600;
 }
 .spend-chip {
+  white-space: nowrap;
   display: inline-flex;
   align-items: center;
   min-block-size: 32px;
@@ -8344,6 +8345,12 @@ select {
     padding-inline-start: 0;
   }
 }
+/* phones: the spend chip shows what was spent (its name still says the limit) */
+@media (max-width: 760px) {
+  .spend-limit {
+    display: none;
+  }
+}
 /* who does what on a phone: each role a block (no sideways scrolling) */
 @media (max-width: 640px) {
   .roles-box {
@@ -8402,4 +8409,189 @@ select {
     block-size: calc(100dvh - var(--top));
     max-block-size: none;
   }
+}
+
+/* ---------- states (redesign 4h) ---------- */
+
+.callout {
+  display: grid;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid transparent;
+  border-radius: var(--wq-radius-control);
+  font-size: 15px;
+  line-height: 1.5;
+}
+.callout-line {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+}
+.callout-line > svg {
+  flex: none;
+  margin-block-start: 2px;
+}
+.callout-text {
+  display: grid;
+  gap: 8px;
+  min-inline-size: 0;
+}
+.callout-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+}
+.callout-info {
+  border-color: color-mix(in srgb, var(--wq-ink) 25%, var(--wq-sheet));
+  background: var(--wq-ink-tint);
+}
+.callout-info > .callout-line > svg {
+  color: var(--wq-ink);
+}
+.callout-pen {
+  border-color: color-mix(in srgb, var(--wq-pen) 35%, transparent);
+  background: var(--wq-pen-tint);
+}
+.callout-pen > .callout-line > svg {
+  color: var(--wq-pen);
+}
+.callout-fluo {
+  border-color: #e8c200;
+  background: var(--wq-fluo-tint);
+}
+.callout-fluo-button {
+  border-color: #c9a400;
+  background: var(--wq-sheet);
+}
+.btn.callout-fluo-text {
+  color: var(--wq-fluo-text);
+}
+.callout-inverse {
+  background: var(--wq-text);
+  color: var(--wq-ground);
+}
+.callout-inverse > .callout-line > svg {
+  color: var(--wq-fluo);
+}
+.callout-button {
+  background: var(--wq-sheet);
+}
+.callout-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 44px;
+  font-weight: 500;
+}
+.rate-wait .callout-actions {
+  justify-content: space-between;
+  font-size: 14px;
+}
+/* the wait as a bar that shrinks to nothing, anchored at the reading start */
+.rate-bar {
+  position: relative;
+  display: block;
+  block-size: 6px;
+  border-radius: var(--wq-radius-pill);
+  background: var(--wq-seyes);
+  overflow: hidden;
+}
+.rate-bar > span {
+  position: absolute;
+  inset-block: 0;
+  inset-inline-start: 0;
+  border-radius: inherit;
+  background: var(--wq-ink);
+  transition: inline-size 1s linear;
+}
+.tray-body .callout {
+  margin-block: 4px;
+}
+.make-sheet > .callout {
+  margin: 4px 20px 12px;
+}
+
+/* a chapter stopped on an error: where (a segment per beat) and why */
+.make-meta > .make-cause {
+  display: grid;
+  flex-basis: 100%;
+  justify-items: start;
+  gap: 8px;
+  color: var(--wq-text);
+  font-size: 15px;
+}
+.make-cause .beats-made {
+  inline-size: min(320px, 100%);
+}
+.chip-pen {
+  justify-self: start;
+  white-space: nowrap;
+  display: inline-flex;
+  align-items: center;
+  min-block-size: 26px;
+  padding: 0 10px;
+  border-radius: var(--wq-radius-pill);
+  background: var(--wq-pen-tint);
+  color: var(--wq-pen);
+  font-size: 13px;
+  font-weight: 500;
+}
+.beats-made {
+  display: flex;
+  gap: 3px;
+  max-inline-size: 320px;
+}
+.beats-made > span {
+  flex: 1;
+  block-size: 6px;
+  border-radius: 3px;
+  background: var(--wq-seyes);
+}
+.beats-made > .is-done {
+  background: var(--wq-ink);
+}
+.beats-made > .is-failed {
+  background: var(--wq-margin);
+}
+.chip-key {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-block-size: 28px;
+  padding: 0 10px;
+  border-radius: var(--wq-radius-pill);
+  background: var(--wq-pen-tint);
+  color: var(--wq-pen);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+}
+.link-button {
+  min-block-size: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: none;
+  color: var(--wq-ink);
+  font: inherit;
+  font-size: 14px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+/* a button that waits for something (a key, the network): reachable, with its reason beside it */
+.btn.is-blocked {
+  background: var(--wq-ink-tint);
+  border-color: transparent;
+  color: var(--wq-text-2);
+  cursor: not-allowed;
+}
+.limit-dialog .field {
+  margin-block: 4px 0;
+}
+.limit-dialog .money-field input {
+  min-block-size: 44px;
+  border: 0;
+  border-radius: 0;
+  outline: none;
+  font-size: 16px;
 }

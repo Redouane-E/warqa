@@ -10,7 +10,7 @@ import { BASE, withBase } from '../../studio/src/client/base';
 import { applyDocument, getLang } from '../../studio/src/client/i18n';
 import { Bridge, installEventSource, installFetch, installLinkFallback, installServiceWorker } from './bridge/client';
 import { WEB_CATALOGS } from './ui/messages';
-import { testMode } from './ui/prefs';
+import { testFailures, testMode } from './ui/prefs';
 import { WebApp } from './ui/WebApp';
 
 // the player's stylesheet, for previews and the books opened here (the interface fonts come from @warqa/brand)
@@ -26,7 +26,9 @@ try {
   /* storage unavailable */
 }
 
-const bridge = new Bridge({ base: BASE, fake: testMode() });
+const fake = testMode();
+const fail = fake ? testFailures() : undefined;
+const bridge = new Bridge({ base: BASE, fake, ...(fail ? { fail } : {}) });
 installFetch(bridge);
 installEventSource(bridge);
 const serviceWorker = installServiceWorker(bridge, BASE);

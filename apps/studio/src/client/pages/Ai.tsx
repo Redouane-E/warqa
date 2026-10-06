@@ -316,9 +316,11 @@ export function AiPage() {
   useEffect(() => {
     if (!ready || !location.hash) return;
     const id = location.hash.slice(1);
-    const el = document.getElementById(id.startsWith('key-') ? 'keys' : id);
-    el?.scrollIntoView({ block: 'start' });
-    el?.querySelector<HTMLElement>('h2, legend')?.focus({ preventScroll: true });
+    // #key-<service> ("Paste a new key"): that service's row, open, its field focused by the row itself
+    const row = id.startsWith('key-') ? document.getElementById(id) : null;
+    const el = row ?? document.getElementById(id.startsWith('key-') ? 'keys' : id);
+    el?.scrollIntoView({ block: row ? 'center' : 'start' });
+    if (!row) el?.querySelector<HTMLElement>('h2, legend')?.focus({ preventScroll: true });
   }, [ready, hash]);
 
   const desktop = status?.capabilities?.platform !== 'browser';
@@ -490,7 +492,10 @@ function KeysCard({
   const [open, setOpen] = useState<string | null>(() =>
     location.hash.startsWith('#key-') ? location.hash.slice(5) : null,
   );
-  const [added, setAdded] = useState<string[]>([]);
+  // a service asked for by the address (#key-mistral) shows its row even without a key
+  const [added, setAdded] = useState<string[]>(() =>
+    location.hash.startsWith('#key-') ? [location.hash.slice(5)] : [],
+  );
   // a row shown once stays where it is (a key removed leaves its row, with "No key yet" and Undo)
   const [kept, setKept] = useState<string[]>([]);
   const isSet = (env: string) => keys.some((k) => k.name === env && k.set);

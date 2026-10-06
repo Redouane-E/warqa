@@ -407,7 +407,7 @@ export function projectDetail(id: string, p: P.Project, jobs: ProjectDetail['job
   for (const c of plan?.chapters ?? []) {
     if (!c.include) continue;
     const d = P.unfinishedDraft(p, c.id);
-    if (d) drafts[c.id] = d;
+    if (d) drafts[c.id] = d as NonNullable<ProjectDetail['drafts']>[string];
     const langs = P.staleTranslations(p, c.id);
     if (langs.length) stale[c.id] = langs;
   }

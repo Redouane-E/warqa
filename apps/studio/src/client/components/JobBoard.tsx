@@ -2,12 +2,13 @@
 // gets its own view: the chapter, its four stages, the beats as they are written and the money against the estimate.
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { JobEvent, JobInfo, JobStatus, JobType } from '../../shared/types';
-import { api, saveFile } from '../api';
+import { api, errorText, saveFile } from '../api';
 import { withBase } from '../base';
 import { type I18n, useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
 import { navigate } from '../router';
 import { type ToastOptions, useToast } from './overlays';
+import { FailureView, RateWait, useLimitDialog, WaitClock } from './states';
 import { Button, Icon } from './ui';
 
 const STAGES = [
@@ -67,7 +68,8 @@ export function useJobStream(jobId: string | null, onEnd?: (job: JobInfo, events
       setEvents(all.current);
       if (e.kind === 'status' && e.jobStatus) setInfo((cur) => (cur ? { ...cur, status: e.jobStatus! } : cur));
     };
-    for (const k of ['status', 'progress', 'log', 'result', 'error']) es.addEventListener(k, add as EventListener);
+    for (const k of ['status', 'progress', 'log', 'result', 'error', 'wait'])
+      es.addEventListener(k, add as EventListener);
     es.addEventListener('end', ((m: MessageEvent<string>) => {
       es.close();
       closed = true;
@@ -866,6 +868,10 @@ function Tray({
         ]
           .filter(Boolean)
           .join(' · ');
+  // a service asked to slow down: the job waits (its countdown replaces the progress in the pill)
+  const waitEvent = [...events].reverse().find((e) => e.kind === 'wait');
+  const waitUntil = live && waitEvent?.until && waitEvent.until > Date.now() ? waitEvent.until : undefined;
+  const [limitDialog, askLimit] = useLimitDialog();
   // a build stopped partway goes on from its last written beat (no force: the beats written are kept); a Stop
   // taken once every chapter was made leaves nothing to go on with
   const asked = info && Array.isArray(info.args.chapters) ? (info.args.chapters as string[]) : undefined;
@@ -898,7 +904,7 @@ function Tray({
               <Icon name="stop" size={10} />
             ) : null}
           </span>
-          <span className="tray-pill-text">{summary}</span>
+          <span className="tray-pill-text">{waitUntil ? <WaitClock until={waitUntil} /> : summary}</span>
           {/* on a phone the pill is a peek bar along the bottom, with the progress under its line */}
           {live && pct !== undefined && (
             <span className="tray-pill-bar" aria-hidden="true">
@@ -951,11 +957,15 @@ function Tray({
         <span className={`pill pill-${status}`}>{t(`job.status.${status}` as MsgKey)}</span>
         {spent ? <span className="tray-money">{usd(spent)}</span> : null}
         <span className="tray-tools">
-          {prog && status === 'cancelled' && restLeft && (
-            <Button variant="primary" icon="play" onClick={() => void makeRest()}>
-              {t('make.rest')}
-            </Button>
-          )}
+          {/* (not after a stop that would come back at once: the limit, a key, no credit, a day's quota) */}
+          {prog &&
+            (status === 'cancelled' ||
+              (status === 'error' && !['budget', 'key', 'credits', 'quota'].includes(info?.failure?.kind ?? ''))) &&
+            restLeft && (
+              <Button variant="primary" icon="play" onClick={() => void makeRest()}>
+                {t('make.rest')}
+              </Button>
+            )}
           {live && (
             <button
               type="button"
@@ -1002,18 +1012,44 @@ function Tray({
             </ol>
           )
         )}
-        {info?.error && (
-          <p className="tray-error" role="alert">
-            <bdi>{info.error}</bdi>
-          </p>
+        {waitUntil && waitEvent?.provider && (
+          <RateWait key={waitUntil} jobId={jobId} until={waitUntil} provider={waitEvent.provider} />
         )}
+        {info?.error && (
+          <FailureView
+            failure={info.failure}
+            error={info.error}
+            {...(cur?.n ? { chapter: cur.n } : {})}
+            task={jobLabel(info.type, i18n)}
+            onRaise={async () => {
+              if (info.failure?.kind !== 'budget') return;
+              // the book's limit now (raised a moment ago, maybe), not the one the failure noted
+              const book = await api.project(tracked.projectId).catch(() => null);
+              const usd = await askLimit({
+                limit: book?.config.budget.usd ?? info.failure.limit,
+                spent: Math.max(book?.ledger.total ?? 0, info.failure.spent),
+                reason: 'reached',
+              });
+              if (usd === null) return;
+              try {
+                await api.saveSettings(tracked.projectId, { budget: { usd } });
+                // go on: a build makes the rest, other work starts again as it was asked
+                if (prog) await makeRest();
+                else onStart((await api.startJob(tracked.projectId, info.type, info.args)).job);
+              } catch (e) {
+                toast({ text: errorText(e, i18n.t), tone: 'error' });
+              }
+            }}
+          />
+        )}
+        {limitDialog}
         {status === 'done' && result?.url && (
           <a className="btn btn-primary tray-link" href={result.url} target="_blank" rel="noreferrer">
             <Icon name="open" size={16} /> <span>{t('export.open')}</span>
           </a>
         )}
         {!!lines.length && (
-          <details className="tray-log" open={live}>
+          <details className="tray-log" open={live || status === 'error'}>
             <summary>{t('job.log')}</summary>
             <ol ref={logRef}>
               {lines.map((e) => (

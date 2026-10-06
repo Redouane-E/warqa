@@ -413,13 +413,30 @@ Write beat "${sb.id}" now. Make the picture carry the argument: schedule a visua
  * storyboard. The beats written are kept and the next build goes on from there. Drafts left by older versions or
  * by "Regenerate this beat" carry no total and never count.
  */
-export function unfinishedDraft(project: Project, chapterId: string): { written: number; total: number } | undefined {
-  const d = project.readJson<{ beats?: unknown[]; total?: number } | undefined>(
+export function unfinishedDraft(
+  project: Project,
+  chapterId: string,
+): { written: number; total: number; stop?: Record<string, unknown> } | undefined {
+  const d = project.readJson<{ beats?: unknown[]; total?: number; stop?: Record<string, unknown> } | undefined>(
     `lessons/${chapterId}/draft.json`,
     undefined,
   );
   const written = Array.isArray(d?.beats) ? d.beats.length : 0;
-  return typeof d?.total === 'number' && written < d.total ? { written, total: d.total } : undefined;
+  return typeof d?.total === 'number' && written < d.total
+    ? { written, total: d.total, ...(d.stop && typeof d.stop === 'object' ? { stop: d.stop } : {}) }
+    : undefined;
+}
+
+/**
+ * Note in a chapter's unfinished draft why its writing stopped (the next beat written clears it), or clear it
+ * (`undefined`: stopped by hand).
+ */
+export function noteDraftStop(project: Project, chapterId: string, stop: Record<string, unknown> | undefined): void {
+  const path = `lessons/${chapterId}/draft.json`;
+  const d = project.readJson<Record<string, unknown> | undefined>(path, undefined);
+  if (!d || typeof d.total !== 'number' || (!stop && !d.stop)) return;
+  const { stop: _old, ...rest } = d;
+  project.writeJson(path, stop ? { ...rest, stop } : rest);
 }
 
 export interface RewriteOptions {

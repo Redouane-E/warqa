@@ -85,8 +85,16 @@ const BEATS: Record<string, unknown> = {
   finish: { title: 'Finished', narration: 'Well done.', scene: { clear: true }, cues: [], sources: [] },
 };
 
+/** One-shot answers for a call name, as a failing service would answer (states: refused key, 429, cut off…). */
+const traps = new Map<string, () => P.FakeReply>();
+
 const fake: P.FakeModel = ({ name, prompt }) => {
   prompts.push(prompt);
+  const trap = traps.get(name);
+  if (trap) {
+    traps.delete(name);
+    return trap();
+  }
   if (name === 'plan')
     return JSON.stringify({
       title: 'The water cycle',
@@ -445,5 +453,107 @@ describe('learning on your own', () => {
     expect(job.args.narrate).toBe(false);
     await webJobs.idle('mine');
     expect(webJobs.list('mine')[0]).toMatchObject({ status: 'done' });
+  });
+
+  it('says why a chapter stopped: an answer cut off, a refused key, the spending limit', async () => {
+    type Detail = { drafts?: Record<string, { written: number; total: number; stop?: { kind: string } }> };
+    const detail = async () => (await (await app.request('/api/projects/mine')).json()) as Detail;
+    // (answers already cached would never reach the scripted failures)
+    rmSync(join(root, 'mine.warqa', 'cache', 'llm'), { recursive: true, force: true });
+    // the model's answer for beat 3 is cut off: not repaired, the chapter stops there and remembers why
+    traps.set('beat:ch01:q1', () => ({ text: '{"title": "Quick', finishReason: 'length' }));
+    const cut = jobs.enqueue('mine', 'build', { chapters: ['ch01'], narrate: false, force: ['write'] });
+    await jobs.idle('mine');
+    expect(jobs.get(cut.id)).toMatchObject({
+      status: 'error',
+      failure: { kind: 'cut', chapter: 'ch01', beat: 3, model: 'anthropic:claude-sonnet-5-5' },
+    });
+    expect(jobs.events(cut.id).at(-2)).toMatchObject({ kind: 'error', failure: { kind: 'cut' } });
+    expect((await detail()).drafts?.ch01).toMatchObject({ written: 2, total: 6, stop: { kind: 'cut', beat: 3 } });
+    // a refused key: which service, which answer
+    traps.set('beat:ch01:q1', () => {
+      throw new P.ProviderError('key', 'anthropic: invalid x-api-key', {
+        provider: 'anthropic',
+        model: 'anthropic:claude-sonnet-5-5',
+        status: 401,
+      });
+    });
+    const key = jobs.enqueue('mine', 'build', { chapters: ['ch01'], narrate: false });
+    await jobs.idle('mine');
+    expect(jobs.get(key.id)?.failure).toEqual({ kind: 'key', provider: 'anthropic', status: 401, chapter: 'ch01', beat: 3 });
+    // the next build goes on from beat 3, and the cause goes with the draft
+    const rest = jobs.enqueue('mine', 'build', { chapters: ['ch01'], narrate: false });
+    await jobs.idle('mine');
+    expect(jobs.get(rest.id)?.status).toBe('done');
+    expect((await detail()).drafts).toBeUndefined();
+    // the limit reached: the numbers, for the dialog that raises it
+    const ledger = join(root, 'mine.warqa', '.ledger.jsonl');
+    const kept = readFileSync(ledger, 'utf8');
+    writeFileSync(ledger, `${kept}${JSON.stringify({ ts: '', stage: 'x', model: 'x', input: 0, output: 0, usd: 5, ms: 0, ok: true })}\n`);
+    try {
+      rmSync(join(root, 'mine.warqa', 'cache', 'llm'), { recursive: true, force: true });
+      const over = jobs.enqueue('mine', 'build', { chapters: ['ch01'], narrate: false, force: ['write'] });
+      await jobs.idle('mine');
+      const f = jobs.get(over.id)?.failure as { kind: string; spent: number; limit: number };
+      expect(f.kind).toBe('budget');
+      expect(f.spent).toBeGreaterThanOrEqual(5);
+      expect(f.limit).toBe(1);
+    } finally {
+      writeFileSync(ledger, kept);
+    }
+    // an answer cut off outside the beats (the storyboard): no beat is named
+    rmSync(join(root, 'mine.warqa', 'cache', 'llm'), { recursive: true, force: true });
+    traps.set('storyboard:ch01', () => ({ text: '{"title":', finishReason: 'length' }));
+    const story = jobs.enqueue('mine', 'build', { chapters: ['ch01'], narrate: false, force: ['storyboard'] });
+    await jobs.idle('mine');
+    expect(jobs.get(story.id)?.failure).toEqual({ kind: 'cut', model: 'anthropic:claude-sonnet-5-5', chapter: 'ch01' });
+  });
+
+  it('waits when a service asks to slow down: a countdown, Try now, and Stop during the wait', async () => {
+    const slowDown = () => {
+      throw new P.ProviderError('rate', 'anthropic: 429', {
+        provider: 'anthropic',
+        model: 'anthropic:claude-sonnet-5-5',
+        status: 429,
+        retryAfterMs: 60_000,
+      });
+    };
+    // (answers already cached would never reach the scripted failures)
+    rmSync(join(root, 'mine.warqa', 'cache', 'llm'), { recursive: true, force: true });
+    traps.set('beat:ch01:states', slowDown);
+    const job = jobs.enqueue('mine', 'build', { chapters: ['ch01'], narrate: false, force: ['write'] });
+    let until = 0;
+    const off = jobs.subscribe(job.id, (e) => {
+      if (e.kind === 'wait' && e.until) {
+        until = e.until;
+        expect(jobs.get(job.id)?.waitUntil).toBe(e.until);
+        // Try now: the call is made again at once
+        void app.request(`/api/jobs/${job.id}/retry-now`, { method: 'POST' });
+      }
+    });
+    await jobs.idle('mine');
+    off();
+    expect(until).toBeGreaterThan(Date.now());
+    expect(jobs.get(job.id)?.status).toBe('done');
+    expect(jobs.events(job.id).filter((e) => e.kind === 'wait').map((e) => (e.until ? 'start' : 'end'))).toEqual([
+      'start',
+      'end',
+    ]);
+    expect((await app.request(`/api/jobs/${job.id}/retry-now`, { method: 'POST' })).status).toBe(409);
+    // Stop during a wait ends the job at once, not when the wait would be over
+    rmSync(join(root, 'mine.warqa', 'cache', 'llm'), { recursive: true, force: true });
+    traps.set('beat:ch01:states', slowDown);
+    const stopped = jobs.enqueue('mine', 'build', { chapters: ['ch01'], narrate: false, force: ['write'] });
+    let asked = 0;
+    const off2 = jobs.subscribe(stopped.id, (e) => {
+      if (e.kind === 'wait' && e.until) {
+        asked = Date.now();
+        jobs.cancel(stopped.id);
+      }
+    });
+    await jobs.idle('mine');
+    off2();
+    expect(jobs.get(stopped.id)?.status).toBe('cancelled');
+    expect(Date.now() - asked).toBeLessThan(2000);
   });
 });

@@ -7,6 +7,7 @@ export * from './export/video.js';
 export * from './ingest/document.js';
 export * from './ingest/index.js';
 export * from './models/catalog.js';
+export * from './models/errors.js';
 export * from './models/llm.js';
 export * from './models/presets.js';
 export * from './models/probe.js';

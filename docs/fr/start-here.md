@@ -157,9 +157,10 @@ Commencez petit : un chapitre de 10 à 20 pages.
 | Le navigateur ne s’ouvre pas | Attendez la fin du premier démarrage, puis ouvrez vous-même <http://127.0.0.1:5170/>. |
 | « Port 5170 is in use » | Warqa est déjà lancé : ouvrez <http://127.0.0.1:5170/>. |
 | « Pas encore de modèle : ajoutez une clé » ou « needs …_API_KEY » | Ajoutez une clé dans **IA et voix → Clés** et choisissez un **Ensemble de modèles** qui utilise cette clé. |
-| « budget reached » | Vous avez atteint votre limite. Ne l’augmentez dans les **Réglages du livre** que si vous êtes d’accord. |
-| Une erreur avec 401 ou 403 | La clé est fausse ou a été supprimée. Créez-en une nouvelle et collez-la à nouveau. |
-| Une erreur avec 429, « quota » ou « rate limit » | Trop de demandes à la fois (les offres gratuites sont limitées). Patientez un peu et relancez : le travail terminé est conservé. |
+| « Votre limite de … est atteinte » | Vous avez atteint votre limite. **Augmentez la limite** (dans le message, ou dans les **Réglages du livre**) seulement si vous êtes d’accord ; le chapitre reprend là où il s’est arrêté. |
+| « … a refusé cette clé (HTTP 401) » | La clé a été supprimée ou copiée en partie. **Coller une nouvelle clé** ouvre IA et voix sur ce service. Rien n’a été facturé. |
+| « … a demandé à Warqa de ralentir » | Le service demande une courte pause : Warqa attend le temps demandé, puis reprend (ou cliquez sur **Réessayer maintenant**). Le travail terminé est gardé. |
+| « L’offre gratuite de … est épuisée pour aujourd’hui » | Les offres gratuites ont une limite par jour. **Utilisez une autre clé**, ou reprenez demain : le travail terminé est gardé. |
 | Le texte arabe est abîmé, ou les pages sont des scans | Cliquez sur **Relire** en cochant **Pages scannées ou cassées**, avec un ensemble de modèles qui lit les images (Gemini). |
 | Pas de son | Les voix gratuites ont besoin d’Internet. Avec le lanceur en mode Node.js, installez [uv](https://docs.astral.sh/uv/getting-started/installation/), ou utilisez Docker. |
 | Une leçon n’est pas réussie | **Régénérer cette étape** avec une consigne, ou essayez un meilleur ensemble de modèles pour ce chapitre. |

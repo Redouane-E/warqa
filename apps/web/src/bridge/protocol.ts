@@ -7,6 +7,8 @@ export interface InitOptions {
   base: string;
   /** Test-only scripted model (no network), enabled by ?warqa-fake=1 or VITE_WARQA_FAKE=1. */
   fake: boolean;
+  /** Test only, with `fake`: calls that fail as a service would ("rate:storyboard,cut:beat:ch05"). */
+  fail?: string;
 }
 
 export interface WorkerInfo {

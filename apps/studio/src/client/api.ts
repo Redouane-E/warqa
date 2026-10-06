@@ -133,6 +133,8 @@ export const api = {
   job: (jobId: string) => req<{ job: JobInfo; events: JobEvent[] }>('GET', `/api/jobs/${jobId}`),
   jobs: (id: string) => req<{ jobs: JobInfo[] }>('GET', `/api/projects/${encodeURIComponent(id)}/jobs`),
   cancelJob: (jobId: string) => req<{ job: JobInfo }>('POST', `/api/jobs/${jobId}/cancel`),
+  /** "Try now": a job waiting for a service that asked to slow down tries again at once. */
+  retryNow: (jobId: string) => req<{ job: JobInfo }>('POST', `/api/jobs/${jobId}/retry-now`),
   lesson: (id: string, lid: string) =>
     req<LessonDetail>('GET', `/api/projects/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lid)}`),
   /** Move the keys of a lesson's translations after ids changed or cues were removed (batches, in order). */

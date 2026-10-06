@@ -56,8 +56,13 @@ function progress(e: P.ProgressEvent) {
   else console.log(`${tag} ${e.status === 'done' ? c.ok('done') : 'start'} ${e.detail ? c.dim(e.detail) : ''}`);
 }
 
-const llmEvents = (e: { type: string; stage: string; model: string; detail?: string }) => {
+const llmEvents = (e: { type: string; stage: string; model: string; detail?: string; ms?: number }) => {
   if (e.type === 'repair') console.log(`  ${c.warn('repair')} ${c.dim(`${e.model}: ${e.detail ?? ''}`)}`);
+  // a service asked to slow down: say how long Warqa waits (else the run looks stuck)
+  if (e.type === 'wait')
+    console.log(
+      `  ${c.warn('waiting')} ${c.dim(`${e.detail ?? e.model} asked to slow down: ${Math.round((e.ms ?? 0) / 1000)} s`)}`,
+    );
   if (e.type === 'fallback')
     console.log(`  ${c.warn('json mode')} ${c.dim(`${e.model} rejected the schema; using JSON instructions`)}`);
 };

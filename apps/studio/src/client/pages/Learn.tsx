@@ -8,6 +8,7 @@ import { useStatus } from '../App';
 import { api, errorText, type ProjectListItem } from '../api';
 import { BASE, stripBase } from '../base';
 import { useJobStream } from '../components/JobBoard';
+import { FailureView, RateWait, useLimitDialog } from '../components/states';
 import { Button, Icon, Loading, Mark, Notice } from '../components/ui';
 import { useExtras } from '../extras';
 import { passPdf, takePdf } from '../handoff';
@@ -520,6 +521,12 @@ function Making({ p, jobId, onJob }: { p: ProjectDetail; jobId: string; onJob: (
   const first = !p.lessons.length;
   const id = p.id;
   const { events, info, lost } = useJobStream(jobId);
+  const [limitDialog, askLimit] = useLimitDialog();
+  const waitEvent = [...events].reverse().find((e) => e.kind === 'wait');
+  const waitUntil =
+    (info?.status === 'running' || info?.status === 'queued') && waitEvent?.until && waitEvent.until > Date.now()
+      ? waitEvent.until
+      : undefined;
   const prog = useMemo(() => progressOf(events, info?.status), [events, info?.status]);
   useEffect(() => {
     const h = setInterval(() => setNow(Date.now()), 5000);
@@ -692,11 +699,40 @@ function Making({ p, jobId, onJob }: { p: ProjectDetail; jobId: string; onJob: (
                 <Icon name="info" size={18} /> {t('learn.making.keepOpen')}
               </p>
             )}
-            {failed && (
-              <Notice tone="error">
-                {t('learn.making.failed')}: <bdi>{info?.error}</bdi>
-              </Notice>
+            {/* a service asked to slow down: when the one go tries again */}
+            {waitUntil && info && waitEvent?.provider && (
+              <RateWait key={waitUntil} jobId={info.id} until={waitUntil} provider={waitEvent.provider} />
             )}
+            {failed &&
+              (info?.failure && info.failure.kind !== 'other' ? (
+                <FailureView
+                  failure={info.failure}
+                  task={t('learn.making.task')}
+                  onRaise={async () => {
+                    if (info.failure?.kind !== 'budget') return;
+                    // the book's limit now, then the one go goes on (its chapter from its last beat)
+                    const fresh = await api.project(id).catch(() => null);
+                    const usd = await askLimit({
+                      limit: fresh?.config.budget.usd ?? info.failure.limit,
+                      spent: Math.max(fresh?.ledger.total ?? 0, info.failure.spent),
+                      reason: 'reached',
+                    });
+                    if (usd === null) return;
+                    try {
+                      await api.saveSettings(id, { budget: { usd } });
+                      const r = await api.startJob(id, 'learn', {});
+                      onJob(r.job.id);
+                    } catch (e) {
+                      setError(errorText(e, t));
+                    }
+                  }}
+                />
+              ) : (
+                <Notice tone="error">
+                  {t('learn.making.failed')}: <bdi>{info?.error}</bdi>
+                </Notice>
+              ))}
+            {limitDialog}
             {error && <Notice tone="error">{error}</Notice>}
             {stopped || failed ? (
               <div className="making-stopped">

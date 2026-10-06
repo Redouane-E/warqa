@@ -18,6 +18,7 @@ import { api, errorText, saveFile } from '../api';
 import { BookSettings } from '../components/BookSettings';
 import { buildProgress, type ChapterRun, useJobStream, useJobs, writingBeat } from '../components/JobBoard';
 import { useConfirm, useToast, useUnsavedGuard } from '../components/overlays';
+import { FailureView, type LimitAsk, useLimitDialog } from '../components/states';
 import { Button, Field, Icon, LangTag, Loading, Notice } from '../components/ui';
 import { useExtras } from '../extras';
 import { useI18n } from '../i18n';
@@ -1022,8 +1023,50 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
   // a job starts once (a double click would queue a second one): the button waits for the server, then the
   // focus goes to the row it makes, as the button is gone
   const [starting, setStarting] = useState<string | null>(null);
+  const [limitDialog, askLimit] = useLimitDialog();
+  const toast = useToast();
+  /**
+   * Raise the book's limit from its current value (a limit raised a moment ago, not the one a failure noted), save
+   * it and reload the book; null when kept or when saving failed (said in a toast).
+   */
+  const raise = async (ask: Omit<LimitAsk, 'limit' | 'spent'>, at = { limit: 0, spent: 0 }): Promise<boolean> => {
+    let fresh = p;
+    try {
+      fresh = await api.project(p.id);
+    } catch {
+      /* the book as shown */
+    }
+    const usd = await askLimit({
+      ...ask,
+      limit: fresh.config.budget.usd ?? at.limit,
+      spent: Math.max(fresh.ledger.total, at.spent),
+    });
+    if (usd === null) return false;
+    try {
+      await api.saveSettings(p.id, { budget: { usd } });
+      await reload();
+      return true;
+    } catch (e) {
+      toast({ text: errorText(e, t), tone: 'error' });
+      return false;
+    }
+  };
   const start = async (key: string, ids: string[], again = false) => {
     if (starting) return;
+    // a limit it would pass: ask first (raise it, or keep it and make nothing). Asked before the button turns
+    // busy, so the focus comes back to it
+    const cost = ids.reduce((a, id) => a + (again ? (estimate?.chapters?.[id] ?? 0) : (toPay(id) ?? 0)), 0);
+    const limit = p.config.budget.usd;
+    if (limit !== undefined && cost > 0 && p.ledger.total + cost > limit) {
+      const first = rows.find((r) => r.id === ids[0]);
+      const ok = await raise({
+        need: cost,
+        ...(first ? { chapter: first.n } : {}),
+        ...(ids.length > 1 ? { chapters: ids.length } : {}),
+        reason: 'before',
+      });
+      if (!ok) return;
+    }
     setStarting(key);
     try {
       await run('build', args(ids, again));
@@ -1031,6 +1074,21 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
       setStarting(null);
     }
     document.getElementById(`make-row-${ids[0]}`)?.focus();
+  };
+
+  // the newest build of this session, and the chapter it stopped on
+  // (newest first: a build just started hides the failure of the one before)
+  const lastBuild = p.jobs.find((j) => j.type === 'build');
+  const failedRow = rows.find((r) => r.id === lastBuild?.failure?.chapter);
+  // no model can write (no key): the Make buttons wait for one
+  const needsKey = !!p.roles.writer?.error;
+  // the first chapter stopped on an error is the screen's ink button (Continue from beat N)
+  const firstStopped = rows.find((r) => p.drafts?.[r.id]?.stop)?.id;
+  /** The tray on the job that stopped this chapter (its log open). */
+  const seeLog = (id: string) => {
+    const j = p.jobs.find((x) => x.type === 'build' && x.failure?.chapter === id);
+    if (j) jobs.track(p.id, j);
+    jobs.show();
   };
 
   const provider = (model?: string) => {
@@ -1134,19 +1192,29 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
                   {leftCost !== undefined && ` · ${t('learn.est.cost', { cost: usd(leftCost) })}`}
                 </span>
                 <Button
-                  variant="primary"
+                  variant={firstStopped ? 'default' : 'primary'}
                   icon="play"
                   busy={starting === 'left'}
                   disabled={!!starting}
-                  onClick={() =>
-                    void start(
-                      'left',
-                      left.map((r) => r.id),
-                    )
-                  }
+                  aria-disabled={needsKey || undefined}
+                  className={needsKey ? 'is-blocked' : undefined}
+                  aria-describedby={needsKey ? 'make-needs-key' : undefined}
+                  onClick={() => {
+                    if (!needsKey)
+                      void start(
+                        'left',
+                        left.map((r) => r.id),
+                      );
+                  }}
                 >
                   {t('make.makeLeft', { n: left.length })}
                 </Button>
+                {needsKey && (
+                  <Link id="make-needs-key" className="chip-key" to="/ai#keys">
+                    <Icon name="key" size={16} />
+                    <span>{t('fail.needsKey')}</span>
+                  </Link>
+                )}
               </>
             ) : (
               !builds.length && (
@@ -1169,6 +1237,34 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
           {t('make.needsPlan')}
         </Notice>
       )}
+      {/* the latest build stopped on something a person can act on (a stopped row says when its answer was cut) */}
+      {lastBuild?.status === 'error' &&
+        lastBuild.failure &&
+        (lastBuild.failure.kind !== 'cut' || !lastBuild.failure.beat) && (
+          <FailureView
+            failure={lastBuild.failure}
+            {...(lastBuild.error ? { error: lastBuild.error } : {})}
+            {...(failedRow ? { chapter: failedRow.n } : {})}
+            onRaise={async () => {
+              if (lastBuild.failure?.kind !== 'budget') return;
+              const f = lastBuild.failure;
+              const id = f.chapter;
+              const ok = await raise(
+                {
+                  ...(id && toPay(id) !== undefined ? { need: toPay(id) } : {}),
+                  ...(failedRow ? { chapter: failedRow.n } : {}),
+                  reason: 'reached',
+                },
+                { limit: f.limit, spent: f.spent },
+              );
+              if (!ok) return;
+              // the chapter that stopped goes on from its last beat
+              const ids = id ? [id] : left.map((r) => r.id);
+              if (ids.length) await run('build', args(ids));
+            }}
+          />
+        )}
+      {limitDialog}
       <ol className="make-rows">
         {rows.map((r) => {
           const l = lessons.get(r.id);
@@ -1217,6 +1313,29 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
                     <span className="make-now">{t('make.now')}</span>
                   ) : state === 'waiting' ? (
                     <span>{t('job.status.queued')}</span>
+                  ) : state === 'stopped' && d?.stop ? (
+                    // stopped on an error: where (a bar of its beats) and why
+                    <span className="make-cause">
+                      <span className="chip-pen">{t('make.stoppedAt', { b: d.written + 1 })}</span>
+                      <span className="beats-made" aria-hidden="true">
+                        {Array.from({ length: d.total }, (_, i) => (
+                          <span
+                            // biome-ignore lint/suspicious/noArrayIndexKey: one segment per beat, in order
+                            key={i}
+                            className={i < d.written ? 'is-done' : i === d.written ? 'is-failed' : ''}
+                          />
+                        ))}
+                      </span>
+                      <span>
+                        {d.stop.kind === 'cut'
+                          ? d.written
+                            ? t('make.cutOff', { b: d.written + 1, k: d.written })
+                            : t('make.cutOffFirst')
+                          : d.stop.kind === 'budget'
+                            ? t('make.stoppedLimit', { b: d.written + 1, k: d.written })
+                            : t('make.stoppedError', { b: d.written + 1, k: d.written })}
+                      </span>
+                    </span>
                   ) : state === 'stopped' && (d || stale) ? (
                     <span className="make-stopped">
                       {d
@@ -1245,12 +1364,27 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
                     {approved && (state === 'todo' || state === 'stopped') && (
                       <Button
                         icon="play"
+                        variant={firstStopped === r.id ? 'primary' : 'default'}
                         busy={starting === `row:${r.id}`}
                         disabled={!!starting}
-                        onClick={() => void start(`row:${r.id}`, [r.id])}
+                        aria-disabled={needsKey || undefined}
+                        className={needsKey ? 'is-blocked' : undefined}
+                        aria-describedby={needsKey ? 'make-needs-key' : undefined}
+                        onClick={() => {
+                          if (!needsKey) void start(`row:${r.id}`, [r.id]);
+                        }}
                       >
-                        {state === 'todo' ? t('make.build') : t('make.rest')}
+                        {state === 'todo'
+                          ? t('make.build')
+                          : d?.stop
+                            ? t('make.continueFrom', { b: d.written + 1 })
+                            : t('make.rest')}
                       </Button>
+                    )}
+                    {d?.stop && p.jobs.some((x) => x.type === 'build' && x.failure?.chapter === r.id) && (
+                      <button type="button" className="link-button" onClick={() => seeLog(r.id)}>
+                        {t('make.seeLog')}
+                      </button>
                     )}
                     {l && state !== 'waiting' && (
                       <Link className="btn btn-default" to={`/project/${book}/lesson/${encodeURIComponent(r.id)}`}>

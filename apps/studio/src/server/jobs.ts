@@ -7,7 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
 import * as P from '@warqa/pipeline';
-import type { JobEvent, JobInfo, JobStatus, JobType } from '../shared/types.js';
+import type { JobEvent, JobFailure, JobInfo, JobStatus, JobType } from '../shared/types.js';
 import { docSummary, loadPlanSafe, type Registry } from './projects.js';
 import { panelDir, panelZipPath, zipPath } from './zip.js';
 
@@ -22,6 +22,33 @@ interface Job extends JobInfo {
   listeners: Set<(e: JobEvent) => void>;
   cancelRequested: boolean;
   seq: number;
+  /** A wait in progress (a service asked to slow down): Stop and "Try now" end it. */
+  waiting?: { resolve: () => void; reject: (e: Error) => void };
+  /** The chapter it is working on (build, translate, narrate), and the stage. */
+  chapterNow?: string;
+  stageNow?: string;
+}
+
+/** Why a job stopped, for a person (the message stays for the log and the CLI). */
+export function failureOf(e: unknown): JobFailure {
+  if (e instanceof P.BudgetError) return { kind: 'budget', spent: e.spent, limit: e.limit };
+  if (e instanceof P.ProviderError) {
+    const { provider, model, status, resetAt } = e.info;
+    switch (e.kind) {
+      case 'key':
+      case 'credits':
+        return { kind: e.kind, provider, ...(status !== undefined ? { status } : {}) };
+      case 'rate':
+        return { kind: 'rate', provider };
+      case 'quota':
+        return { kind: 'quota', provider, model, ...(resetAt !== undefined ? { resetAt } : {}) };
+      case 'cut':
+        return { kind: 'cut', model };
+      default:
+        return { kind: e.kind };
+    }
+  }
+  return { kind: 'other' };
 }
 
 export interface JobCtx {
@@ -720,8 +747,61 @@ export class Jobs {
   ) {}
 
   private info(j: Job): JobInfo {
-    const { events: _e, listeners: _l, cancelRequested: _c, seq: _s, ...rest } = j;
+    const {
+      events: _e,
+      listeners: _l,
+      cancelRequested: _c,
+      seq: _s,
+      waiting: _w,
+      chapterNow: _n,
+      stageNow: _g,
+      ...rest
+    } = j;
     return rest;
+  }
+
+  /**
+   * A wait the job's model client asked for: "slow down" waits are told to the page (a countdown) and can be ended
+   * early (Try now); every wait ends at once on Stop.
+   */
+  private wait(j: Job, ms: number, info: { provider: string; reason: 'rate' | 'network' }): Promise<void> {
+    if (j.cancelRequested) return Promise.reject(new CancelledError());
+    return new Promise<void>((resolve, reject) => {
+      const end = () => {
+        clearTimeout(timer);
+        j.waiting = undefined;
+        if (info.reason === 'rate') {
+          delete j.waitUntil;
+          this.emit(j, { kind: 'wait', until: 0, provider: info.provider });
+        }
+      };
+      const timer = setTimeout(() => {
+        end();
+        resolve();
+      }, ms);
+      j.waiting = {
+        resolve: () => {
+          end();
+          resolve();
+        },
+        reject: (e) => {
+          end();
+          reject(e);
+        },
+      };
+      if (info.reason === 'rate') {
+        j.waitUntil = Date.now() + ms;
+        this.emit(j, { kind: 'wait', until: j.waitUntil, provider: info.provider });
+      }
+    });
+  }
+
+  /** "Try now": end a job's wait at once. Undefined when it is not waiting. */
+  retryNow(id: string): JobInfo | undefined {
+    const j = this.jobs.get(id);
+    if (!j?.waiting || !j.waitUntil) return undefined;
+    j.waiting.resolve();
+    return this.info(j);
   }
 
   get(id: string): JobInfo | undefined {
@@ -756,6 +836,8 @@ export class Jobs {
     const ev: JobEvent = { seq: ++j.seq, ts: Date.now(), ...e };
     j.events.push(ev);
     if (j.events.length > 5000) j.events.splice(0, j.events.length - 5000);
+    if (e.kind === 'progress' && e.chapter) j.chapterNow = e.chapter;
+    if (e.kind === 'progress' && e.stage && e.stage !== 'chapter') j.stageNow = e.stage;
     if (e.kind === 'progress')
       j.last = [e.chapter, e.stage, e.status === 'beat' ? `${(e.index ?? 0) + 1}/${e.total}` : e.status, e.detail]
         .filter(Boolean)
@@ -814,6 +896,8 @@ export class Jobs {
     } else if (j.status === 'running') {
       j.cancelRequested = true;
       this.emit(j, { kind: 'log', level: 'warn', message: 'stopping after the current step…' });
+      // a wait ends now, not when its timer runs out
+      j.waiting?.reject(new CancelledError());
     }
     return this.info(j);
   }
@@ -880,6 +964,7 @@ export class Jobs {
       llm: () =>
         P.projectLlm(project, {
           ...this.llmOptions,
+          wait: (ms, info) => this.wait(j, ms, info),
           onEvent: (e) => {
             if (e.type === 'repair')
               this.emit(j, { kind: 'log', level: 'warn', message: `repair · ${e.model}: ${e.detail ?? ''}` });
@@ -888,6 +973,12 @@ export class Jobs {
                 kind: 'log',
                 level: 'warn',
                 message: `${e.model} rejected the JSON schema; using JSON instructions`,
+              });
+            else if (e.type === 'wait')
+              this.emit(j, {
+                kind: 'log',
+                level: 'warn',
+                message: `${e.detail ?? e.model} asked to slow down: waiting ${Math.round((e.ms ?? 0) / 1000)} s`,
               });
             else if (e.type === 'call')
               this.emit(j, {
@@ -905,10 +996,41 @@ export class Jobs {
       this.setStatus(j, j.cancelRequested ? 'cancelled' : 'done');
     } catch (e) {
       if (e instanceof CancelledError || j.cancelRequested) {
+        // stopped by hand: an older cause in the chapter's draft no longer says why it stopped
+        if (j.type === 'build' && j.chapterNow)
+          try {
+            P.noteDraftStop(project, j.chapterNow, undefined);
+          } catch {
+            /* best effort */
+          }
         this.setStatus(j, 'cancelled');
       } else {
         j.error = (e as Error).message || String(e);
-        this.emit(j, { kind: 'error', error: j.error });
+        // where it stopped: the chapter, and the beat a build was writing (the draft knows the beats written)
+        const chapter = j.chapterNow;
+        const writing = j.type === 'build' && j.stageNow === 'write';
+        let draft: ReturnType<typeof P.unfinishedDraft>;
+        try {
+          draft = chapter && writing ? P.unfinishedDraft(project, chapter) : undefined;
+        } catch {
+          draft = undefined;
+        }
+        j.failure = {
+          ...failureOf(e),
+          ...(chapter ? { chapter } : {}),
+          ...(draft ? { beat: draft.written + 1 } : {}),
+        };
+        // a chapter stopped partway remembers why (the Make step says it after a reload); a full disk must not
+        // keep the job from ending
+        if (chapter && draft) {
+          const { chapter: _c, ...stop } = j.failure;
+          try {
+            P.noteDraftStop(project, chapter, stop);
+          } catch {
+            /* best effort */
+          }
+        }
+        this.emit(j, { kind: 'error', error: j.error, failure: j.failure });
         this.setStatus(j, 'error');
       }
     }

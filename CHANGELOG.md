@@ -122,6 +122,18 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **When work stops or waits (redesign 4h, part 1).** A model call that fails now says why, with the next step: a
+  refused key (which service, Paste a new key, a link to its console; nothing was charged), no credit left, a free
+  tier used up for the day (when it starts again, in your time), an answer cut off (the chapter stops at that beat and
+  goes on from there with Continue from beat N; a cut-off answer is no longer repaired), no network, or the spending
+  limit reached (Raise the limit: a dialog with the new amount, then the chapter goes on). When a service asks Warqa
+  to slow down (HTTP 429), Warqa waits as long as it asks (or 5 s to 60 s, four times at most) and shows a countdown
+  with Try now; Stop ends a wait at once. Starting a chapter that would pass the limit asks first. A chapter stopped
+  on an error remembers why after a reload. Pipeline: `ProviderError`, `classifyModelError`, `BudgetError` with
+  `spent` and `limit`, `LlmOptions.wait`, Warqa's own retries (the SDK's are off); a `FakeModel` may answer `{ text,
+  finishReason }`. Studio: `JobInfo.failure`, `waitUntil`, `wait` events, `POST /api/jobs/:id/retry-now`,
+  `drafts[].stop`; a full disk answers `code: 'disk-full'`. The web app's test mode takes `?warqa-fake-fail=`
+  (scripted failures).
 - **AI and voices, and Book settings (redesign 4g).** The keys page is now **AI and voices** (`/ai`; the old
   `/settings` address leads there): keys as rows with a free check before saving, Remove with Undo, Ollama found on
   this computer, a server of your own and the speech services; the model sets with what a chapter costs; who does

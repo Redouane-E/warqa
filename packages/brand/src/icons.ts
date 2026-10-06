@@ -51,6 +51,10 @@ export const ICONS = {
   info: { d: `${circle(12, 12, 9)}M12 11v5.5M12 7.8v.01` },
   error: { d: `${circle(12, 12, 9)}M12 7.5v5.5M12 16.5v.01` },
   warn: { d: 'M12 3.5L2.5 20h19zM12 10v4.5M12 17.5v.01' },
+  // no network: the wifi waves crossed out (the States board)
+  offline: {
+    d: 'M2 8.5a15 15 0 0 1 5-3M22 8.5a15 15 0 0 0-8.5-3.8M5.5 12a10 10 0 0 1 3-1.8M18.5 12a10 10 0 0 0-2.4-1.6M9 15.5a5 5 0 0 1 6 0M12 19.5v.01M3 3l18 18',
+  },
   preview: { d: `M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z${circle(12, 12, 3)}` },
   more: { d: `${circle(5, 12, 1.6)}${circle(12, 12, 1.6)}${circle(19, 12, 1.6)}` },
   // missing from the Kit, drawn in its style

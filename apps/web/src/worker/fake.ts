@@ -1,7 +1,8 @@
 // A scripted "model" for tests and demos without a network: it answers each pipeline call (plan, storyboard,
 // beats, translation, page reading) with small valid content, through the pipeline's FakeModel hook in Llm.
 // Enabled only by ?warqa-fake=1 (or VITE_WARQA_FAKE=1 at build time); never offered otherwise.
-import { type FakeModel, type TtsProvider, ttsProvider } from '@warqa/pipeline';
+import { BudgetError, type FakeModel, type TtsProvider, ttsProvider } from '@warqa/pipeline';
+import { APICallError } from 'ai';
 
 /** The id the fake provider shows in model settings. */
 export const FAKE_MODEL = 'fake:scripted';
@@ -229,3 +230,58 @@ export const fakeTts = (id: string): TtsProvider => ({
   ...ttsProvider(id, { worker: 'http://localhost:8790' }),
   synth: async () => ({ audio: silentWav(2), ext: 'wav', dur: 2 }),
 });
+
+/**
+ * Test mode: calls that fail as a service would, once per call ("rate:storyboard" waits 3 s first, "quota:plan",
+ * "key:storyboard", "credits:plan", "cut:beat:*:q1", "budget:beat:*:rule" (the limit reached, as if $1 of $1 was
+ * spent: the test model costs nothing)); a rule matches the call names that start with it, `*` within a part.
+ */
+export function withFailures(fake: FakeModel, spec: string | undefined): FakeModel {
+  if (!spec) return fake;
+  const rules = spec
+    .split(',')
+    .map((r) => r.trim())
+    .filter(Boolean)
+    .map((r) => {
+      const [kind, ...name] = r.split(':');
+      const start = name
+        .join(':')
+        .split('*')
+        .map((x) => x.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'))
+        .join('[^:]*');
+      return { kind: kind ?? '', name: new RegExp(`^${start}`), done: false };
+    });
+  const answer = (status: number, body = '', headers: Record<string, string> = {}) =>
+    new APICallError({
+      message: `HTTP ${status}`,
+      url: 'https://example.invalid/test',
+      requestBodyValues: {},
+      statusCode: status,
+      responseHeaders: headers,
+      responseBody: body,
+    });
+  return (call) => {
+    const rule = rules.find((r) => !r.done && r.name.test(call.name));
+    if (!rule) return fake(call);
+    rule.done = true;
+    switch (rule.kind) {
+      case 'rate':
+        throw answer(429, '', { 'retry-after': '3' });
+      case 'quota':
+        throw answer(
+          429,
+          '{"error":{"status":"RESOURCE_EXHAUSTED","details":[{"violations":[{"quotaId":"GenerateRequestsPerDayPerProjectPerModel-FreeTier"}]}]}}',
+        );
+      case 'key':
+        throw answer(401, '{"error":{"message":"invalid api key"}}');
+      case 'credits':
+        throw answer(402);
+      case 'cut':
+        return { text: '{"title": "Cut', finishReason: 'length' };
+      case 'budget':
+        throw new BudgetError(1, 1);
+      default:
+        return fake(call);
+    }
+  };
+}
