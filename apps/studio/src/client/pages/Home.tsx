@@ -3,7 +3,7 @@ import type { StepId } from '../../shared/types';
 import { useStatus } from '../App';
 import { api, errorText, type ProjectListItem } from '../api';
 import { SideSheet } from '../components/SideSheet';
-import { Button, Field, Icon, LangTag, Loading, Notice } from '../components/ui';
+import { Button, Field, Icon, LangTag, Loading, Mark, Notice } from '../components/ui';
 import { useExtras } from '../extras';
 import { BOOK_LANGS, useI18n } from '../i18n';
 import { onboarded } from '../prefs';
@@ -358,17 +358,20 @@ export function HomePage() {
               </label>
             </div>
           )}
-          {empty && <p className="empty">{t('home.empty')}</p>}
-          <ul className="books">
-            {books.map((p) => (
-              <BookCard key={p.id} p={p} />
-            ))}
-            {!q.trim() && (
-              <li className="book-new">
-                <NewTile onFile={open} />
-              </li>
-            )}
-          </ul>
+          {empty ? (
+            <NoBooks onFile={open} />
+          ) : (
+            <ul className="books">
+              {books.map((p) => (
+                <BookCard key={p.id} p={p} />
+              ))}
+              {!q.trim() && (
+                <li className="book-new">
+                  <NewTile onFile={open} />
+                </li>
+              )}
+            </ul>
+          )}
           {!!q.trim() && !books.length && <p className="empty">{t('home.noMatch')}</p>}
           {inBrowser && <p className="root-note muted">{t('cap.books')}</p>}
           {!inBrowser && (
@@ -383,6 +386,85 @@ export function HomePage() {
       <SideSheet open={creating} onClose={() => setCreating(false)} title={t('new.title')}>
         <NewBook initial={dropped} />
       </SideSheet>
+    </div>
+  );
+}
+
+/**
+ * No books yet: a ruled card that takes a dropped PDF, with Choose a PDF and, where the host has one, the
+ * finished example book (redesign 4h).
+ */
+function NoBooks({ onFile }: { onFile: (f: File | null) => void }) {
+  const { t } = useI18n();
+  const { guide } = useExtras();
+  const [over, setOver] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState('');
+  const pdf = (f: File | undefined | null) => {
+    if (!f) return;
+    if (f.type !== 'application/pdf' && !f.name.toLowerCase().endsWith('.pdf')) {
+      setError(t('new.notPdf'));
+      return;
+    }
+    setError('');
+    onFile(f);
+  };
+  return (
+    // biome-ignore lint/a11y/noStaticElementInteractions: a drop zone; its button and link do the same by keyboard
+    <div
+      className={`no-books${over ? ' is-over' : ''}`}
+      onDragOver={(e) => {
+        e.preventDefault();
+        setOver(true);
+      }}
+      onDragLeave={() => setOver(false)}
+      onDrop={(e) => {
+        e.preventDefault();
+        setOver(false);
+        pdf(e.dataTransfer.files[0]);
+      }}
+    >
+      <Mark size={44} />
+      <h2 className="no-books-title">{t('home.noBooks')}</h2>
+      <p className="no-books-body">{t('home.noBooksBody')}</p>
+      <div className="no-books-actions">
+        <label className="btn btn-primary">
+          <input
+            type="file"
+            accept="application/pdf,.pdf"
+            className="visually-hidden"
+            data-testid="empty-pdf-input"
+            onChange={(e) => {
+              pdf(e.target.files?.[0]);
+              // the same file chosen again (after closing the sheet) still counts
+              e.target.value = '';
+            }}
+          />
+          <span>{t('learn.setup.choose')}</span>
+        </label>
+        {guide?.example && (
+          <Button
+            variant="quiet"
+            busy={busy}
+            onClick={async () => {
+              setBusy(true);
+              try {
+                navigate(await guide.example!());
+              } catch (e) {
+                setError(errorText(e, t));
+                setBusy(false);
+              }
+            }}
+          >
+            {t('welcome.example')}
+          </Button>
+        )}
+      </div>
+      {error && (
+        <p className="field-error" role="alert">
+          {error}
+        </p>
+      )}
     </div>
   );
 }

@@ -13,6 +13,7 @@ import { api } from './api';
 import { GoTo } from './components/GoTo';
 import { JobsProvider } from './components/JobBoard';
 import { OverlayProvider } from './components/overlays';
+import { OfflineBanner } from './components/states';
 import { applyTheme, StackStrips, TopBar, useStrips } from './components/TopBar';
 import { inField, toolOpen } from './components/tools';
 import { Icon } from './components/ui';
@@ -125,8 +126,11 @@ export function App({ extras = {} }: { extras?: StudioExtras } = {}) {
             <JobsProvider>
               <PlaceProvider>
                 {path === '/welcome' || path === '/welcome/start' ? (
-                  // the first visit: the welcome page and the start guide, full window
-                  <WelcomePage />
+                  // the first visit: the welcome page and the start guide, full window (offline: said there too)
+                  <>
+                    <OfflineBanner />
+                    <WelcomePage />
+                  </>
                 ) : (
                   <>
                     <TopBar onGoTo={() => setGoto(true)} />
@@ -135,6 +139,7 @@ export function App({ extras = {} }: { extras?: StudioExtras } = {}) {
                         <Icon name="warn" /> {i18n.t('settings.remote', { host: status.host })}
                       </div>
                     )}
+                    <OfflineBanner />
                     {extras.banner}
                     <Places mainRef={mainRef} />
                     <GoTo open={goto} onClose={() => setGoto(false)} />

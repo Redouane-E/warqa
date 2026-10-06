@@ -122,6 +122,14 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **Offline, empty and other states (redesign 4h, part 2).** Offline, a banner says reading and editing still work;
+  the buttons that call an online model or voice (Make, Draft the plan, Translate, Narrate, Regenerate, Improve, Teach
+  me) wait with "needs the internet", Go to leaves them out, and a toast says when you are back online; a book whose
+  models run on this computer is not stopped. Your books with no book is a card to drop a PDF on, with Choose a PDF
+  and the example book; the Make step with no chapters drafts the plan from there, with its cost. Leaving the editor
+  with unsaved changes names the beat and what would be lost. A full disk (or a browser's storage) is said in words.
+  Scanned pages not read yet are counted on the Read step with what reading them costs. The voice that needs the
+  desktop version says so with a link to it.
 - **When work stops or waits (redesign 4h, part 1).** A model call that fails now says why, with the next step: a
   refused key (which service, Paste a new key, a link to its console; nothing was charged), no credit left, a free
   tier used up for the day (when it starts again, in your time), an answer cut off (the chapter stops at that beat and

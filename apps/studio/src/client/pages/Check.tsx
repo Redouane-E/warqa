@@ -12,6 +12,7 @@ import { DesktopOnly, DesktopOnlyChip } from '../components/DesktopOnly';
 import { useJobs } from '../components/JobBoard';
 import { useConfirm, useToast } from '../components/overlays';
 import { PenNote, ScoreMark } from '../components/RedPen';
+import { useNetGate } from '../components/states';
 import { Button, Icon, Loading, Notice } from '../components/ui';
 import { useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
@@ -132,7 +133,10 @@ function BeatDetail({
   onRegenerate,
   editorHref,
   headRef,
+  book,
 }: {
+  /** The book (its writer's service decides whether writing again needs the internet). */
+  book: ProjectDetail;
   b: CheckBeat;
   lang: string;
   instruction: string;
@@ -144,6 +148,8 @@ function BeatDetail({
   headRef: React.RefObject<HTMLHeadingElement | null>;
 }) {
   const { t, usd, langName } = useI18n();
+  // offline: writing a beat again needs the internet
+  const net = useNetGate('check-regen-net', book, 'rewrite');
   const f = useFinding();
   const issue = b.issues[0];
   const box = b.issues.find((i) => i.box)?.box;
@@ -223,12 +229,22 @@ function BeatDetail({
           <textarea rows={2} value={instruction} dir="auto" onChange={(e) => onInstruction(e.target.value)} />
         </label>
         <div className="beat-detail-actions">
-          <Button icon="regenerate" busy={busy} disabled={busy} onClick={onRegenerate}>
+          <Button
+            icon="regenerate"
+            busy={busy}
+            disabled={busy}
+            className={net.blocked ? 'is-blocked' : undefined}
+            {...net.props}
+            onClick={() => {
+              if (!net.blocked) onRegenerate();
+            }}
+          >
             {t('editor.regen')}
           </Button>
           {rewriteUsd !== undefined && (
             <span className="mono muted small">{t('learn.est.cost', { cost: usd(Math.max(rewriteUsd, 0.001)) })}</span>
           )}
+          {net.chip}
           <Link className="btn btn-quiet beat-detail-edit" to={editorHref}>
             <Icon name="edit" size={18} />
             <span>{t('check.openEditor')}</span>
@@ -260,6 +276,9 @@ export function CheckStep({
   const caps = status?.capabilities;
   const canCheck = !!caps && !caps.jobsUnavailable.includes('qa') && caps.playwright !== false;
   const canImprove = !!caps && !caps.jobsUnavailable.includes('improve') && caps.playwright !== false;
+  const improveNet = useNetGate('improve-net', p, 'improve');
+  // the checks themselves run here; with the judge they call its model
+  const runGate = useNetGate('run-net', p, 'qa');
   // a desktop without Playwright's browser is told to install it (not to get the desktop version)
   const noPlaywright = caps?.platform === 'desktop' && caps.playwright === false;
   const deskReason = (web: string) => (noPlaywright ? t('check.needsPlaywright') : web);
@@ -370,6 +389,7 @@ export function CheckStep({
   const improveCost = d?.rewriteUsd !== undefined ? weak.length * (d.rewriteUsd + (d.judge?.beatUsd ?? 0)) : undefined;
   const attention = beats.filter((b) => b.attention).length;
   const runCost = d?.judge?.lessonUsd;
+  const runNet = d?.judge ? runGate : { blocked: false, props: {}, chip: null };
 
   const start = async (key: string, type: JobType, args: Record<string, unknown>) => {
     if (starting) return;
@@ -456,20 +476,27 @@ export function CheckStep({
                   icon="regenerate"
                   busy={starting === 'qa'}
                   disabled={!!starting}
-                  onClick={() => void start('qa', 'qa', { chapters: [chapter.id], langs: [lang], judge: !!d?.judge })}
+                  className={runNet.blocked ? 'is-blocked' : undefined}
+                  {...runNet.props}
+                  onClick={() => {
+                    if (!runNet.blocked)
+                      void start('qa', 'qa', { chapters: [chapter.id], langs: [lang], judge: !!d?.judge });
+                  }}
                 >
                   {t('check.run')}
                 </Button>
                 <span className="mono muted small">
                   {runCost ? t('learn.est.cost', { cost: usd(Math.max(runCost, 0.001)) }) : t('learn.est.free')}
                 </span>
+                {runNet.chip}
               </span>
             )}
           </div>
         </div>
         {!canCheck && (
           <div className="check-desk">
-            <Button icon="regenerate" disabled aria-describedby="chk-desk">
+            {/* reachable by the keyboard, with its reason (it does nothing here) */}
+            <Button icon="regenerate" className="is-blocked" aria-disabled aria-describedby="chk-desk">
               {t('check.run')}
             </Button>
             <DesktopOnly id="chk-desk" reason={deskReason(t('cap.qa'))} {...deskChip} />
@@ -520,6 +547,7 @@ export function CheckStep({
 
       {d && selected && (
         <BeatDetail
+          book={p}
           key={selected.id}
           b={selected}
           lang={lang}
@@ -597,7 +625,10 @@ export function CheckStep({
               icon="edit"
               busy={starting === 'improve'}
               disabled={!weak.length || !!starting}
+              className={improveNet.blocked ? 'is-blocked' : undefined}
+              {...improveNet.props}
               onClick={async () => {
+                if (improveNet.blocked) return;
                 const beats = t('common.beats', { n: weak.length });
                 const ok = await confirm({
                   title:
@@ -620,9 +651,11 @@ export function CheckStep({
             >
               {t('improve.runN', { n: weak.length })}
             </Button>
-          ) : (
+          ) : null}
+          {weak.length && d?.fresh && canImprove ? improveNet.chip : null}
+          {!weak.length || !d?.fresh || canImprove ? null : (
             <div className="check-desk">
-              <Button variant="primary" icon="edit" disabled aria-describedby="imp-desk">
+              <Button variant="primary" icon="edit" className="is-blocked" aria-disabled aria-describedby="imp-desk">
                 {t('improve.runN', { n: weak.length })}
               </Button>
               <DesktopOnly id="imp-desk" reason={deskReason(t('cap.improve'))} {...deskChip} />

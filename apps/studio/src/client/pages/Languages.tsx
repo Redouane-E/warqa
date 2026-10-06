@@ -8,6 +8,7 @@ import type { JobInfo, JobType, LanguageInfo, ProjectDetail, StatusInfo } from '
 import { api, errorText } from '../api';
 import { useJobStream, useJobs } from '../components/JobBoard';
 import { useToast } from '../components/overlays';
+import { useNetGate } from '../components/states';
 import { Button, Icon, Loading, Notice } from '../components/ui';
 import { useI18n } from '../i18n';
 import { Link, navigate, useLocation } from '../router';
@@ -95,6 +96,9 @@ function LanguageCard({
   const rest = !original && !todo && (info.missing > 0 || (tr !== undefined ? tr > 0 : info.stale > 0));
   const narrateCost = info.estimate?.narrate;
   const id = `lc-${lang}`;
+  // offline: translating and narrating with an online voice need the internet
+  const trNet = useNetGate(`${id}-tr-net`, p, 'translate');
+  const nrNet = useNetGate(`${id}-nr-net`, p, 'narrate');
   const chip = original ? (
     <span className="lang-chip is-original">{t('voice.author')}</span>
   ) : todo ? (
@@ -107,9 +111,21 @@ function LanguageCard({
     </button>
   );
   const narrateBtn = (label: string) => (
-    <Button variant="quiet" busy={starting === `narrate:${lang}`} disabled={!!starting} onClick={onNarrate}>
-      {label}
-    </Button>
+    <>
+      <Button
+        variant="quiet"
+        busy={starting === `narrate:${lang}`}
+        disabled={!!starting}
+        className={nrNet.blocked ? 'is-blocked' : undefined}
+        {...nrNet.props}
+        onClick={() => {
+          if (!nrNet.blocked) onNarrate();
+        }}
+      >
+        {label}
+      </Button>
+      {nrNet.chip}
+    </>
   );
   const narration = (() => {
     if (narrating) return <RunningChip job={narrating} lang={lang} />;
@@ -214,10 +230,15 @@ function LanguageCard({
             variant={todo ? 'primary' : 'quiet'}
             busy={starting === `translate:${lang}`}
             disabled={!!starting}
-            onClick={onTranslate}
+            className={trNet.blocked ? 'is-blocked' : undefined}
+            {...trNet.props}
+            onClick={() => {
+              if (!trNet.blocked) onTranslate();
+            }}
           >
             {todo ? t('voice.translate', { lang: short }) : t('voice.translateRest')}
           </Button>
+          {trNet.chip}
           {!!tr && <span className="card-meta">{t('learn.est.cost', { cost: usd(Math.max(tr, 0.001)) })}</span>}
         </div>
       )}

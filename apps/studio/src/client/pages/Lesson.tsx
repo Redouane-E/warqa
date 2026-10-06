@@ -3,7 +3,7 @@
 // details open in the side sheet (pushing the place on wide screens).
 import { dirOf } from '@warqa/i18n';
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Issue, LessonDetail, StagePart } from '../../shared/types';
+import type { Issue, LessonDetail, ProjectDetail, StagePart } from '../../shared/types';
 import { api, errorText } from '../api';
 import { useJobs } from '../components/JobBoard';
 import { Menu } from '../components/Menu';
@@ -286,6 +286,19 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const uiRef = useRef({ t, ui });
   uiRef.current = { t, ui };
 
+  // the book's models: offline, writing a beat again waits only when its writer is a cloud model
+  const [bookInfo, setBookInfo] = useState<ProjectDetail | null>(null);
+  useEffect(() => {
+    let live = true;
+    api
+      .project(id)
+      .then((p) => live && setBookInfo(p))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [id]);
+
   const load = useCallback(async () => {
     const { t, ui } = uiRef.current;
     try {
@@ -324,7 +337,52 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
     return () => clearTimeout(h);
   }, [lesson, dirty, id, lid]);
 
-  useUnsavedGuard(dirty);
+  // leaving names what is lost: the beat changed (or how many), and at most two kinds of change in it
+  useUnsavedGuard(dirty, () => {
+    const saved = detail?.lesson.beats ?? [];
+    if (!lesson) return null;
+    const json = (x: unknown) => JSON.stringify(x ?? null);
+    const changed = lesson.beats
+      .map((b, i) => ({ b, i, old: saved.find((x) => x.id === b.id) }))
+      .filter(({ b, old }) => json(b) !== json(old));
+    const removed = saved.filter((x) => !lesson.beats.some((b) => b.id === x.id)).length;
+    if (!changed.length && !removed) return null;
+    const one = changed[0];
+    if (changed.length + removed > 1 || !one) return { title: t('leave.beats', { n: changed.length + removed }) };
+    const { b, old } = one;
+    const what: string[] = [];
+    const o = (old ?? {}) as Record<string, unknown>;
+    if (old && json(b.narration) !== json(o.narration)) what.push(t('leave.what.narration'));
+    const cues = (b.cues ?? []) as { at?: unknown }[];
+    const oldCues = (o.cues ?? []) as { at?: unknown }[];
+    const cue = cues.find((c, k) => json(c) !== json(oldCues[k]));
+    // the mark a cue waits for: "keep", or { mark: "keep", offset } (not the start, the end or a time)
+    const mark = (at: unknown): string | null =>
+      typeof at === 'string'
+        ? at === 'start' || at === 'end'
+          ? null
+          : at
+        : at && typeof at === 'object' && typeof (at as { mark?: unknown }).mark === 'string'
+          ? (at as { mark: string }).mark
+          : null;
+    const cueMark = cue ? mark(cue.at) : null;
+    if (old && cue) what.push(cueMark ? t('leave.what.cue', { mark: cueMark }) : t('leave.what.cues'));
+    if (old && json(b.scene) !== json(o.scene)) what.push(t('leave.what.stage'));
+    if (old && json(b.questions) !== json(o.questions)) what.push(t('leave.what.question'));
+    if (old && json(b.title) !== json(o.title)) what.push(t('leave.what.title'));
+    const list = new Intl.ListFormat(i18n.locale, { type: 'conjunction' }).format(what.slice(0, 2));
+    return {
+      title: t('leave.beat', { n: one.i + 1 }),
+      // (a capital where the sentence starts with the list: English)
+      ...(list
+        ? {
+            body: t('leave.lost', {
+              changes: i18n.lang === 'en' ? list.charAt(0).toUpperCase() + list.slice(1) : list,
+            }),
+          }
+        : {}),
+    };
+  });
 
   // put back the lesson as it was saved before (the toast's Undo); edits made since are lost, so that asks first
   const restore = useCallback(
@@ -769,7 +827,8 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
             </Button>
           }
         >
-          {t('editor.saveFailed', { error: saveError })}
+          {/* (a reason that is its own sentence loses its full stop inside this one) */}
+          {t('editor.saveFailed', { error: saveError.replace(/[.。]$/, '') })}
         </Notice>
       )}
 
@@ -961,6 +1020,7 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
               instruction: instructions[beat.id] ?? '',
               setInstruction: (v) => setInstructions((cur) => ({ ...cur, [beat.id]: v })),
               start: startRegen,
+              book: bookInfo,
             }}
             {...(cand
               ? {
@@ -975,6 +1035,7 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
                     ...(regenErrors[beat.id] ? { error: regenErrors[beat.id] } : {}),
                     again: () => void startRegen(cand.instruction ?? instructions[beat.id] ?? ''),
                     disabled: dirty || !!rewriting[beat.id],
+                    book: bookInfo,
                   },
                 }
               : {})}

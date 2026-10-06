@@ -3,12 +3,14 @@
 // slow down, and the dialog that raises a book's spending limit.
 
 import type { IconName } from '@warqa/brand';
-import { type ReactNode, useCallback, useEffect, useRef, useState } from 'react';
+import { type ReactNode, useCallback, useEffect, useRef, useState, useSyncExternalStore } from 'react';
 import { FAKE_PROVIDER, PROVIDERS } from '../../shared/providers';
-import type { JobFailure } from '../../shared/types';
+import type { JobFailure, JobType, ProjectDetail } from '../../shared/types';
 import { api } from '../api';
 import { type I18n, useI18n } from '../i18n';
+import { type NetOptions, needsNet } from '../net';
 import { navigate } from '../router';
+import { useToast } from './overlays';
 import { Button, Icon } from './ui';
 
 /** A box that says what happened, with what to do next. */
@@ -397,5 +399,81 @@ function LimitDialog({
         </div>
       </form>
     </dialog>
+  );
+}
+
+/* ---------- offline ---------- */
+
+const subscribeOnline = (fn: () => void) => {
+  window.addEventListener('online', fn);
+  window.addEventListener('offline', fn);
+  return () => {
+    window.removeEventListener('online', fn);
+    window.removeEventListener('offline', fn);
+  };
+};
+
+/** The network is there (the browser's own view: it may still be wrong, a failed call says so). */
+export const useOnline = (): boolean =>
+  useSyncExternalStore(
+    subscribeOnline,
+    () => navigator.onLine,
+    () => true,
+  );
+
+/** A book's details for a gate (its models), fetched once the network goes (online, nothing is blocked). */
+export function useOfflineBook(id: string | undefined): ProjectDetail | null {
+  const online = useOnline();
+  const [book, setBook] = useState<ProjectDetail | null>(null);
+  useEffect(() => {
+    if (online || !id) return;
+    let live = true;
+    api
+      .project(id)
+      .then((p) => live && setBook(p))
+      .catch(() => {});
+    return () => {
+      live = false;
+    };
+  }, [online, id]);
+  return book && book.id === id ? book : null;
+}
+
+/** While offline, a button that needs the internet is blocked (reachable, with its reason beside it). */
+export function useNetGate(id: string, p: ProjectDetail | null, type: JobType, o: NetOptions = {}) {
+  const { t } = useI18n();
+  const online = useOnline();
+  // (no book at hand: counted as cloud work)
+  const blocked = !online && (!p || needsNet(p, type, o));
+  return {
+    blocked,
+    /** Spread on the button (it keeps its own className: add `is-blocked` with `blocked`). */
+    props: blocked ? { 'aria-disabled': true as const, 'aria-describedby': id } : {},
+    chip: blocked ? (
+      <span id={id} className="chip-desk">
+        {t('net.needs')}
+      </span>
+    ) : null,
+  };
+}
+
+/** Under the top bar while the network is gone; a toast when it is back. */
+export function OfflineBanner() {
+  const { t } = useI18n();
+  const online = useOnline();
+  const toast = useToast();
+  const was = useRef(online);
+  useEffect(() => {
+    if (online && !was.current) toast({ text: t('net.back'), tone: 'good' });
+    was.current = online;
+  }, [online, toast, t]);
+  return (
+    <div className="offline-host" role="status">
+      {!online && (
+        <Callout tone="inverse" icon="offline" className="offline-banner">
+          {t('net.offline')}
+        </Callout>
+      )}
+    </div>
   );
 }

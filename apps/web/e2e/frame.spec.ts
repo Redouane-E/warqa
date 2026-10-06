@@ -69,6 +69,9 @@ test('?beat opens a beat; Alt+↑ goes up a place, but not while typing or with 
   // unsaved work asks before it is lost; Stay keeps it
   await page.locator('.beat-btn').first().focus();
   await page.keyboard.press('Alt+ArrowUp');
+  // the dialog names the beat and what would be lost
+  await expect(page.locator('dialog.dialog')).toContainText('Leave without saving your changes to beat 5?');
+  await expect(page.locator('dialog.dialog')).toContainText('The title will be lost.');
   await confirmDialog(page, 'Stay');
   await expect(page).toHaveURL(/lesson\/ch05/);
   await expect(title).toHaveValue('A changed title');

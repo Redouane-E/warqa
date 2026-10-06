@@ -12,6 +12,7 @@ import type { MsgKey } from '../messages';
 import { Link } from '../router';
 import { useConfirm, useToast, useUnsavedGuard } from './overlays';
 import { SideSheet } from './SideSheet';
+import { useNetGate } from './states';
 import { Button, Field, Loading, Notice } from './ui';
 
 interface Form {
@@ -376,6 +377,8 @@ function MapsSection({ id }: { id: string }) {
   const [error, setError] = useState('');
   const [added, setAdded] = useState<GeoResult | null>(null);
   const can = !status?.capabilities?.jobsUnavailable.includes('geo');
+  // the regions come from their site: offline, adding waits
+  const net = useNetGate('geo-net', null, 'geo');
   const load = useCallback(() => {
     api
       .geo(id)
@@ -462,9 +465,18 @@ function MapsSection({ id }: { id: string }) {
           )}
         </Field>
         <div className="field">
-          <Button busy={busy} disabled={!can || !/^[A-Z]{3}$/.test(code)} onClick={() => void add()}>
+          <Button
+            busy={busy}
+            disabled={!can || !/^[A-Z]{3}$/.test(code)}
+            className={can && net.blocked ? 'is-blocked' : undefined}
+            {...(can ? net.props : {})}
+            onClick={() => {
+              if (!net.blocked) void add();
+            }}
+          >
             {busy ? t('geo.adding') : t('geo.add')}
           </Button>
+          {can && net.chip}
         </div>
       </div>
       {!can && <Notice>{t('cap.desktopOnly')}</Notice>}

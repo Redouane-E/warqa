@@ -224,7 +224,15 @@ export function ProjectActions({ id }: { id: string }) {
   const [error, setError] = useState('');
 
   const remove = async () => {
-    if (!(await confirm({ title: w('project.deleteConfirm'), confirm: w('project.deleteYes'), danger: true }))) return;
+    if (
+      !(await confirm({
+        title: w('project.deleteConfirm'),
+        confirm: w('project.deleteYes'),
+        cancel: w('project.deleteNo'),
+        danger: true,
+      }))
+    )
+      return;
     setBusy('delete');
     setError('');
     try {

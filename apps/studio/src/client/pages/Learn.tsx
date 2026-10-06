@@ -8,12 +8,13 @@ import { useStatus } from '../App';
 import { api, errorText, type ProjectListItem } from '../api';
 import { BASE, stripBase } from '../base';
 import { useJobStream } from '../components/JobBoard';
-import { FailureView, RateWait, useLimitDialog } from '../components/states';
+import { FailureView, RateWait, useLimitDialog, useNetGate } from '../components/states';
 import { Button, Icon, Loading, Mark, Notice } from '../components/ui';
 import { useExtras } from '../extras';
 import { passPdf, takePdf } from '../handoff';
 import { type I18n, makeI18n, UI_LANGS, type UiLang, useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
+import { needsNet } from '../net';
 import { type LessonPlace, useSetPlace } from '../place';
 import { loadPacks, loadPlayer, type WarqaPlayer } from '../player';
 import { Link, navigate, useLocation } from '../router';
@@ -103,6 +104,7 @@ export function LearnNewPage() {
   const [lang, setLang] = useState<string>('');
   const [level, setLevel] = useState<LearnLevel | null>(null);
   const [needsAi, setNeedsAi] = useState(false);
+  const [bookInfo, setBookInfo] = useState<ProjectDetail | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const [provider, setProvider] = useState<GuideProvider | null>(fake ? FAKE_PROVIDER : null);
@@ -127,6 +129,11 @@ export function LearnNewPage() {
   const estimate = useCallback(async (book: string) => {
     const e = await api.learnEstimate(book);
     setEst(e);
+    // its models (offline, Teach me waits only for a cloud model)
+    api
+      .project(book)
+      .then(setBookInfo)
+      .catch(() => {});
     setNeedsAi(!!e.error);
     return e;
   }, []);
@@ -407,16 +414,7 @@ export function LearnNewPage() {
         </dl>
         {est && !est.error && <Estimate e={est} />}
         <p className="learn-what">{t('learn.setup.what')}</p>
-        <Button
-          variant="primary"
-          className="teach-me"
-          busy={busy}
-          disabled={busy || !est || !!est.error}
-          onClick={() => void teach()}
-        >
-          <Mark size={22} />
-          {t('learn.setup.teachMe')}
-        </Button>
+        <TeachMe book={bookInfo} busy={busy} disabled={busy || !est || !!est.error} onTeach={() => void teach()} />
         <div className="learn-start-foot">
           <span className="hint">{t('learn.setup.stopNote')}</span>
           <Link className="learn-plan-link" to={`/project/${encodeURIComponent(id)}?step=plan`}>
@@ -509,6 +507,41 @@ function progressOf(events: JobEvent[], status: string | undefined): Progress {
   return p;
 }
 
+/** "Teach me": it calls a model, so it waits for the network (blocked, with its reason, while offline). */
+function TeachMe({
+  book,
+  busy,
+  disabled,
+  onTeach,
+}: {
+  /** The book (its models decide whether teaching needs the internet; not known yet: it does). */
+  book: ProjectDetail | null;
+  busy?: boolean;
+  disabled: boolean;
+  onTeach: () => void;
+}) {
+  const { t } = useI18n();
+  const net = useNetGate('teach-net', book, 'learn');
+  return (
+    <>
+      <Button
+        variant="primary"
+        className={`teach-me${net.blocked ? ' is-blocked' : ''}`}
+        busy={!!busy}
+        disabled={disabled}
+        {...net.props}
+        onClick={() => {
+          if (!net.blocked) onTeach();
+        }}
+      >
+        <Mark size={22} />
+        {t('learn.setup.teachMe')}
+      </Button>
+      {net.chip}
+    </>
+  );
+}
+
 function Making({ p, jobId, onJob }: { p: ProjectDetail; jobId: string; onJob: (id: string) => void }) {
   const i18n = useI18n();
   const { t, usd, langName } = i18n;
@@ -565,6 +598,7 @@ function Making({ p, jobId, onJob }: { p: ProjectDetail; jobId: string; onJob: (
   const failed = info?.status === 'error';
   // what is left to pay, before Continue can be pressed
   const [contError, setContError] = useState(false);
+  const contNet = useNetGate('cont-net', p, 'learn');
   useEffect(() => {
     if (!stopped && !failed) return;
     api
@@ -738,11 +772,21 @@ function Making({ p, jobId, onJob }: { p: ProjectDetail; jobId: string; onJob: (
               <div className="making-stopped">
                 {stopped && <p>{t('learn.making.stopped')}</p>}
                 {contError && <Notice tone="warn">{t('learn.setup.noAi')}</Notice>}
-                <Button variant="primary" icon="play" disabled={!cont} onClick={() => void again()}>
+                <Button
+                  variant="primary"
+                  icon="play"
+                  disabled={!cont}
+                  className={contNet.blocked ? 'is-blocked' : undefined}
+                  {...contNet.props}
+                  onClick={() => {
+                    if (!contNet.blocked) void again();
+                  }}
+                >
                   {cont && cont.usd.p50 > 0
                     ? t('learn.making.continue', { cost: usd(cont.usd.p50) })
                     : t('learn.making.continueFree')}
                 </Button>
+                {contNet.chip}
               </div>
             ) : (
               info?.status !== 'done' && (
@@ -900,10 +944,7 @@ function LearnRestart({ p, onJob }: { p: ProjectDetail; onJob: (id: string) => v
         <p className="learn-what">{t('learn.setup.what')}</p>
         {error && <Notice tone="error">{error}</Notice>}
         {est?.error && <Notice tone="warn">{t('learn.setup.noAi')}</Notice>}
-        <Button variant="primary" className="teach-me" disabled={!est || !!est.error} onClick={() => void teach()}>
-          <Mark size={22} />
-          {t('learn.setup.teachMe')}
-        </Button>
+        <TeachMe book={p} disabled={!est || !!est.error} onTeach={() => void teach()} />
       </section>
     </div>
   );
@@ -1032,6 +1073,9 @@ export function LearnPlayerPage({ id, lid }: { id: string; lid: string }) {
                     run: () => {
                       if (p.lessons.some((l) => l.id === next.id))
                         navigate(`/learn/${encodeURIComponent(id)}/${encodeURIComponent(next.id)}?play=1`);
+                      else if (!navigator.onLine && needsNet(p, 'learn'))
+                        // offline: said on the card, nothing queued
+                        mounted?.learnerNext?.({ status: 'error', message: tRef.current('net.offline') });
                       else if (!asked) {
                         // once: a second click must not queue the same paid chapter again
                         asked = true;
@@ -1113,6 +1157,8 @@ function CourseCard({ c, onMake, busy }: { c: Course; onMake: (c: Course) => voi
   const making = p?.jobs.some((j) => j.type === 'learn' && live(j));
   const nextC = chapters.find((ch) => !made.has(ch.id));
   const nextN = nextC ? chapters.indexOf(nextC) + 1 : 0;
+  // offline: making the next chapter waits for a cloud model (the book not loaded: it waits too)
+  const net = useNetGate(`course-net-${item.id}`, p, 'learn');
   const rows = chapters.slice(0, 3);
   const base = `/learn/${encodeURIComponent(item.id)}`;
   return (
@@ -1171,16 +1217,23 @@ function CourseCard({ c, onMake, busy }: { c: Course; onMake: (c: Course) => voi
           </Link>
         ) : nextC ? (
           // a paid run: only once its cost is known, and once
-          <Button
-            busy={busy}
-            disabled={!c.est || !!c.est.error}
-            title={c.est?.error ? t('learn.setup.noAi') : undefined}
-            onClick={() => onMake(c)}
-          >
-            {c.est && !c.est.error && c.est.usd.p50 > 0
-              ? t('learn.home.makeN', { n: nextN, cost: usd(c.est.usd.p50) })
-              : t('learn.home.makeNFree', { n: nextN })}
-          </Button>
+          <>
+            <Button
+              busy={busy}
+              disabled={!c.est || !!c.est.error}
+              title={c.est?.error ? t('learn.setup.noAi') : undefined}
+              className={net.blocked ? 'is-blocked' : undefined}
+              {...net.props}
+              onClick={() => {
+                if (!net.blocked) onMake(c);
+              }}
+            >
+              {c.est && !c.est.error && c.est.usd.p50 > 0
+                ? t('learn.home.makeN', { n: nextN, cost: usd(c.est.usd.p50) })
+                : t('learn.home.makeNFree', { n: nextN })}
+            </Button>
+            {net.chip}
+          </>
         ) : null}
         <Link className="course-teacher" to={`/project/${encodeURIComponent(item.id)}`}>
           {t('learn.home.openAsTeacher')}

@@ -1162,6 +1162,8 @@ input[type="radio"] {
 }
 .tray-tools {
   display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
   align-items: center;
   gap: 6px;
   margin-inline-start: auto;
@@ -5612,6 +5614,7 @@ select {
 /* ---------- ③ Make: each chapter with its cost before the click, the one being made (redesign 4c) ---------- */
 .make-sheet {
   display: grid;
+  align-content: start;
   padding: 0;
 }
 .make-head {
@@ -8594,4 +8597,113 @@ select {
   border-radius: 0;
   outline: none;
   font-size: 16px;
+}
+
+/* offline: under the top bar, on every screen */
+.offline-banner {
+  max-inline-size: 1440px;
+  margin: 12px auto 0;
+  margin-inline: max(24px, calc((100% - 1392px) / 2));
+}
+
+/* no books yet: a ruled card that takes a dropped PDF */
+.no-books {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 40px 20px;
+  border: 2px dashed var(--wq-control-border);
+  border-radius: var(--wq-radius-sheet);
+  background:
+    linear-gradient(var(--wq-seyes) 1px, transparent 1px) 0 0 / 100% 28px,
+    var(--wq-sheet);
+  text-align: center;
+}
+.no-books.is-over {
+  border-color: var(--wq-ink);
+  background-color: var(--wq-ink-tint);
+}
+.no-books-title {
+  margin: 4px 0 0;
+  font-size: 18px;
+  font-variation-settings: "HEXP" 60;
+  font-weight: 600;
+}
+.no-books-body {
+  max-inline-size: 36ch;
+  margin: 0;
+  color: var(--wq-text-2);
+  font-size: 14px;
+}
+.no-books-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+.no-books-actions label.btn {
+  cursor: pointer;
+}
+.no-books-actions label.btn:has(input:focus-visible) {
+  outline: var(--wq-focus);
+  outline-offset: 2px;
+}
+
+/* no chapters yet: an inset card that drafts the plan */
+.make-empty {
+  margin: 0 20px 20px;
+  padding: 24px 22px;
+  border: 1px solid var(--wq-line);
+  border-radius: var(--wq-radius-sheet);
+  background: color-mix(in srgb, var(--wq-ground) 40%, var(--wq-sheet));
+}
+@media (max-width: 760px) {
+  .make-empty {
+    margin: 0 12px 12px;
+    padding: 18px 16px;
+  }
+}
+/* in a grid card, the chip keeps its own width (beside the work it explains) */
+.chip-desk {
+  justify-self: start;
+}
+.learn-card > .chip-desk {
+  justify-self: center;
+}
+.make-empty-body {
+  max-inline-size: 60ch;
+  margin: 0;
+  font-size: 15px;
+}
+.make-empty-go {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+}
+
+/* pages that are photos: a tile per page, the photos in highlighter yellow */
+.photo-pages {
+  display: grid;
+  gap: 10px;
+  margin-block: 4px 12px;
+}
+.photo-tiles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.photo-tiles > li {
+  inline-size: 28px;
+  block-size: 36px;
+  border: 1.5px solid var(--wq-ink);
+  border-radius: 3px;
+  background: var(--wq-ink-tint);
+}
+.photo-tiles > li.is-photo {
+  border-color: #c9a400;
+  background: var(--wq-fluo-tint);
 }

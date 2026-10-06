@@ -11,6 +11,7 @@ import { useExtras } from '../extras';
 import { passPdf, takePdf } from '../handoff';
 import { BOOK_LANGS, setLang, UI_LANGS, type UiLang, useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
+import { LOCAL_SERVICES } from '../net';
 import { setMode, setOnboarded } from '../prefs';
 import { navigate, useLocation } from '../router';
 
@@ -630,7 +631,9 @@ function Guide({ onSkip, onExample }: { onSkip: () => void; onExample?: () => vo
             : {}),
         budget: { usd: usdLimit > 0 ? usdLimit : null },
       });
-      await api.startJob(p.id, 'ingest', { ocr: 'auto' });
+      // offline with a cloud model: the text layer only (the Read step counts the photo pages left to read)
+      const ocr = navigator.onLine || LOCAL_SERVICES.has(provider.id) ? 'auto' : 'never';
+      await api.startJob(p.id, 'ingest', { ocr });
       setOnboarded(true);
       navigate(`/project/${encodeURIComponent(p.id)}?step=read`);
     } catch (e) {

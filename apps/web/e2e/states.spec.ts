@@ -29,6 +29,23 @@ async function ended(page: Page, act: () => Promise<void>): Promise<string> {
   return status;
 }
 
+/** A new book from the test PDF through the start guide, read (no plan yet). */
+async function bookRead(page: Page, fail = '') {
+  await page.goto(`./?warqa-fake=1&warqa-fake-fail=${encodeURIComponent(fail)}`);
+  await page.getByRole('button', { name: 'Make my first book' }).click();
+  await page.getByRole('radio', { name: 'I teach' }).check();
+  await page.getByRole('button', { name: 'Continue' }).click();
+  await page.getByRole('radio', { name: /Test model/ }).check();
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByTestId('pdf-input').setInputFiles(fixture('textbook-en.pdf'));
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('checkbox', { name: 'Arabic' }).uncheck();
+  await page.getByRole('checkbox', { name: 'French' }).uncheck();
+  await page.getByRole('button', { name: 'Next' }).click();
+  await page.getByRole('button', { name: 'Create the book' }).click();
+  await expect(page.getByRole('cell', { name: 'Chapter 1: Integers' })).toBeVisible({ timeout: 60_000 });
+}
+
 /** A new book from the test PDF through the start guide, read, planned and approved, on its Make step. */
 async function bookAtMake(page: Page, fail: string) {
   await page.goto(`./?warqa-fake=1&warqa-fake-fail=${encodeURIComponent(fail)}`);
@@ -117,4 +134,33 @@ test('the spending limit reached: raise it, and the chapter goes on', async ({ p
   ).toBe('done');
   await expect(ch01).toHaveClass(/is-made/);
   await expect(page.locator('.spend-chip')).toContainText('$3.00');
+});
+
+test('offline: making waits for the internet and says so; back online, it goes on', async ({ page, context }) => {
+  await bookAtMake(page, '');
+  const make = page.locator('.make-row').first().getByRole('button', { name: 'Make', exact: true });
+  await context.setOffline(true);
+  await expect(page.locator('.offline-banner')).toContainText("You're offline. Reading and editing still work");
+  await expect(make).toHaveAttribute('aria-disabled', 'true');
+  await expect(page.locator('.make-sheet')).toContainText('needs the internet');
+  // Go to leaves the spending actions out
+  await page.keyboard.press('ControlOrMeta+k');
+  const goto = page.getByRole('dialog', { name: /Go to/ });
+  await expect(goto).toBeVisible();
+  await expect(goto.getByRole('option', { name: /Make every lesson|Draft the plan/ })).toHaveCount(0);
+  await page.keyboard.press('Escape');
+  await context.setOffline(false);
+  await expect(page.locator('.offline-banner')).toHaveCount(0);
+  await expect(page.locator('.toast')).toContainText("You're back online.");
+  await expect(make).not.toHaveAttribute('aria-disabled', 'true');
+});
+
+test('no chapters yet: the Make step drafts the plan, with its cost', async ({ page }) => {
+  await bookRead(page);
+  await step(page, /Make lessons/).click();
+  const empty = page.locator('.make-empty');
+  await expect(empty).toContainText('No chapters to make yet');
+  await empty.getByRole('button', { name: 'Draft the plan' }).click();
+  await expect(page).toHaveURL(/step=plan/);
+  await expect(page.locator('.plan-chapter')).toHaveCount(4, { timeout: 60_000 });
 });

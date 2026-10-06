@@ -3,17 +3,19 @@
 
 import type { IconName } from '@warqa/brand';
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { JobType, LanguageInfo } from '../../shared/types';
+import type { JobType, LanguageInfo, ProjectDetail } from '../../shared/types';
 import { useStatus } from '../App';
 import { api, errorText, type ProjectListItem } from '../api';
 import { stripBase } from '../base';
 import { useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
+import { needsNet } from '../net';
 import { bookTitle } from '../pages/Home';
 import { STEPS, usePlace } from '../place';
 import { go, navigate } from '../router';
 import { useJobs } from './JobBoard';
 import { useToast } from './overlays';
+import { useOnline } from './states';
 import { trapTab, useEscape } from './tools';
 import { Icon } from './ui';
 
@@ -34,6 +36,7 @@ const fold = (s: string) =>
     .toLowerCase();
 
 export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const online = useOnline();
   const i18n = useI18n();
   const { t, lang, usd, num, langName } = i18n;
   const place = usePlace();
@@ -46,6 +49,8 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
   // the book's languages (what translating and narrating each still needs) and its glossary
   const [langs, setLangs] = useState<LanguageInfo[]>([]);
   const [glossary, setGlossary] = useState<Record<string, string>[]>([]);
+  // the book's models: offline, only cloud work is left out
+  const [detail, setDetail] = useState<ProjectDetail | null>(null);
   const [active, setActive] = useState(0);
   const listId = useId();
   const box = useRef<HTMLDivElement>(null);
@@ -77,11 +82,18 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
         .catch(() => setLangs([]));
       api
         .project(bookId)
-        .then((d) => setGlossary((d.plan?.glossary ?? []).map((g) => g.terms)))
-        .catch(() => setGlossary([]));
+        .then((d) => {
+          setGlossary((d.plan?.glossary ?? []).map((g) => g.terms));
+          setDetail(d);
+        })
+        .catch(() => {
+          setGlossary([]);
+          setDetail(null);
+        });
     } else {
       setLangs([]);
       setGlossary([]);
+      setDetail(null);
     }
     return () => {
       if (opener?.isConnected && (!document.activeElement || document.activeElement === document.body))
@@ -101,7 +113,14 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
       if (book && at === `/project/${encodeURIComponent(book.id)}`) navigate(path, { replace: true, keepScroll: true });
       else void go(path);
     };
-    const can = (type: JobType) => !status?.capabilities?.jobsUnavailable.includes(type);
+    // offline: no work that calls a cloud model or an online voice (the buttons say why; here they are left out;
+    // the book's models not known yet: all of that waits)
+    const can = (type: JobType) =>
+      !status?.capabilities?.jobsUnavailable.includes(type) &&
+      (online ||
+        (detail
+          ? !needsNet(detail, type)
+          : !['plan', 'build', 'translate', 'narrate', 'rewrite', 'improve', 'learn', 'geo', 'ingest'].includes(type)));
     const out: Item[] = [];
     const run =
       (type: JobType, args: Record<string, unknown> = {}) =>
@@ -282,7 +301,25 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
       run: to('/ai#voices'),
     });
     return out;
-  }, [book, place.lesson, books, cost, lang, t, num, jobs, toast, onClose, status, langs, glossary, langName, usd]);
+  }, [
+    book,
+    place.lesson,
+    books,
+    cost,
+    lang,
+    t,
+    num,
+    jobs,
+    toast,
+    onClose,
+    status,
+    langs,
+    glossary,
+    langName,
+    usd,
+    online,
+    detail,
+  ]);
 
   const shown = useMemo(() => {
     const f = fold(q.trim());

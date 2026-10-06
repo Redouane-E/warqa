@@ -3,7 +3,8 @@
 // questions, its problems, regenerating it, and its whole JSON as an escape hatch.
 import { dirOf } from '@warqa/i18n';
 import { useEffect, useRef, useState } from 'react';
-import type { EditorCatalog, Issue, StagePart } from '../../../shared/types';
+import type { EditorCatalog, Issue, ProjectDetail, StagePart } from '../../../shared/types';
+import { useNetGate } from '../../components/states';
 import { Button, Field, Icon, IssueList, Notice } from '../../components/ui';
 import { useI18n } from '../../i18n';
 import { moveName } from './BeatList';
@@ -96,10 +97,14 @@ export interface RegenState {
   instruction: string;
   setInstruction: (s: string) => void;
   start: (instruction: string) => Promise<void>;
+  /** The book (its writer's service decides whether writing again needs the internet). */
+  book?: ProjectDetail | null;
 }
 
 export function Regenerate({ regen }: { regen: RegenState }) {
   const { t } = useI18n();
+  // offline: writing a beat again needs the internet
+  const net = useNetGate('regen-net', regen.book ?? null, 'rewrite');
   return (
     <section className="insp-sec regen" aria-labelledby="regen-title">
       <h3 id="regen-title" className="insp-title">
@@ -122,11 +127,16 @@ export function Regenerate({ regen }: { regen: RegenState }) {
           icon="regenerate"
           busy={regen.busy}
           disabled={regen.disabled}
-          onClick={() => void regen.start(regen.instruction)}
+          className={net.blocked ? 'is-blocked' : undefined}
+          {...net.props}
+          onClick={() => {
+            if (!net.blocked) void regen.start(regen.instruction);
+          }}
         >
           {t('editor.regenBtn')}
         </Button>
         {regen.cost && <span className="mono muted small">{regen.cost}</span>}
+        {net.chip}
       </div>
       <p className="hint">{regen.disabled ? t('editor.regenSaveFirst') : t('editor.regenHint')}</p>
       {regen.error && <Notice tone="error">{regen.error}</Notice>}
@@ -150,10 +160,14 @@ export interface CompareState {
   changed?: boolean;
   /** Keeping it failed (it no longer fits the beats after it, …). */
   error?: string;
+  /** The book (Try again writes the beat again: offline, it may wait for the internet). */
+  book?: ProjectDetail | null;
 }
 
 function Compare({ c, current, lang }: { c: CompareState; current: string; lang: string }) {
   const { t } = useI18n();
+  // offline: trying again writes the beat again
+  const retryNet = useNetGate('retry-net', c.book ?? null, 'rewrite');
   return (
     <section className="insp-sec compare" aria-labelledby="compare-title">
       <h3 id="compare-title" className="insp-title">
@@ -196,9 +210,19 @@ function Compare({ c, current, lang }: { c: CompareState; current: string; lang:
         <Button disabled={c.disabled} onClick={c.keepOld}>
           {t('editor.keepOld')}
         </Button>
-        <Button variant="quiet" icon="regenerate" disabled={c.disabled} onClick={c.again}>
+        <Button
+          variant="quiet"
+          icon="regenerate"
+          disabled={c.disabled}
+          className={retryNet.blocked ? 'is-blocked' : undefined}
+          {...retryNet.props}
+          onClick={() => {
+            if (!retryNet.blocked) c.again();
+          }}
+        >
           {t('common.retry')}
         </Button>
+        {retryNet.chip}
       </div>
       {c.disabled && <p className="hint">{t('editor.regenSaveFirst')}</p>}
     </section>

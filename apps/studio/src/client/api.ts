@@ -258,9 +258,12 @@ export const api = {
 /** A readable message for an error, in the interface language. */
 export function errorText(
   e: unknown,
-  t: (k: 'err.network' | 'err.generic', p?: Record<string, string>) => string,
+  t: (k: 'err.network' | 'err.generic' | 'err.diskFull' | 'err.browserFull', p?: Record<string, string>) => string,
 ): string {
   if (e instanceof HttpError && e.status === 0) return t('err.network');
+  // a full disk, or this browser's storage used up: said in words, not as the system's error
+  if (e instanceof HttpError && e.body.code === 'disk-full') return t('err.diskFull');
+  if (e instanceof HttpError && e.body.code === 'browser-full') return t('err.browserFull');
   return (e as Error)?.message ?? String(e);
 }
 

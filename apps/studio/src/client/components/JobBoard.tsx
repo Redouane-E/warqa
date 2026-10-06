@@ -8,7 +8,7 @@ import { type I18n, useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
 import { navigate } from '../router';
 import { type ToastOptions, useToast } from './overlays';
-import { FailureView, RateWait, useLimitDialog, WaitClock } from './states';
+import { FailureView, RateWait, useLimitDialog, useNetGate, useOfflineBook, WaitClock } from './states';
 import { Button, Icon } from './ui';
 
 const STAGES = [
@@ -872,6 +872,7 @@ function Tray({
   const waitEvent = [...events].reverse().find((e) => e.kind === 'wait');
   const waitUntil = live && waitEvent?.until && waitEvent.until > Date.now() ? waitEvent.until : undefined;
   const [limitDialog, askLimit] = useLimitDialog();
+  const restNet = useNetGate('tray-rest-net', useOfflineBook(tracked.projectId), 'build');
   // a build stopped partway goes on from its last written beat (no force: the beats written are kept); a Stop
   // taken once every chapter was made leaves nothing to go on with
   const asked = info && Array.isArray(info.args.chapters) ? (info.args.chapters as string[]) : undefined;
@@ -962,9 +963,20 @@ function Tray({
             (status === 'cancelled' ||
               (status === 'error' && !['budget', 'key', 'credits', 'quota'].includes(info?.failure?.kind ?? ''))) &&
             restLeft && (
-              <Button variant="primary" icon="play" onClick={() => void makeRest()}>
-                {t('make.rest')}
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  icon="play"
+                  className={restNet.blocked ? 'is-blocked' : undefined}
+                  {...restNet.props}
+                  onClick={() => {
+                    if (!restNet.blocked) void makeRest();
+                  }}
+                >
+                  {t('make.rest')}
+                </Button>
+                {restNet.chip}
+              </>
             )}
           {live && (
             <button
@@ -1033,6 +1045,8 @@ function Tray({
               if (usd === null) return;
               try {
                 await api.saveSettings(tracked.projectId, { budget: { usd } });
+                // offline: the new limit is kept, the work waits for the network (Make the rest says so)
+                if (prog && restNet.blocked) return;
                 // go on: a build makes the rest, other work starts again as it was asked
                 if (prog) await makeRest();
                 else onStart((await api.startJob(tracked.projectId, info.type, info.args)).job);

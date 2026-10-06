@@ -9,9 +9,11 @@ import { api, errorText } from '../../api';
 import { useJobs } from '../../components/JobBoard';
 import { useToast } from '../../components/overlays';
 import { SideSheet } from '../../components/SideSheet';
+import { useOfflineBook, useOnline } from '../../components/states';
 import { Button, Icon, Loading, Notice } from '../../components/ui';
 import { useI18n } from '../../i18n';
 import type { MsgKey } from '../../messages';
+import { needsNet } from '../../net';
 import { SourceText, TranslationBox, type TranslationBoxHandle } from './Editor';
 import { changeOf, liveProblems, putBack, staleRanges, termRanges } from './tokens';
 
@@ -311,6 +313,9 @@ export function ReviewQueue({
   const { t, num, langName } = useI18n();
   const toast = useToast();
   const jobs = useJobs();
+  // offline: translating a line again waits for a cloud translator (said in a toast: the rows stay quiet)
+  const online = useOnline();
+  const book = useOfflineBook(id);
   const [info, setInfo] = useState<ReviewInfo | null>(null);
   const [error, setError] = useState('');
   const [filter, setFilter] = useState<Filter>('all');
@@ -610,6 +615,10 @@ export function ReviewQueue({
                     }
                     onKeep={() => void act(i, { keep: true }, next(i))}
                     onAgain={() => {
+                      if (!online && (!book || needsNet(book, 'translate'))) {
+                        toast({ text: t('net.offline'), tone: 'error' });
+                        return;
+                      }
                       flag(setAgain, k, true);
                       void run('translate', { lang, chapters: [i.lesson], keys: [i.key] }).catch(() =>
                         flag(setAgain, k, false),

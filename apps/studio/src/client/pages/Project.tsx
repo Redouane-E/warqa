@@ -16,9 +16,10 @@ import type {
 import { useStatus } from '../App';
 import { api, errorText, saveFile } from '../api';
 import { BookSettings } from '../components/BookSettings';
+import { DesktopOnly } from '../components/DesktopOnly';
 import { buildProgress, type ChapterRun, useJobStream, useJobs, writingBeat } from '../components/JobBoard';
 import { useConfirm, useToast, useUnsavedGuard } from '../components/overlays';
-import { FailureView, type LimitAsk, useLimitDialog } from '../components/states';
+import { Callout, FailureView, type LimitAsk, serviceInfo, useLimitDialog, useNetGate } from '../components/states';
 import { Button, Field, Icon, LangTag, Loading, Notice } from '../components/ui';
 import { useExtras } from '../extras';
 import { useI18n } from '../i18n';
@@ -153,6 +154,11 @@ function ReadStep({ p, status, run, live, estimate }: StepProps) {
     setPagesError(bad);
     if (!bad) void run('ingest', { ocr, ...(pages.trim() ? { pages: pages.trim() } : {}) });
   };
+  // offline: reading pages from their image calls the vision model (the text layer alone is read here)
+  const readGate = useNetGate('read-net', p, 'ingest');
+  const readNet = ocr === 'never' ? { blocked: false, props: {}, chip: null } : readGate;
+  // pages that are photos (scans the text layer could not read) and nobody has read yet
+  const photos = doc?.read.filter((r) => r.method === 'none').length ?? 0;
   // what reading costs: nothing without the vision model; else per page read from its image
   const perPage = ocr !== 'never' && !p.roles.vision?.error ? estimate?.visionPage : undefined;
   const costNote = [
@@ -327,6 +333,29 @@ function ReadStep({ p, status, run, live, estimate }: StepProps) {
             {t('read.noVision')} <Link to="/ai#keys">{t('nav.ai')}</Link>
           </Notice>
         )}
+        {/* scanned pages not read yet: the vision model reads them as images, for about this much more */}
+        {!p.roles.vision?.error && photos > 0 && ocr !== 'never' && (
+          <div className="photo-pages">
+            <ol className="photo-tiles" aria-hidden="true">
+              {(doc?.read ?? []).slice(0, 40).map((r) => (
+                <li key={r.n} className={r.method === 'none' ? 'is-photo' : ''} />
+              ))}
+            </ol>
+            <Callout tone="info" icon="info" role="status">
+              {estimate?.visionPage
+                ? t('read.photos', {
+                    n: photos,
+                    vision: serviceInfo(p.roles.vision?.model?.split(':')[0] ?? '').family,
+                    cost: usd(Math.max(estimate.visionPage * photos, 0.01)),
+                  })
+                : // no price known (a model on this computer, the test model): no cost made up
+                  t('read.photosFree', {
+                    n: photos,
+                    vision: serviceInfo(p.roles.vision?.model?.split(':')[0] ?? '').family,
+                  })}
+            </Callout>
+          </div>
+        )}
         <div className="read-again-row">
           <Field label={t('read.pages')} hint={t('read.pagesHint')}>
             {(id, d) => (
@@ -370,11 +399,16 @@ function ReadStep({ p, status, run, live, estimate }: StepProps) {
               icon={doc ? 'regenerate' : undefined}
               busy={reading}
               disabled={!canRead}
-              onClick={read}
+              className={readNet.blocked ? 'is-blocked' : undefined}
+              {...readNet.props}
+              onClick={() => {
+                if (!readNet.blocked) read();
+              }}
             >
               {doc ? t('read.again') : t('read.run')}
             </Button>
             <span className="mono muted small">{costNote}</span>
+            {readNet.chip}
           </div>
         </div>
         {pagesError && (
@@ -393,13 +427,13 @@ function ReadStep({ p, status, run, live, estimate }: StepProps) {
             <p className="hint">{t('read.nextBody')}</p>
           </div>
           <div className="next-go">
-            {estimate?.plan ? (
-              <span className="mono muted small">{t('learn.est.cost', { cost: usd(estimate.plan) })}</span>
-            ) : null}
-            <Button variant="primary" busy={live.has('plan')} onClick={() => run('plan')}>
-              {t('plan.draft')}
-              <Icon name="next" className="flip-rtl" />
-            </Button>
+            <DraftPlan
+              p={p}
+              id="read-plan-net"
+              busy={live.has('plan')}
+              cost={estimate?.plan}
+              onDraft={() => run('plan')}
+            />
           </div>
         </section>
       )}
@@ -515,6 +549,7 @@ function PlanStep({ p, run, live, reload, estimate }: StepProps) {
     document.querySelector<HTMLInputElement>(`#gloss-${added.current} input`)?.focus();
     added.current = -1;
   }, [draft?.glossary.length]);
+  const redraftNet = useNetGate('redraft-net', p, 'plan');
 
   if (!draft) {
     if (!p.document) return <Notice>{p.lessons.length ? t('plan.noPlan') : t('plan.needsRead')}</Notice>;
@@ -527,13 +562,7 @@ function PlanStep({ p, run, live, reload, estimate }: StepProps) {
           <p className="hint">{t('read.nextBody')}</p>
         </div>
         <div className="next-go">
-          {estimate?.plan ? (
-            <span className="mono muted small">{t('learn.est.cost', { cost: usd(estimate.plan) })}</span>
-          ) : null}
-          <Button variant="primary" busy={live.has('plan')} onClick={() => run('plan')}>
-            {t('plan.draft')}
-            <Icon name="next" className="flip-rtl" />
-          </Button>
+          <DraftPlan p={p} id="plan-net" busy={live.has('plan')} cost={estimate?.plan} onDraft={() => run('plan')} />
         </div>
       </section>
     );
@@ -898,9 +927,18 @@ function PlanStep({ p, run, live, reload, estimate }: StepProps) {
           {range && <span>{t('plan.making', { n: toMake.length, cost: range })}</span>}
         </p>
         <div className="plan-bar-actions">
-          <Button variant="quiet" busy={live.has('plan')} onClick={() => void redraft()}>
+          <Button
+            variant="quiet"
+            busy={live.has('plan')}
+            className={redraftNet.blocked ? 'is-blocked' : undefined}
+            {...redraftNet.props}
+            onClick={() => {
+              if (!redraftNet.blocked) void redraft();
+            }}
+          >
             {t('plan.redraft')}
           </Button>
+          {redraftNet.chip}
           <Button
             busy={busy === 'save'}
             disabled={!dirty}
@@ -951,12 +989,48 @@ const ENGINES: Record<string, string> = {
 
 type MakeState = 'made' | 'todo' | 'making' | 'waiting' | 'stopped';
 
+/** Draft the plan (it spends: its cost beside it), blocked while offline. */
+function DraftPlan({
+  p,
+  id,
+  busy,
+  cost,
+  onDraft,
+}: {
+  p: ProjectDetail;
+  id: string;
+  busy: boolean;
+  cost: number | undefined;
+  onDraft: () => void;
+}) {
+  const { t, usd } = useI18n();
+  const net = useNetGate(id, p, 'plan');
+  return (
+    <>
+      {cost ? <span className="mono muted small">{t('learn.est.cost', { cost: usd(cost) })}</span> : null}
+      <Button
+        variant="primary"
+        busy={busy}
+        className={net.blocked ? 'is-blocked' : undefined}
+        {...net.props}
+        onClick={() => {
+          if (!net.blocked) onDraft();
+        }}
+      >
+        {t('plan.draft')}
+        <Icon name="next" className="flip-rtl" />
+      </Button>
+      {net.chip}
+    </>
+  );
+}
+
 /**
  * Make (its own card, the Make board): every chapter of the plan with what making it costs before the click, each
  * made lesson's facts (beats, problems, languages, what it cost), the chapter being made with the beat being
  * written, and a chapter stopped partway with what is left. The work itself shows in the tray.
  */
-function MakeStep({ p, status, run, reload, estimate }: StepProps) {
+function MakeStep({ p, status, run, live, reload, estimate }: StepProps) {
   const { t, usd, langName } = useI18n();
   const confirm = useConfirm();
   const jobs = useJobs();
@@ -1082,6 +1156,10 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
   const failedRow = rows.find((r) => r.id === lastBuild?.failure?.chapter);
   // no model can write (no key): the Make buttons wait for one
   const needsKey = !!p.roles.writer?.error;
+  // offline: making needs the internet (unless the models run on this computer)
+  const net = useNetGate('make-net', p, 'build', { narrate: narrate && !engineOff });
+  const blocked = needsKey || net.blocked;
+  const why = needsKey ? 'make-needs-key' : net.blocked ? 'make-net' : undefined;
   // the first chapter stopped on an error is the screen's ink button (Continue from beat N)
   const firstStopped = rows.find((r) => p.drafts?.[r.id]?.stop)?.id;
   /** The tray on the job that stopped this chapter (its log open). */
@@ -1141,11 +1219,35 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
         <div className="make-head">{title}</div>
         <div className="make-empty">
           <h3 className="block-title">{t('make.emptyTitle')}</h3>
-          <p className="hint">{t('make.emptyBody')}</p>
-          <Link className="btn btn-primary" to={`/project/${book}?step=plan`}>
-            <span>{t('make.toPlan')}</span>
-            <Icon name="next" className="flip-rtl" />
-          </Link>
+          <p className="make-empty-body">{t('make.emptyBody')}</p>
+          {/* chapters come from the plan: draft it from here (its cost beside it), once the PDF is read */}
+          <div className="make-empty-go">
+            {p.plan ? (
+              // a plan with no chapter included: the plan is where that changes
+              <Link className="btn btn-primary" to={`/project/${book}?step=plan`}>
+                <span>{t('make.toPlan')}</span>
+                <Icon name="next" className="flip-rtl" />
+              </Link>
+            ) : p.document ? (
+              <DraftPlan
+                p={p}
+                id="make-plan-net"
+                busy={live.has('plan')}
+                cost={estimate?.plan}
+                onDraft={async () => {
+                  await run('plan');
+                  navigate(`/project/${book}?step=plan`, { replace: true });
+                }}
+              />
+            ) : (
+              <>
+                <span className="hint">{t('plan.needsRead')}</span>
+                <Link className="btn btn-default" to={`/project/${book}?step=read`}>
+                  {t('step.read')}
+                </Link>
+              </>
+            )}
+          </div>
         </div>
       </section>
     );
@@ -1167,20 +1269,33 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
             </Link>
           </p>
           {approved && engine !== 'none' && (
-            <label className="check make-narrate">
-              <input
-                type="checkbox"
-                checked={narrate && !engineOff}
-                disabled={engineOff}
-                onChange={(e) => setNarrate(e.target.checked)}
-              />
-              <span>
-                {engine === 'edge'
-                  ? t('make.narrateFree', { engine: ENGINES.edge! })
-                  : t('make.narrate', { engine: ENGINES[engine] ?? engine })}
-              </span>
-              {engineOff && <span className="muted small">{t('cap.desktopOnly')}</span>}
-            </label>
+            <>
+              <label className="check make-narrate">
+                <input
+                  type="checkbox"
+                  checked={narrate && !engineOff}
+                  disabled={engineOff}
+                  aria-describedby={engineOff ? 'make-narrate-desk' : undefined}
+                  onChange={(e) => setNarrate(e.target.checked)}
+                />
+                <span>
+                  {engine === 'edge'
+                    ? t('make.narrateFree', { engine: ENGINES.edge! })
+                    : t('make.narrate', { engine: ENGINES[engine] ?? engine })}
+                </span>
+              </label>
+              {/* the voice runs only on the desktop: why, and where to get it */}
+              {engineOff && (
+                <DesktopOnly
+                  id="make-narrate-desk"
+                  reason={
+                    engine === 'edge'
+                      ? t('ai.edgeDesktop')
+                      : t('make.voiceDesktop', { engine: ENGINES[engine] ?? engine })
+                  }
+                />
+              )}
+            </>
           )}
         </div>
         {approved && (
@@ -1196,11 +1311,11 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
                   icon="play"
                   busy={starting === 'left'}
                   disabled={!!starting}
-                  aria-disabled={needsKey || undefined}
-                  className={needsKey ? 'is-blocked' : undefined}
-                  aria-describedby={needsKey ? 'make-needs-key' : undefined}
+                  aria-disabled={blocked || undefined}
+                  className={blocked ? 'is-blocked' : undefined}
+                  aria-describedby={why}
                   onClick={() => {
-                    if (!needsKey)
+                    if (!blocked)
                       void start(
                         'left',
                         left.map((r) => r.id),
@@ -1215,6 +1330,7 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
                     <span>{t('fail.needsKey')}</span>
                   </Link>
                 )}
+                {!needsKey && net.chip}
               </>
             ) : (
               !builds.length && (
@@ -1257,7 +1373,8 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
                 },
                 { limit: f.limit, spent: f.spent },
               );
-              if (!ok) return;
+              // offline: the new limit is kept; making goes on once the network is back (the buttons say so)
+              if (!ok || blocked) return;
               // the chapter that stopped goes on from its last beat
               const ids = id ? [id] : left.map((r) => r.id);
               if (ids.length) await run('build', args(ids));
@@ -1367,11 +1484,11 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
                         variant={firstStopped === r.id ? 'primary' : 'default'}
                         busy={starting === `row:${r.id}`}
                         disabled={!!starting}
-                        aria-disabled={needsKey || undefined}
-                        className={needsKey ? 'is-blocked' : undefined}
-                        aria-describedby={needsKey ? 'make-needs-key' : undefined}
+                        aria-disabled={blocked || undefined}
+                        className={blocked ? 'is-blocked' : undefined}
+                        aria-describedby={why}
                         onClick={() => {
-                          if (!needsKey) void start(`row:${r.id}`, [r.id]);
+                          if (!blocked) void start(`row:${r.id}`, [r.id]);
                         }}
                       >
                         {state === 'todo'
@@ -1397,7 +1514,12 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
                         variant="quiet"
                         busy={starting === `again:${r.id}`}
                         disabled={!!starting}
-                        onClick={() => void again(r)}
+                        aria-disabled={blocked || undefined}
+                        aria-describedby={why}
+                        className={blocked ? 'is-blocked' : undefined}
+                        onClick={() => {
+                          if (!blocked) void again(r);
+                        }}
                       >
                         {t('make.rebuild')}
                       </Button>

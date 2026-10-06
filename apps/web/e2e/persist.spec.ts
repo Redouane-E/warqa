@@ -4,7 +4,7 @@ import { confirmDialog, openStudio } from './helpers';
 
 test('books and keys survive a reload; keys can be forgotten', async ({ page }) => {
   await openStudio(page);
-  await expect(page.getByText('No books here yet. Start with a PDF.')).toBeVisible();
+  await expect(page.getByRole('heading', { name: 'No books yet' })).toBeVisible();
   await page.getByRole('button', { name: 'Open the example book' }).click();
   await expect(page).toHaveURL(/project\/integers\/lesson\/ch05/);
   // a change to the lesson is saved too

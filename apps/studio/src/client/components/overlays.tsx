@@ -65,13 +65,18 @@ function ConfirmDialog({ pending, onDone }: { pending: Pending; onDone: (ok: boo
       ref={ref}
       className="dialog"
       aria-labelledby="dialog-title"
+      aria-describedby={pending.body ? 'dialog-body' : undefined}
       onCancel={(e) => {
         e.preventDefault();
         done(false);
       }}
     >
       <h2 id="dialog-title">{pending.title}</h2>
-      {pending.body && <div className="dialog-body">{pending.body}</div>}
+      {pending.body && (
+        <div id="dialog-body" className="dialog-body">
+          {pending.body}
+        </div>
+      )}
       <div className="dialog-actions">
         <button ref={safe} type="button" className="btn btn-default" onClick={() => done(false)}>
           {pending.cancel ?? t('common.cancel')}
@@ -169,12 +174,23 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
 }
 
 /** Unsaved changes: leaving the screen through the studio asks first (loss interrupts), and so does closing the tab. */
-export function useUnsavedGuard(dirty: boolean): void {
+export function useUnsavedGuard(
+  dirty: boolean,
+  /** What would be lost, in words ("Leave without saving your changes to beat 3?" and what they are). */
+  describe?: () => { title: string; body?: string } | null,
+): void {
   const { t } = useI18n();
   const confirm = useConfirm();
-  useLeaveGuard(dirty, () =>
-    confirm({ title: t('leave.title'), confirm: t('leave.discard'), cancel: t('leave.stay'), danger: true }),
-  );
+  useLeaveGuard(dirty, () => {
+    const d = describe?.();
+    return confirm({
+      title: d?.title ?? t('leave.title'),
+      ...(d?.body ? { body: d.body } : {}),
+      confirm: t('leave.discard'),
+      cancel: t('leave.stay'),
+      danger: true,
+    });
+  });
 }
 
 /** A result to announce ("Saved"): shown by the toast host while this is rendered. */
