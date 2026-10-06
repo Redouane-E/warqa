@@ -3,7 +3,7 @@
 // details open in the side sheet (pushing the place on wide screens).
 import { dirOf } from '@warqa/i18n';
 import { type MutableRefObject, useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import type { Issue, LessonDetail } from '../../shared/types';
+import type { Issue, LessonDetail, StagePart } from '../../shared/types';
 import { api, errorText } from '../api';
 import { useJobs } from '../components/JobBoard';
 import { Menu } from '../components/Menu';
@@ -16,6 +16,7 @@ import { usePublishBook } from '../place';
 import type { WarqaPlayer } from '../player';
 import { Link, navigate, useLocation } from '../router';
 import { BeatList } from './editor/BeatList';
+import { useCatalog } from './editor/catalog';
 import { Inspector } from './editor/Inspector';
 import { Stage, type StageHandle } from './editor/Stage';
 import {
@@ -23,8 +24,10 @@ import {
   type BeatTime,
   copyBeat,
   freshId,
+  type KeyMove,
   type LessonObj,
   marksOf,
+  renameNode,
   type Timings,
   wordsOf,
 } from './editor/shared';
@@ -182,6 +185,9 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const [error, setError] = useState('');
   const [dirty, setDirty] = useState(false);
   const [issues, setIssues] = useState<Issue[]>([]);
+  // what is on the stage during each beat (the server's last check of the lesson, saved or not)
+  const [parts, setParts] = useState<Record<string, StagePart[]>>({});
+  const catalog = useCatalog(id);
   // ?beat=3 shows the third beat (Go to links here); the address follows the beat shown
   const beatParam = query.get('beat');
   const [sel, setSelState] = useState(() => beatOf(beatParam));
@@ -219,6 +225,42 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const [regenErrors, setRegenErrors] = useState<Record<string, string>>({});
   const dirtyRef = useRef(dirty);
   dirtyRef.current = dirty;
+  // what the translations' keys need since the last save: cue removals (in order, by the saved beat ids) and ids
+  // renamed from their saved value to their current one ("node:eq1" → "eq2"); sent once the lesson is saved
+  const keyMoves = useRef<{ cues: KeyMove[][]; renames: Map<string, string> }>({ cues: [], renames: new Map() });
+  const savedIdOf = (kind: string, id: string) =>
+    [...keyMoves.current.renames.entries()]
+      .find(([k, v]) => k.startsWith(`${kind}:`) && v === id)?.[0]
+      .slice(kind.length + 1) ?? id;
+  const renameKeys = (kind: 'node' | 'q' | 'beat', from: string, to: string) => {
+    const m = keyMoves.current.renames;
+    const hit = [...m.entries()].find(([k, v]) => k.startsWith(`${kind}:`) && v === from);
+    m.set(hit ? hit[0] : `${kind}:${from}`, to);
+  };
+  const moveKeys = (moves: KeyMove[]) => {
+    // written with the beat ids the server knows (a beat renamed since keeps its saved id there until the save)
+    const batch = moves.map((mv) => {
+      const fix = (k: string) => k.replace(/^beat\.([^.]+)\./, (_, b: string) => `beat.${savedIdOf('beat', b)}.`);
+      return { from: fix(mv.from), to: mv.to === null ? null : fix(mv.to) };
+    });
+    keyMoves.current.cues.push(batch);
+    return () => {
+      keyMoves.current.cues = keyMoves.current.cues.filter((b) => b !== batch);
+    };
+  };
+  const sendKeyMoves = useCallback(async () => {
+    const { cues, renames } = keyMoves.current;
+    const prefix = { node: 'node', q: 'q', beat: 'beat' } as Record<string, string>;
+    const named = [...renames.entries()]
+      .map(([k, to]) => {
+        const [kind, from] = [k.slice(0, k.indexOf(':')), k.slice(k.indexOf(':') + 1)];
+        return { from: `${prefix[kind]}.${from}.`, to: `${prefix[kind]}.${to}.` };
+      })
+      .filter((mv) => mv.from !== mv.to);
+    const batches = [...cues, ...(named.length ? [named] : [])].filter((b) => b.length);
+    keyMoves.current = { cues: [], renames: new Map() };
+    if (batches.length) await api.moveStrings(id, lid, batches);
+  }, [id, lid]);
   const tab = query.get('tab') === 'translations' ? 'translations' : 'beats';
   usePublishBook(
     id,
@@ -241,6 +283,9 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
       setDetail(d);
       setLesson(structuredClone(d.lesson) as unknown as LessonObj);
       setIssues(d.issues);
+      setParts(d.parts ?? {});
+      // edits are gone (a reload, a restore): so are the key moves they needed
+      keyMoves.current = { cues: [], renames: new Map() };
       setDirty(false);
       setPreviewLang(
         (cur) =>
@@ -260,7 +305,10 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
     const h = setTimeout(() => {
       api
         .saveLesson(id, lid, lesson, { dry: true })
-        .then((r) => setIssues(r.issues))
+        .then((r) => {
+          setIssues(r.issues);
+          if (r.parts) setParts(r.parts);
+        })
         .catch(() => {});
     }, 700);
     return () => clearTimeout(h);
@@ -337,11 +385,14 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
         const r = await api.saveLesson(id, lid, lesson, { force });
         setIssues(r.issues);
         if (r.saved) {
+          await sendKeyMoves().catch(() => {});
           setDirty(false);
           setBlocked(0);
           setSavedAt(Date.now());
           setReloadKey((k) => k + 1);
-          setDetail(await api.lesson(id, lid));
+          const fresh = await api.lesson(id, lid);
+          setDetail(fresh);
+          setParts(fresh.parts ?? {});
           toast({
             text: t('editor.lessonSaved'),
             tone: 'good',
@@ -357,7 +408,7 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
       }
       setSaving(false);
     },
-    [id, lid, lesson, t, detail, toast, restore],
+    [id, lid, lesson, t, detail, toast, restore, sendKeyMoves],
   );
 
   const beatsLen = lesson?.beats.length ?? 0;
@@ -720,13 +771,30 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
             returnFocus={() => detailsBtn.current}
           >
             <Inspector
-              key={`${beat.id}-${i}`}
+              // by its place: editing the beat's id (Edit as JSON) keeps the inspector as it is
+              key={i}
               beat={beat}
               index={i}
               lessonLang={lessonLang}
+              langs={detail.bookLangs.filter((l) => l !== lessonLang)}
               moves={detail.moves}
               issues={byBeat.get(beat.id) ?? []}
+              catalog={catalog}
+              parts={parts[beat.id] ?? []}
+              allIds={beats.flatMap((b) => b.scene?.add?.map((n) => n.id) ?? [])}
+              allQuestionIds={beats.flatMap((b) => ((b.questions ?? []) as { id?: string }[]).map((q) => q.id ?? ''))}
               update={updateBeat}
+              replace={(b) => {
+                if (b.id !== beat.id) renameKeys('beat', beat.id, b.id);
+                update((l) => void (l.beats[i] = b));
+              }}
+              renameNode={(from, to) => {
+                renameKeys('node', from, to);
+                update((l) => renameNode(l, i, from, to));
+              }}
+              moveKeys={moveKeys}
+              renameKeys={renameKeys}
+              onGoTo={setSel}
               regen={{
                 busy: !!rewriting[beat.id],
                 error: regenErrors[beat.id] ?? '',

@@ -122,6 +122,11 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **The beat inspector, generated from the lesson format (redesign 4d2).** The parts on a beat's stage each open a
+  form built from their component's definition (lists fold to a line per item, translated fields say so, problems
+  show on their field), and new parts come from the catalog; renaming a part carries its cues and questions along.
+  The cues of each mark open an editor (when, on which part, the action with its own settings, the duration), and
+  each question kind has its form. Edit as JSON stays as the escape hatch. Pack components get a form too.
 - **The lesson editor, redesigned (redesign 4d1).** The beats hang on the notebook's margin, the current one on
   the highlighter (a diamond for a beat with questions). The stage is the lesson's own player drawing the beat
   being edited, with "Play this beat" and a clock; **Preview** grows that same player to the whole window with

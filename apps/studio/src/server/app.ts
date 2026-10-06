@@ -4,14 +4,21 @@ import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
 import { faviconSvg, webManifest } from '@warqa/brand';
 import {
+  Card,
+  ColorName,
   checkStrings,
   collectStrings,
+  compileLesson,
   completeTimings,
+  componentsFor,
+  GENERIC_ACTIONS,
   type Lesson,
   type Issue as LessonIssue,
   localize,
   ltext,
   MOVES,
+  Question,
+  Slot,
   Strings,
   safeParseLesson,
   type Timings,
@@ -24,6 +31,7 @@ import { streamSSE } from 'hono/streaming';
 import * as z from 'zod';
 import type {
   Capabilities,
+  EditorCatalog,
   Issue,
   JobType,
   LessonDetail,
@@ -31,6 +39,7 @@ import type {
   ReviewInfo,
   ReviewItem,
   ReviewState,
+  StagePart,
   StatusInfo,
 } from '../shared/types.js';
 import { JOB_TYPES } from '../shared/types.js';
@@ -694,6 +703,68 @@ export function createApp(opts: AppOptions) {
     return { issues, stringIssues };
   }
 
+  /** What is on the stage during each beat: its nodes (not those fading out), their parts, the beat that added them. */
+  function stageParts(lesson: Lesson): Record<string, StagePart[]> {
+    const out: Record<string, StagePart[]> = {};
+    try {
+      const compiled = compileLesson(lesson, undefined, { strict: false });
+      const added = new Map<string, number>();
+      compiled.beats.forEach((cb, i) => {
+        for (const n of lesson.beats[i]!.scene.add) added.set(n.id, i);
+        const leaving = new Set(cb.leaving);
+        out[cb.id] = cb.start.order
+          .filter((id) => !leaving.has(id))
+          .map((id) => {
+            const n = cb.start.nodes[id]!;
+            return { id, type: n.type, parts: Object.keys(n.subs), from: added.get(id) ?? i };
+          });
+      });
+    } catch {
+      /* a lesson that does not compile shows no parts; its problems say why */
+    }
+    return out;
+  }
+
+  /** The editor's catalog: every component (the book's packs too) with its props and actions as JSON Schema. */
+  app.get('/api/projects/:id/components', (c) => {
+    const p = project(c.req.param('id')); // opening the book registers its component packs
+    // the registry holds every pack opened in this process: a book offers its own and the built-in ones
+    const own = new Set(P.loadPacks(p.root, p.config.components).flatMap((x) => x.types));
+    const js = (schema: z.ZodType): Record<string, unknown> => {
+      try {
+        const out = z.toJSONSchema(schema, { io: 'input', unrepresentable: 'any' }) as Record<string, unknown>;
+        delete out.$schema;
+        return out;
+      } catch {
+        return {};
+      }
+    };
+    const catalog: EditorCatalog = {
+      components: componentsFor()
+        .filter((d) => !d.external || own.has(d.type))
+        .map((d) => ({
+          type: d.type,
+          pack: d.pack,
+          defaultSlot: d.defaultSlot,
+          text: d.text,
+          props: js(d.props),
+          actions: Object.fromEntries(
+            Object.entries(d.actions ?? {}).map(([name, a]) => [
+              name,
+              { args: js(a.args), ...(a.text ? { text: a.text } : {}), ...(a.dur !== undefined ? { dur: a.dur } : {}) },
+            ]),
+          ),
+          example: d.examples[0]?.props ?? {},
+        })),
+      generic: [...GENERIC_ACTIONS],
+      question: js(Question),
+      card: js(Card),
+      colors: [...ColorName.options],
+      slots: [...Slot.options],
+    };
+    return c.json(catalog);
+  });
+
   /** "Chapter 5 · Unit 2": the lesson's number among the chapters to make, and the book unit holding it. */
   function lessonPlace(p: P.Project, lid: string): Pick<LessonDetail, 'chapter' | 'unit'> {
     let plan: ReturnType<typeof P.loadPlan>;
@@ -768,6 +839,7 @@ export function createApp(opts: AppOptions) {
       bookLangs: p.book.langs,
       bookId: p.book.id,
       ...lessonPlace(p, lid),
+      parts: stageParts(lesson),
     };
     return c.json(detail);
   });
@@ -797,7 +869,8 @@ export function createApp(opts: AppOptions) {
     const { issues, stringIssues } = lessonIssues(p, lid, lesson);
     // translation problems never block saving the author lesson; they are follow-ups for the translations
     const blocking = issues.filter((i) => i.level === 'error' && !i.lang);
-    if (dry) return c.json({ saved: false, issues, stringIssues, entries: collectStrings(lesson) });
+    if (dry)
+      return c.json({ saved: false, issues, stringIssues, entries: collectStrings(lesson), parts: stageParts(lesson) });
     if (blocking.length && !force)
       return c.json(
         { error: `${blocking.length} errors: fix them or save anyway`, saved: false, issues, stringIssues },
@@ -805,6 +878,46 @@ export function createApp(opts: AppOptions) {
       );
     p.saveLesson(lid, raw);
     return c.json({ saved: true, issues, stringIssues, entries: collectStrings(lesson) });
+  });
+
+  /**
+   * After ids changed in the editor (a part, a question, a beat) or cues were removed, the translations' keys follow:
+   * batches in order, each applied at once (keys starting with `from` start with `to`, or go when `to` is null).
+   */
+  app.post('/api/projects/:id/lessons/:lid/strings/move', async (c) => {
+    const p = project(c.req.param('id'));
+    const lid = lessonIdOf(p, c.req.param('lid'));
+    const body = (await jsonBody(c)) as { batches?: unknown };
+    const ok = (m: unknown): m is { from: string; to: string | null } =>
+      !!m &&
+      typeof (m as { from?: unknown }).from === 'string' &&
+      (m as { from: string }).from.endsWith('.') &&
+      ((m as { to?: unknown }).to === null || typeof (m as { to?: unknown }).to === 'string');
+    const batches = (Array.isArray(body.batches) ? (body.batches as unknown[]) : [])
+      .filter((b): b is unknown[] => Array.isArray(b))
+      .map((b) => b.filter(ok));
+    const lessonLang = (p.loadLessonRaw(lid) as { lang?: string }).lang;
+    let moved = 0;
+    for (const lang of p.book.langs.filter((l) => l !== lessonLang)) {
+      let st = p.loadStrings(lid, lang);
+      if (!st) continue;
+      for (const batch of batches) {
+        const kept: Strings = {};
+        const went: Strings = {};
+        for (const [k, v] of Object.entries(st)) {
+          const mv = batch.find((m) => k.startsWith(m.from));
+          if (!mv) kept[k] = v;
+          else {
+            moved++;
+            if (mv.to !== null) went[mv.to + k.slice(mv.from.length)] = v;
+          }
+        }
+        // a moved key never overwrites one that stays
+        st = { ...went, ...kept };
+      }
+      p.saveStrings(lid, lang, st);
+    }
+    return c.json({ moved });
   });
 
   app.put('/api/projects/:id/lessons/:lid/strings/:lang', async (c) => {

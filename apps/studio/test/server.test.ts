@@ -216,6 +216,56 @@ describe('lessons', () => {
     book.saveBook();
   });
 
+  it('describes the components for the editor, and what is on the stage during each beat', async () => {
+    const cat = (await (await app.request(`/api/projects/${id}/components`)).json()) as {
+      components: { type: string; props: { properties?: Record<string, unknown> }; actions: Record<string, { args: unknown; dur?: number }>; text: string[] }[];
+      generic: string[];
+      question: { oneOf?: unknown[] };
+      slots: string[];
+    };
+    const eq = cat.components.find((c) => c.type === 'equation')!;
+    expect(Object.keys(eq.props.properties ?? {})).toContain('steps');
+    expect(eq.actions.step).toBeDefined();
+    expect(cat.components.find((c) => c.type === 'list')?.text).toContain('items.*.text');
+    expect(cat.generic).toContain('highlight');
+    expect(cat.question.oneOf?.length).toBe(7);
+    expect(cat.slots).toContain('band');
+
+    const d = (await (await app.request(lessonUrl())).json()) as {
+      parts: Record<string, { id: string; type: string; parts: string[]; from: number }[]>;
+    };
+    // the rule beat: its equation (with token parts) and the number line kept from the beat before
+    const rule = d.parts.rule!;
+    expect(rule.find((p) => p.id === 'eq1')?.parts).toContain('tok:0');
+    expect(rule.find((p) => p.id === 'nl')).toMatchObject({ type: 'numberline', from: 1 });
+
+    // a dry run returns them too, so a part just added gets its own
+    const changed = original();
+    changed.beats[2].scene.add.push({ id: 'extra', type: 'list', items: [{ text: 'One' }, { text: 'Two' }] });
+    const dry = (await (await app.request(`${lessonUrl()}?dry=1`, json('PUT', changed))).json()) as {
+      parts: Record<string, { id: string; parts: string[] }[]>;
+    };
+    expect(dry.parts.rule!.find((p) => p.id === 'extra')?.parts).toEqual(['item:0', 'item:1']);
+  });
+
+  it('moves the keys of the translations after ids changed or cues were removed', async () => {
+    const before = JSON.parse(readFileSync(join(dir, 'lessons', 'ch05', 'strings.fr.json'), 'utf8')) as Record<string, unknown>;
+    const node = Object.keys(before).find((k) => k.startsWith('node.'))!;
+    const nodeId = node.split('.')[1]!;
+    const res = await app.request(
+      `${lessonUrl()}/strings/move`,
+      json('POST', { batches: [[{ from: `node.${nodeId}.`, to: 'node.renamed.' }], [{ from: 'beat.intro.', to: null }]] }),
+    );
+    expect(res.status).toBe(200);
+    expect(((await res.json()) as { moved: number }).moved).toBeGreaterThan(0);
+    const after = JSON.parse(readFileSync(join(dir, 'lessons', 'ch05', 'strings.fr.json'), 'utf8')) as Record<string, unknown>;
+    expect(after[node.replace(`node.${nodeId}.`, 'node.renamed.')]).toEqual(before[node]);
+    expect(Object.keys(after).some((k) => k.startsWith(`node.${nodeId}.`))).toBe(false);
+    expect(Object.keys(after).some((k) => k.startsWith('beat.intro.'))).toBe(false);
+    // the example's strings back, for the tests after
+    writeFileSync(join(dir, 'lessons', 'ch05', 'strings.fr.json'), JSON.stringify(before));
+  });
+
   it('saves a valid lesson and blocks one with errors unless forced', async () => {
     const good = original();
     good.beats[0].title = 'A new title';

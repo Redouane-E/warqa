@@ -317,6 +317,43 @@ export interface StringEntry {
   kind: 'narration' | 'text' | 'math-template';
 }
 
+/** A JSON Schema (draft 2020-12, the input side of a Zod schema). */
+export type JsonSchema = Record<string, unknown>;
+
+/** A part on the stage during a beat: a node, its named parts (cues target "id#part") and the beat that added it. */
+export interface StagePart {
+  id: string;
+  type: string;
+  parts: string[];
+  /** Index of the beat that put it on the stage. */
+  from: number;
+}
+
+/** A component as the editor's forms need it (from its definition). */
+export interface ComponentInfo {
+  type: string;
+  pack: string;
+  defaultSlot: string;
+  /** Localizable prop paths ("items.*.text"): the editor marks those fields as translated. */
+  text: string[];
+  props: JsonSchema;
+  /** Its own actions: their arguments, localizable arguments and usual duration in seconds. */
+  actions: Record<string, { args: JsonSchema; text?: string[]; dur?: number }>;
+  /** Props of its first example: a new node on the stage starts from them. */
+  example: Record<string, unknown>;
+}
+
+/** GET /api/projects/:id/components: what the structured inspector is generated from. */
+export interface EditorCatalog {
+  components: ComponentInfo[];
+  /** Actions every node and part has (show, hide, highlight…). */
+  generic: string[];
+  question: JsonSchema;
+  card: JsonSchema;
+  colors: string[];
+  slots: string[];
+}
+
 export interface LessonDetail {
   id: string;
   lesson: Record<string, unknown> & { beats: Record<string, unknown>[]; lang: string; title: string };
@@ -334,6 +371,8 @@ export interface LessonDetail {
   bookId: string;
   /** Its number among the chapters to make (as on the Make step), and its unit in the book, for the kicker. */
   chapter?: number;
+  /** What is on the stage during each beat (by beat id), for the cue and question editors. */
+  parts?: Record<string, StagePart[]>;
   unit?: { index: number; title: string | Record<string, string> };
 }
 

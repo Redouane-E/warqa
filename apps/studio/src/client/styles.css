@@ -1806,6 +1806,345 @@ input[type="radio"] {
   padding-block: 4px;
 }
 
+/* the structured inspector (4d2): parts on the stage, cues, questions, and forms generated from definitions */
+.part-rows,
+.cue-groups,
+.cue-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.part-row {
+  display: grid;
+  grid-template-columns: 32px minmax(0, 1fr) auto auto;
+  align-items: center;
+  gap: 4px 10px;
+  min-block-size: 48px;
+  padding: 6px 6px 6px 10px;
+  padding-inline: 10px 6px;
+  border: 1px solid var(--wq-seyes);
+  border-radius: var(--wq-radius-control);
+}
+.part-row.is-open {
+  border-color: var(--wq-control-border);
+  background: var(--wq-ground);
+}
+.part-row.is-kept {
+  grid-template-columns: 32px minmax(0, 1fr) auto;
+  border-style: dashed;
+  color: var(--wq-text-2);
+}
+.part-tile {
+  display: grid;
+  place-items: center;
+  inline-size: 32px;
+  block-size: 32px;
+  border-radius: var(--wq-radius-sheet);
+  background: var(--wq-ink-tint);
+  color: var(--wq-ink);
+  font-size: 13px;
+}
+.part-text {
+  display: grid;
+  gap: 1px;
+  min-inline-size: 0;
+}
+.part-name {
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+.part-name code {
+  font-size: 12px;
+  color: var(--wq-text-2);
+}
+.part-sum {
+  font-size: 13px;
+  color: var(--wq-text-2);
+  overflow-wrap: anywhere;
+}
+.part-add {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+}
+.part-add select {
+  flex: 1 1 160px;
+  min-inline-size: 0;
+}
+.node-editor {
+  grid-column: 1 / -1;
+  display: grid;
+  gap: 12px;
+  padding: 12px 4px 6px;
+  border-block-start: 1px solid var(--wq-seyes);
+}
+.node-place {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(150px, 100%), 1fr));
+  gap: 10px;
+}
+.sf-field {
+  display: grid;
+  gap: 4px;
+  min-inline-size: 0;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.sf-label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0;
+  font-size: 14px;
+  font-weight: 500;
+}
+.sf-field input:not([type="checkbox"]),
+.sf-field select,
+.sf-field textarea {
+  inline-size: 100%;
+  min-block-size: 40px;
+}
+.sf-group,
+.sf-list,
+.sf-tuple,
+.sf-record,
+.sf-union {
+  display: grid;
+  gap: 10px;
+}
+fieldset.sf-group,
+fieldset.sf-list,
+fieldset.sf-record,
+fieldset.sf-tuple,
+fieldset.sf-union {
+  padding: 8px 10px;
+  border: 1px solid var(--wq-seyes);
+  border-radius: var(--wq-radius-control);
+}
+/* nested groups lean on their parent's frame: no frame in a frame in a frame */
+fieldset fieldset fieldset {
+  padding: 0;
+  border: 0;
+}
+.sf-fold {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  inline-size: 100%;
+  min-block-size: 40px;
+  padding: 6px 8px;
+  border: 1px solid var(--wq-seyes);
+  border-radius: var(--wq-radius-control);
+  background: var(--wq-sheet);
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-align: start;
+  cursor: pointer;
+  overflow: hidden;
+}
+.sf-fold bdi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sf-fold-icon {
+  flex: none;
+  transition: rotate var(--wq-t-tap) var(--wq-ease-settle);
+}
+.sf-fold[aria-expanded="true"] {
+  margin-block-end: 8px;
+}
+.sf-fold[aria-expanded="true"] .sf-fold-icon {
+  rotate: 90deg;
+}
+[dir="rtl"] .sf-fold[aria-expanded="true"] .sf-fold-icon {
+  rotate: -90deg;
+}
+.sf-tuple-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(80px, 100%), 1fr));
+  gap: 8px;
+}
+.sf-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 0;
+  min-inline-size: 0;
+}
+/* a list inside a list: its tools under the item, so the item keeps the width (a token of an equation's step) */
+.sf-items .sf-items .sf-item {
+  grid-template-columns: minmax(0, 1fr);
+}
+.sf-items .sf-items .sf-n {
+  display: none;
+}
+.sf-items .sf-items .sf-item-tools {
+  justify-content: flex-end;
+}
+.sf-items {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 8px;
+}
+.sf-item,
+.sf-record-row {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: start;
+  gap: 8px;
+}
+.sf-n {
+  min-inline-size: 18px;
+  padding-block-start: 10px;
+  font-size: 12px;
+  color: var(--wq-text-2);
+}
+.sf-item-body {
+  min-inline-size: 0;
+}
+.sf-item-tools {
+  display: flex;
+  align-items: center;
+}
+.sf-item-tools .icon-btn,
+.sf-remove {
+  inline-size: 30px;
+  block-size: 30px;
+}
+.sf-key {
+  inline-size: 7em;
+}
+.sf-absent {
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+}
+.sf-check {
+  min-block-size: 40px;
+}
+.sf-hint {
+  font-size: 12.5px;
+  color: var(--wq-text-2);
+}
+.sf-error {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--wq-pen);
+}
+.sf-field.has-error > input,
+.sf-field.has-error > select,
+.sf-field.has-error > textarea {
+  border-width: 2px;
+  border-color: var(--wq-pen);
+}
+.prop-code {
+  font-size: 13px;
+  font-weight: 400;
+}
+.cue-group {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: start;
+  gap: 4px 8px;
+}
+.cue-group > .mark-chip,
+.cue-group > .small {
+  margin-block-start: 12px;
+}
+.cue-row {
+  border-radius: var(--wq-radius-control);
+}
+.cue-row.is-open {
+  border: 1px solid #e8c200;
+  background: color-mix(in srgb, var(--wq-fluo-tint) 45%, var(--wq-sheet));
+}
+.cue-line {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 2px 8px;
+  inline-size: 100%;
+  min-block-size: 44px;
+  padding: 8px 10px;
+  border: 0;
+  border-radius: var(--wq-radius-control);
+  background: none;
+  color: inherit;
+  font: inherit;
+  font-size: 14px;
+  text-align: start;
+  cursor: pointer;
+}
+.cue-line:hover {
+  background: var(--wq-ground);
+}
+.cue-target {
+  font-size: 12.5px;
+  overflow-wrap: anywhere;
+}
+.cue-dur {
+  margin-inline-start: auto;
+  font-size: 12px;
+  color: var(--wq-text-2);
+}
+.cue-none {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 8px;
+  min-block-size: 44px;
+}
+.cue-editor {
+  display: grid;
+  gap: 10px;
+  padding: 4px 10px 12px;
+}
+.cue-when,
+.cue-on {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.cue-when select,
+.cue-on select {
+  flex: 1 1 140px;
+  min-inline-size: 0;
+}
+.cue-num {
+  display: flex;
+  flex: 1 1 100%;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--wq-text-2);
+}
+.cue-num input {
+  inline-size: 5.5em;
+}
+.cue-args {
+  padding: 8px 10px;
+  border-radius: var(--wq-radius-control);
+  background: var(--wq-sheet);
+}
+.cue-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.add-cue {
+  justify-self: start;
+}
+
 /* the beat's inspector, in the side sheet */
 .beat-sheet .side-sheet-head h2 {
   display: grid;
@@ -1863,31 +2202,6 @@ input[type="radio"] {
 }
 .insp-delete {
   color: var(--wq-pen);
-}
-.cue-map {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 8px;
-}
-.cue-map > li {
-  display: flex;
-  gap: 10px;
-  align-items: baseline;
-  flex-wrap: wrap;
-}
-.cue-map ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-  display: grid;
-  gap: 2px;
-  min-inline-size: 0;
-}
-.cue-map code {
-  font-size: 12.5px;
-  overflow-wrap: anywhere;
 }
 details > summary {
   cursor: pointer;
@@ -5782,5 +6096,24 @@ select {
   .make-chip .chip-dot,
   .build-stage-mark i {
     animation: none;
+  }
+}
+@media (max-width: 760px) {
+  /* phones: every list item gets the whole width, its tools under it */
+  .sf-item {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .sf-n {
+    display: none;
+  }
+  .sf-item-tools {
+    justify-content: flex-end;
+  }
+  fieldset.sf-group,
+  fieldset.sf-list,
+  fieldset.sf-record,
+  fieldset.sf-tuple,
+  fieldset.sf-union {
+    padding: 6px 8px;
   }
 }

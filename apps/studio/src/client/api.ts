@@ -3,6 +3,7 @@
 import type { KeyCheck } from '../shared/providers';
 import type {
   BookPlan,
+  EditorCatalog,
   EstimateInfo,
   GeoLayerInfo,
   Issue,
@@ -19,6 +20,7 @@ import type {
   ReviewInfo,
   ReviewItem,
   ReviewState,
+  StagePart,
   StatusInfo,
   StringEntry,
 } from '../shared/types';
@@ -78,6 +80,8 @@ export interface SaveLessonResult {
   stringIssues?: Record<string, Record<string, string[]>>;
   entries?: StringEntry[];
   error?: string;
+  /** What is on the stage during each beat (a dry run returns it, so new nodes get their parts). */
+  parts?: Record<string, StagePart[]>;
 }
 
 export const api = {
@@ -112,6 +116,15 @@ export const api = {
   cancelJob: (jobId: string) => req<{ job: JobInfo }>('POST', `/api/jobs/${jobId}/cancel`),
   lesson: (id: string, lid: string) =>
     req<LessonDetail>('GET', `/api/projects/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lid)}`),
+  /** Move the keys of a lesson's translations after ids changed or cues were removed (batches, in order). */
+  moveStrings: (id: string, lid: string, batches: { from: string; to: string | null }[][]) =>
+    req<{ moved: number }>(
+      'POST',
+      `/api/projects/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lid)}/strings/move`,
+      { batches },
+    ),
+  /** Components, actions and question kinds as JSON Schemas: the editor's forms are generated from them. */
+  components: (id: string) => req<EditorCatalog>('GET', `/api/projects/${encodeURIComponent(id)}/components`),
   async saveLesson(
     id: string,
     lid: string,

@@ -1,11 +1,15 @@
-// The beat inspector (in the side sheet): the beat's title and teaching move, what each mark does, its problems,
-// regenerating it, and its JSON as an escape hatch.
+// The beat inspector (in the side sheet), generated from the lesson format: the beat's title and teaching move,
+// the parts on its stage (forms from their components' definitions), what each mark does (the cue editor), its
+// questions, its problems, regenerating it, and its whole JSON as an escape hatch.
 import { useEffect, useRef, useState } from 'react';
-import type { Issue } from '../../../shared/types';
+import type { EditorCatalog, Issue, StagePart } from '../../../shared/types';
 import { Button, Field, Icon, IssueList, Notice } from '../../components/ui';
 import { useI18n } from '../../i18n';
 import { moveName } from './BeatList';
-import { atText, type Beat, type Cue, markOfCue, marksOf } from './shared';
+import { CuesSection } from './Cues';
+import { StageSection } from './Parts';
+import { QuestionsSection } from './Questions';
+import { type Beat, beatProblem, type KeyMove } from './shared';
 
 /* ---------- validated JSON field ---------- */
 
@@ -15,12 +19,15 @@ export function JsonField({
   shape,
   onValid,
   resetKey,
+  check,
 }: {
   label: string;
   value: unknown;
   shape: 'object' | 'array';
   onValid: (v: unknown) => void;
   resetKey: string;
+  /** A problem with the parsed value that keeps it out (a beat without its narration). */
+  check?: (v: unknown) => string | null;
 }) {
   const { t } = useI18n();
   const [text, setText] = useState(() => JSON.stringify(value ?? (shape === 'array' ? [] : {}), null, 2));
@@ -48,6 +55,8 @@ export function JsonField({
     if (shape === 'array' && !Array.isArray(v)) return setError(t('editor.jsonArray'));
     if (shape === 'object' && (typeof v !== 'object' || v === null || Array.isArray(v)))
       return setError(t('editor.jsonObject'));
+    const problem = check?.(v);
+    if (problem) return setError(problem);
     setError('');
     own.current = true;
     onValid(v);
@@ -69,63 +78,6 @@ export function JsonField({
         />
       )}
     </Field>
-  );
-}
-
-/* ---------- what each mark does ---------- */
-
-export function CuesByMark({ beat }: { beat: Beat }) {
-  const { t } = useI18n();
-  const marks = marksOf(beat.narration);
-  const cues = beat.cues ?? [];
-  const other = cues.filter((c) => {
-    const m = markOfCue(c);
-    return !m || !marks.includes(m);
-  });
-  if (!marks.length && !cues.length) return <p className="muted">{t('editor.noMarks')}</p>;
-  const cueLine = (c: Cue, i: number) => (
-    <li key={i}>
-      <code dir="ltr">
-        {c.do} <b>{c.target}</b>
-        {c.args ? ` ${JSON.stringify(c.args)}` : ''}
-      </code>
-      {typeof c.at === 'object' && c.at.offset ? (
-        <span className="muted small"> {t('editor.at', { at: atText(c.at) })}</span>
-      ) : null}
-    </li>
-  );
-  return (
-    <ul className="cue-map">
-      {marks.map((m) => {
-        const mine = cues.filter((c) => markOfCue(c) === m);
-        return (
-          <li key={m}>
-            <span className="mark-chip" dir="ltr">
-              {m}
-            </span>
-            {mine.length ? <ul>{mine.map(cueLine)}</ul> : <span className="warn small">{t('editor.noCues')}</span>}
-          </li>
-        );
-      })}
-      {!!other.length && (
-        <li>
-          <span className="small muted">{t('editor.otherCues')}</span>
-          <ul>
-            {other.map((c, i) => (
-              // biome-ignore lint/suspicious/noArrayIndexKey: cues have no id
-              <li key={i}>
-                <span className="muted small" dir="ltr">
-                  {atText(c.at)}
-                </span>{' '}
-                <code dir="ltr">
-                  {c.do} <b>{c.target}</b>
-                </code>
-              </li>
-            ))}
-          </ul>
-        </li>
-      )}
-    </ul>
   );
 }
 
@@ -182,9 +134,19 @@ export function Inspector({
   beat,
   index,
   lessonLang,
+  langs,
   moves,
   issues,
+  catalog,
+  parts,
+  allIds,
+  allQuestionIds,
   update,
+  replace,
+  renameNode,
+  onGoTo,
+  moveKeys,
+  renameKeys,
   regen,
   onDuplicate,
   onDelete,
@@ -193,15 +155,61 @@ export function Inspector({
   beat: Beat;
   index: number;
   lessonLang: string;
+  /** The languages its text is translated into. */
+  langs: string[];
   moves: string[];
+  /** This beat's problems (those with a path show on their field). */
   issues: Issue[];
+  catalog: EditorCatalog | null;
+  /** What is on the stage during this beat. */
+  parts: StagePart[];
+  /** Ids of every part added in the lesson, and of every question (new ones must not take them). */
+  allIds: string[];
+  allQuestionIds: string[];
   update: (fn: (b: Beat) => void) => void;
+  /** The whole beat, from "Edit as JSON". */
+  replace: (b: Beat) => void;
+  renameNode: (from: string, to: string) => void;
+  onGoTo: (beat: number) => void;
+  /** Translations keyed by a cue's place follow it; returns how to take the change back. */
+  moveKeys: (moves: KeyMove[]) => () => void;
+  /** A question's translations follow its new id. */
+  renameKeys: (kind: 'q', from: string, to: string) => void;
   regen: RegenState;
   onDuplicate: () => void;
   onDelete: () => void;
   canDelete: boolean;
 }) {
   const { t } = useI18n();
+  const [json, setJson] = useState(false);
+  // parts added in this beat that the last check has not seen yet are on the stage too
+  const nodes: StagePart[] = [
+    ...parts,
+    ...(beat.scene?.add ?? [])
+      .filter((n) => !parts.some((p) => p.id === n.id))
+      .map((n) => ({ id: n.id, type: n.type, parts: [], from: index })),
+  ];
+  if (json)
+    return (
+      <div className="inspector">
+        <section className="insp-sec">
+          <JsonField
+            label={t('editor.beatJson')}
+            shape="object"
+            value={beat}
+            resetKey={`${index}-json`}
+            check={(v) => {
+              const p = beatProblem(v);
+              return p ? t('editor.jsonBeat', { field: p }) : null;
+            }}
+            onValid={(v) => replace(v as Beat)}
+          />
+          <Button icon="back" className="flip-rtl-icon" onClick={() => setJson(false)}>
+            {t('editor.backToForm')}
+          </Button>
+        </section>
+      </div>
+    );
   return (
     <div className="inspector">
       <section className="insp-sec insp-ident">
@@ -233,12 +241,42 @@ export function Inspector({
         </Field>
       </section>
 
-      <section className="insp-sec" aria-labelledby="cues-title">
-        <h3 id="cues-title" className="insp-title">
-          {t('editor.cuesTitle')}
-        </h3>
-        <CuesByMark beat={beat} />
-      </section>
+      <StageSection
+        beat={beat}
+        index={index}
+        lang={lessonLang}
+        langs={langs}
+        catalog={catalog}
+        parts={parts}
+        allIds={allIds}
+        issues={issues}
+        update={update}
+        renameNode={renameNode}
+        onGoTo={onGoTo}
+        moveKeys={moveKeys}
+      />
+
+      <CuesSection
+        beat={beat}
+        nodes={nodes}
+        catalog={catalog}
+        lang={lessonLang}
+        langs={langs}
+        update={update}
+        moveKeys={moveKeys}
+      />
+
+      <QuestionsSection
+        beat={beat}
+        index={index}
+        lang={lessonLang}
+        langs={langs}
+        catalog={catalog}
+        issues={issues}
+        allQuestionIds={allQuestionIds}
+        update={update}
+        renameKeys={renameKeys}
+      />
 
       <section className="insp-sec" aria-labelledby="issues-title">
         <h3 id="issues-title" className="insp-title">
@@ -255,39 +293,10 @@ export function Inspector({
 
       <Regenerate regen={regen} />
 
-      <section className="insp-sec">
-        <details className="insp-json">
-          <summary>{t('editor.editJson')}</summary>
-          <JsonField
-            label={t('editor.scene')}
-            shape="object"
-            value={beat.scene}
-            resetKey={`${beat.id}-${index}-scene`}
-            onValid={(v) => update((b) => void (b.scene = v as Beat['scene']))}
-          />
-          <JsonField
-            label={t('editor.cues')}
-            shape="array"
-            value={beat.cues}
-            resetKey={`${beat.id}-${index}-cues`}
-            onValid={(v) => update((b) => void (b.cues = v as Cue[]))}
-          />
-          <JsonField
-            label={t('editor.questions')}
-            shape="array"
-            value={beat.questions ?? []}
-            resetKey={`${beat.id}-${index}-questions`}
-            onValid={(v) =>
-              update((b) => {
-                if ((v as unknown[]).length) b.questions = v as unknown[];
-                else delete b.questions;
-              })
-            }
-          />
-        </details>
-      </section>
-
       <section className="insp-sec insp-tools">
+        <Button variant="quiet" icon="file" onClick={() => setJson(true)}>
+          {t('editor.editJson')}
+        </Button>
         <Button variant="quiet" icon="plus" onClick={onDuplicate}>
           {t('editor.duplicateBeat')}
         </Button>
