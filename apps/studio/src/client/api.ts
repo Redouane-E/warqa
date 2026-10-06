@@ -11,6 +11,7 @@ import type {
   JobInfo,
   JobType,
   KeyInfo,
+  LanguageInfo,
   LearnEstimateInfo,
   LearnLevel,
   LessonDetail,
@@ -154,27 +155,41 @@ export const api = {
     ),
   review: (id: string, lang: string) =>
     req<ReviewInfo>('GET', `/api/projects/${encodeURIComponent(id)}/review/${encodeURIComponent(lang)}`),
-  reviewString: (id: string, lang: string, body: { lesson: string; key: string; text?: string; approve?: boolean }) =>
+  /** The book's languages: the original and each translation, with their voices and recordings. */
+  languages: (id: string) =>
+    req<{ languages: LanguageInfo[] }>('GET', `/api/projects/${encodeURIComponent(id)}/languages`),
+  /** A sample of a language's voice (the book's own recording, or a free voice reading a sentence). */
+  voiceSampleUrl: (id: string, lang: string) =>
+    withBase(`/api/projects/${encodeURIComponent(id)}/voices/${encodeURIComponent(lang)}/sample`),
+  reviewString: (
+    id: string,
+    lang: string,
+    body: { lesson: string; key: string; text?: string; approve?: boolean; keep?: boolean },
+  ) =>
     req<{ state: ReviewState; item?: ReviewItem }>(
       'POST',
       `/api/projects/${encodeURIComponent(id)}/review/${encodeURIComponent(lang)}/strings`,
       body,
     ),
-  reviewApprove: (id: string, lang: string, items: { lesson: string; key: string }[]) =>
+  /** Approve many strings; `approve: false` takes those approvals back (Undo). */
+  reviewApprove: (id: string, lang: string, items: { lesson: string; key: string }[], approve = true) =>
     req<{ approved: number; errors: ReviewImportResult['errors'] }>(
       'POST',
       `/api/projects/${encodeURIComponent(id)}/review/${encodeURIComponent(lang)}/approve`,
-      { items },
+      approve ? { items } : { items, approve: false },
     ),
-  reviewImport: (id: string, lang: string, csv: string) =>
+  /** A reviewed spreadsheet: `dry` says what it would change and writes nothing (the preview before Apply). */
+  reviewImport: (id: string, lang: string, csv: string, dry = false) =>
     req<ReviewImportResult>(
       'POST',
-      `/api/projects/${encodeURIComponent(id)}/review/${encodeURIComponent(lang)}/import`,
+      `/api/projects/${encodeURIComponent(id)}/review/${encodeURIComponent(lang)}/import${dry ? '?dry=1' : ''}`,
       new Raw(csv, 'text/csv'),
     ),
-  /** Where the review queue downloads as CSV (a link). */
-  reviewCsvUrl: (id: string, lang: string) =>
-    withBase(`/api/projects/${encodeURIComponent(id)}/review/${encodeURIComponent(lang)}.csv`),
+  /** Where the review queue downloads as CSV (a link): the whole book, or one chapter. */
+  reviewCsvUrl: (id: string, lang: string, lesson?: string) =>
+    withBase(
+      `/api/projects/${encodeURIComponent(id)}/review/${encodeURIComponent(lang)}.csv${lesson ? `?lesson=${encodeURIComponent(lesson)}` : ''}`,
+    ),
   geo: (id: string) => req<{ layers: GeoLayerInfo[] }>('GET', `/api/projects/${encodeURIComponent(id)}/geo`),
   /** The lesson as the player reads it; `candidate`: with the new version of that beat in it (Compare). */
   playerData: (id: string, lid: string, lang?: string, candidate?: string) => {

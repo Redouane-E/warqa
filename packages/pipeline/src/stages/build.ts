@@ -2,7 +2,7 @@
 // Every stage writes its result into the project folder, so a run can stop and resume at any point.
 import { existsSync, readFileSync } from 'node:fs';
 import { join } from 'node:path';
-import { type Lesson, validateLesson } from '@warqa/lesson';
+import { collectStrings, type Lesson, validateLesson } from '@warqa/lesson';
 import { SourceDocument } from '../ingest/document.js';
 import { costOf } from '../models/catalog.js';
 import { Llm, type LlmOptions } from '../models/llm.js';
@@ -10,9 +10,11 @@ import { resolveRole } from '../models/presets.js';
 import type { Project } from '../project/index.js';
 import { type NarrateReport, narrateLesson } from '../tts/narrate.js';
 import { learnerAudience } from './levels.js';
+import { loadReview, TranslationMemory } from './memory.js';
 import { applyPlan, type BookPlan, loadPlan, planBook } from './plan.js';
+import { changedSource, loadSources } from './sources.js';
 import { type Storyboard, storyboardChapter } from './storyboard.js';
-import { translateLesson } from './translate.js';
+import { isMathOnly, translateLesson } from './translate.js';
 import { unfinishedDraft, writeChapter } from './write.js';
 
 export type ProgressEvent = (
@@ -307,6 +309,50 @@ export function estimateChapters(project: Project): {
     spread: 2.2,
     ...(visionPage !== undefined ? { visionPage } : {}),
   };
+}
+
+/**
+ * What translating into a language costs now: the strings still to translate (not translated yet, or a model's
+ * translation whose original changed) that are neither pure math nor in the book's translation memory, in the given
+ * lessons (default: every made one), or these keys only ("Translate again"). Undefined when the model has no price.
+ */
+export function estimateTranslate(
+  project: Project,
+  lang: string,
+  opts: { lessons?: string[]; keys?: string[]; loaded?: Map<string, Lesson> } = {},
+): { usd: number; strings: number } | undefined {
+  let chars = 0;
+  let strings = 0;
+  let calls = 0;
+  const memories = new Map<string, TranslationMemory>();
+  for (const id of opts.lessons ?? project.lessonIds()) {
+    const lesson = opts.loaded?.get(id) ?? (project.hasLesson(id) ? project.loadLesson(id) : undefined);
+    if (!lesson) continue;
+    if (lesson.lang === lang) continue;
+    const saved = project.loadStrings(id, lang) ?? {};
+    const sources = loadSources(project, id, lang);
+    const reviewed = new Set(Object.keys(loadReview(project, id, lang)));
+    if (!memories.has(lesson.lang)) memories.set(lesson.lang, new TranslationMemory(project, lesson.lang, lang));
+    const tm = memories.get(lesson.lang)!;
+    let here = 0;
+    for (const e of collectStrings(lesson)) {
+      if (opts.keys && !opts.keys.includes(e.key)) continue;
+      const stale = !reviewed.has(e.key) && changedSource(sources, e.key, e.text);
+      if (!opts.keys && saved[e.key] !== undefined && !stale) continue;
+      if (isMathOnly(e.text) || (!opts.keys && tm.get(e.text))) continue;
+      here += e.text.length;
+      strings++;
+    }
+    chars += here;
+    if (here) calls += Math.ceil(here / 5000);
+  }
+  if (!strings) return { usd: 0, strings: 0 };
+  try {
+    // each call carries the instructions, the glossary and similar earlier sentences (about 1500 tokens)
+    return { usd: costOf(resolveRole('translator', project.config), calls * 1500 + chars / 3.5, chars / 3), strings };
+  } catch {
+    return undefined;
+  }
 }
 
 /** What writing one beat again costs (the writer model, with its usual repairs), shown beside Regenerate. */

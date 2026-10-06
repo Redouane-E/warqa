@@ -50,7 +50,10 @@ export interface JobEvent {
   usd?: number;
   /** A written beat's title (write stage). */
   title?: string;
-  /** A build's chapter events (stage "chapter"): its number in the plan, its estimate in USD, the book's limit. */
+  /**
+   * A build's chapter events (stage "chapter") and translate/narrate starts: the chapter's number in the plan, the
+   * estimate in USD, the book's limit.
+   */
   n?: number;
   estimate?: number;
   limit?: number;
@@ -426,6 +429,29 @@ export interface LearnEstimateInfo {
 
 export type ReviewState = 'machine' | 'approved' | 'edited' | 'stale' | 'missing';
 
+export type StringField =
+  | 'lesson-title'
+  | 'unit'
+  | 'title'
+  | 'narration'
+  | 'part'
+  | 'question'
+  | 'choice'
+  | 'answer'
+  | 'cue';
+
+export interface ReviewProblem {
+  code: 'missing' | 'marks' | 'speak-marks' | 'boxes' | 'dollars' | 'glossary';
+  /** Marks or answer boxes the translation lost, and those it has that the original doesn't. */
+  lost?: string[];
+  extra?: string[];
+  /** Glossary: the original's term and the agreed translation. */
+  term?: string;
+  expected?: string;
+  /** Approving waits until it is fixed (marks, answer boxes, $); a glossary miss does not block. */
+  blocking: boolean;
+}
+
 export interface ReviewItem {
   lesson: string;
   key: string;
@@ -434,23 +460,80 @@ export interface ReviewItem {
   source: string;
   text: string;
   state: ReviewState;
-  /** Glossary misses and string-table problems (marks, answer boxes). */
+  /** Glossary misses and string-table problems (marks, answer boxes), in English (spreadsheet, CLI). */
   flags: string[];
+  /** The beat it belongs to (1-based), its title in the original language. */
+  beat?: { n: number; id: string; title: string };
+  field: StringField;
+  part?: { type: string; path: string };
+  problems: ReviewProblem[];
+  /** Every glossary term the original uses, and whether the translation uses the agreed one. */
+  glossary: { term: string; expected: string; used: boolean }[];
+  /** "Original changed": the original as it was when this was translated or checked. */
+  before?: string;
+  /** Checked by a person: when, and where from. */
+  reviewed?: { at: string; by?: 'studio' | 'sheet' | 'cli' };
+  /** The lesson's number among the chapters to make. */
+  chapter?: number;
 }
 
 export interface ReviewInfo {
   lang: string;
   /** The language the lessons are written in (sources), per lesson. */
   sourceLangs: Record<string, string>;
-  lessons: { id: string; title: string }[];
+  lessons: { id: string; title: string; n?: number }[];
   items: ReviewItem[];
   counts: Record<ReviewState | 'flagged' | 'total', number>;
+  /** What translating one string again costs (about), when the translator has a price. */
+  perString?: number;
 }
 
 export interface ReviewImportResult {
   edited: number;
   approved: number;
   errors: { key: string; error: string }[];
+  /** The preview (`?dry=1`): what the file would change, row by row. */
+  changes?: { lesson: string; key: string; kind: 'edited' | 'approved'; before: string; after: string }[];
+}
+
+/** One language of a book, for the Translate & narrate step's cards and the rail. */
+export interface LanguageInfo {
+  lang: string;
+  /** The original: every lesson is written in it. */
+  role: 'original' | 'translation';
+  /** Texts to translate (for the original: written) and the lessons that have them. */
+  texts: number;
+  chapters: number;
+  translated: number;
+  /** Checked by a person (approved or their own wording). */
+  checked: number;
+  stale: number;
+  problems: number;
+  missing: number;
+  audio: {
+    /** Lessons that can be narrated in this language (written or translated). */
+    chapters: number;
+    /** Lessons with a recording of every beat. */
+    narrated: number;
+    /** Beats whose recording no longer matches what they say, or the voice chosen. */
+    changed: number;
+    /** Beats with no recording yet, in lessons that can be narrated. */
+    unrecorded: number;
+    seconds: number;
+  };
+  voice: {
+    engine: string;
+    id: string;
+    /** A short name ("Mouna" for ar-MA-MounaNeural). */
+    name: string;
+    free: boolean;
+    /** This host can run the engine (Edge needs the desktop version). */
+    available: boolean;
+    /** A sample can be played (the book's own recording, or a free engine reading a sentence). */
+    sample: boolean;
+  };
+  /** What the missing part costs, in USD, when known. */
+  estimate?: { translate?: number; narrate?: number };
 }
 
 /* ---------- judge, map layers, teacher panel ---------- */

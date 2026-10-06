@@ -309,32 +309,63 @@ export function checkStrings(lesson: Lesson, strings: Strings, lang: string): Is
   for (const e of collectStrings(lesson)) {
     const v = strings[e.key];
     if (v === undefined) {
-      issues.push({ level: 'error', message: `[${lang}] missing translation for ${e.key} (${e.where})` });
+      issues.push({
+        level: 'error',
+        message: `[${lang}] missing translation for ${e.key} (${e.where})`,
+        code: 'missing',
+        key: e.key,
+      });
       continue;
     }
     const text = typeof v === 'string' ? v : v.text;
     if (e.kind === 'narration') {
-      const want = Object.keys(parseMarks(e.text).marks).sort().join(',');
-      const got = Object.keys(parseMarks(text).marks).sort().join(',');
+      const wantList = Object.keys(parseMarks(e.text).marks).sort();
+      const gotList = Object.keys(parseMarks(text).marks).sort();
+      const want = wantList.join(',');
+      const got = gotList.join(',');
       if (want !== got)
         issues.push({
           level: 'error',
           message: `[${lang}] ${e.key}: marks must be [${want}] like the original, found [${got}]`,
+          code: 'marks',
+          key: e.key,
+          want: wantList,
+          got: gotList,
         });
       if (typeof v !== 'string' && v.speak) {
-        const sp = Object.keys(parseMarks(v.speak).marks).sort().join(',');
-        if (sp !== want) issues.push({ level: 'error', message: `[${lang}] ${e.key}: speak marks must be [${want}]` });
+        const spList = Object.keys(parseMarks(v.speak).marks).sort();
+        if (spList.join(',') !== want)
+          issues.push({
+            level: 'error',
+            message: `[${lang}] ${e.key}: speak marks must be [${want}]`,
+            code: 'speak-marks',
+            key: e.key,
+            want: wantList,
+            got: spList,
+          });
       }
     }
     if (e.kind === 'math-template') {
-      const want = templateBoxes(e.text).sort().join(',');
-      const got = templateBoxes(text).sort().join(',');
-      if (want !== got)
-        issues.push({ level: 'error', message: `[${lang}] ${e.key}: answer boxes must be [${want}], found [${got}]` });
+      const wantList = templateBoxes(e.text).sort();
+      const gotList = templateBoxes(text).sort();
+      if (wantList.join(',') !== gotList.join(','))
+        issues.push({
+          level: 'error',
+          message: `[${lang}] ${e.key}: answer boxes must be [${wantList.join(',')}], found [${gotList.join(',')}]`,
+          code: 'boxes',
+          key: e.key,
+          want: wantList,
+          got: gotList,
+        });
     }
     const dollars = (s: string) => (s.replace(/\\\$/g, '').match(/\$/g) ?? []).length;
     if (dollars(text) % 2)
-      issues.push({ level: 'error', message: `[${lang}] ${e.key}: unbalanced $ (inline math must be $…$)` });
+      issues.push({
+        level: 'error',
+        message: `[${lang}] ${e.key}: unbalanced $ (inline math must be $…$)`,
+        code: 'dollars',
+        key: e.key,
+      });
   }
   const loc = localize(lesson, strings);
   void loc;

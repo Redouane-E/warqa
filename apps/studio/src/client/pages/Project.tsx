@@ -26,6 +26,7 @@ import type { MsgKey } from '../messages';
 import { bookPlaceOf, STEPS, useSetPlace } from '../place';
 import { confirmLeave, Link, navigate, useLocation } from '../router';
 import { bookTitle } from './Home';
+import { LanguagesStep } from './Languages';
 
 type Run = (type: JobType, args?: Record<string, unknown>) => Promise<void>;
 
@@ -1266,94 +1267,7 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
   );
 }
 
-/* ---------- ④ translate & narrate ---------- */
-
-function VoiceStep({ p, status, run, live }: StepProps) {
-  const { t, langName } = useI18n();
-  const engine = p.config.tts.provider;
-  const engineOff = !!status?.capabilities?.ttsUnavailable.includes(engine);
-  // a language needs translating unless every lesson is written in it
-  const isAuthor = (l: string) => p.lessons.length > 0 && p.lessons.every((ls) => ls.lang === l);
-  return (
-    <>
-      <p className="lede">{t('voice.intro')}</p>
-      {p.lessons.some((ls) => ls.langs.length > 1) && (
-        <div className="actions">
-          <Link className="btn btn-default" to={`/project/${encodeURIComponent(p.id)}/review`}>
-            <Icon name="check" />
-            <span>{t('review.open')}</span>
-          </Link>
-        </div>
-      )}
-      <p className="engine-line">
-        <span>{t('voice.engine', { engine })}</span>
-        <Link to={`/project/${encodeURIComponent(p.id)}/settings#speech`}>{t('voice.change')}</Link>
-      </p>
-      {engine === 'none' && <Notice>{t('voice.none')}</Notice>}
-      {engineOff && <Notice tone="warn">{t('cap.engine', { engine })}</Notice>}
-      <div className="table-wrap">
-        <table className="table voice-table">
-          <thead>
-            <tr>
-              <th scope="col">{t('voice.lesson')}</th>
-              {p.book.langs.map((l) => (
-                <th key={l} scope="col">
-                  <span lang={l}>{langName(l)}</span>
-                  <div className="th-actions">
-                    {!isAuthor(l) && (
-                      <Button
-                        variant="quiet"
-                        busy={live.has('translate')}
-                        disabled={!p.lessons.length}
-                        onClick={() => run('translate', { lang: l })}
-                      >
-                        {t('voice.translate', { lang: langName(l) })}
-                      </Button>
-                    )}
-                    {engine !== 'none' && !engineOff && (
-                      <Button
-                        variant="quiet"
-                        busy={live.has('narrate')}
-                        disabled={!p.lessons.length}
-                        onClick={() => run('narrate', { lang: l })}
-                      >
-                        {t('voice.narrate', { lang: langName(l) })}
-                      </Button>
-                    )}
-                  </div>
-                </th>
-              ))}
-            </tr>
-          </thead>
-          <tbody>
-            {p.lessons.map((ls) => (
-              <tr key={ls.id}>
-                <th scope="row">
-                  <code>{ls.id}</code> <span dir="auto">{ls.title[ls.lang]}</span>
-                </th>
-                {p.book.langs.map((l) => {
-                  const has = ls.langs.includes(l);
-                  return (
-                    <td key={l}>
-                      <span className={has ? 'good' : 'muted'}>
-                        {l === ls.lang ? t('voice.author') : has ? t('voice.translated') : t('voice.missing')}
-                      </span>
-                      {has && (
-                        <span className={ls.hasAudio[l] ? 'good audio-mark' : 'muted audio-mark'}>
-                          {ls.hasAudio[l] ? `♪ ${t('voice.audio')}` : t('voice.noAudio')}
-                        </span>
-                      )}
-                    </td>
-                  );
-                })}
-              </tr>
-            ))}
-          </tbody>
-        </table>
-      </div>
-    </>
-  );
-}
+/* ---------- ④ translate & narrate: pages/Languages.tsx ---------- */
 
 /* ---------- ⑤ export ---------- */
 
@@ -1657,6 +1571,13 @@ function Stepper({ p, current, onSelect }: { p: ProjectDetail; current: StepId; 
       const made = ids.filter((id) => p.lessons.some((l) => l.id === id)).length;
       return t('step.meta.made', { made, total: ids.length });
     }
+    // languages every lesson has ("3/4"), all of them once done ("4 lang.")
+    if (s === 'voice' && p.lessons.length && p.book.langs.length > 1) {
+      const done = p.book.langs.filter((l) => p.lessons.every((ls) => ls.langs.includes(l))).length;
+      return p.steps.voice === 'done'
+        ? t('step.meta.langsDone', { n: p.book.langs.length })
+        : t('step.meta.langs', { done, total: p.book.langs.length });
+    }
     return '';
   };
   return (
@@ -1793,7 +1714,7 @@ export function ProjectPage({ id }: { id: string }) {
     );
 
   const current = step ?? p.next;
-  const bare = current === 'read' || current === 'plan' || current === 'make';
+  const bare = current === 'read' || current === 'plan' || current === 'make' || current === 'voice';
   const select = async (s: StepId) => {
     // a step with unsaved work (the plan) asks before it is closed
     if (s !== current && !(await confirmLeave())) return;
@@ -1811,7 +1732,7 @@ export function ProjectPage({ id }: { id: string }) {
     read: ReadStep,
     plan: PlanStep,
     make: MakeStep,
-    voice: VoiceStep,
+    voice: LanguagesStep,
     check: CheckStep,
     share: ShareStep,
   }[current];
@@ -1864,7 +1785,7 @@ export function ProjectPage({ id }: { id: string }) {
       <p className="visually-hidden">{t('project.cached')}</p>
       <div className="project-grid">
         <Stepper p={p} current={current} onSelect={select} />
-        {/* Read, Plan and Make are their own cards, each with its title (the boards of redesign 4b and 4c) */}
+        {/* Read, Plan, Make and Translate & narrate are their own cards, each with its title (redesign 4b–4e) */}
         <section
           className={`step-panel${bare ? ' step-bare' : ' sheet'}`}
           {...(bare ? { 'aria-label': t(`step.${current}` as MsgKey) } : { 'aria-labelledby': 'step-title' })}

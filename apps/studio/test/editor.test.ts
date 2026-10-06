@@ -16,6 +16,14 @@ import {
 } from '../src/client/pages/editor/schema.js';
 import { segmentsOf } from '../src/client/pages/editor/Marks.js';
 import {
+  changeOf,
+  liveProblems,
+  putBack,
+  staleRanges,
+  termRanges,
+  tokensOf,
+} from '../src/client/pages/translate/tokens.js';
+import {
   type Beat,
   beatProblem,
   copyBeat,
@@ -169,6 +177,52 @@ describe('the narration and its marks', () => {
     expect(segmentsOf('[[a]][[b]]Word.').map((s) => ('mark' in s ? `${s.mark}:${s.word}` : s.text))).toEqual([
       'a:',
       'b:Word.',
+    ]);
+  });
+});
+
+describe('the locked parts of a translation', () => {
+  it('splits a text into words, marks, answer boxes and formulas', () => {
+    expect(tokensOf('Keep [[a]]seven, $7 - 3$ \\$5', 'narration').map((t) => t.kind)).toEqual([
+      'text',
+      'mark',
+      'text',
+      'math',
+      'text',
+    ]);
+    // the same brackets in an answer template are answer boxes
+    expect(tokensOf('25 − 8 = [[a]] meters', 'math-template').find((t) => t.kind !== 'text')?.kind).toBe('box');
+  });
+
+  it('sees lost and extra marks, answer boxes and an unbalanced $ while a person types', () => {
+    expect(liveProblems('A [[k]]b [[m]]c.', 'A b [[m]]c [[x]].', 'narration')).toEqual([
+      { code: 'marks', lost: ['k'], extra: ['x'] },
+    ]);
+    expect(liveProblems('= [[a]]', '= ', 'math-template')).toEqual([{ code: 'boxes', lost: ['a'], extra: [] }]);
+    expect(liveProblems('$x$', '$x', 'text')).toEqual([{ code: 'dollars', lost: [], extra: [] }]);
+    expect(liveProblems('A [[k]]b.', 'Un [[k]]b.', 'narration')).toEqual([]);
+  });
+
+  it('puts a lost mark back at the same share of the sentence, between the marks around it', () => {
+    const src = 'Take seven. [[keep]]Keep the seven. [[chg]]Change the minus to a plus.';
+    const tr = 'Prenons sept. [[keep]]On garde le sept. On change le moins en plus.';
+    const r = putBack(src, tr, 'chg', 'narration');
+    expect(r.text).toBe('Prenons sept. [[keep]]On garde le sept. [[chg]]On change le moins en plus.');
+    expect(r.word).toBe('On');
+    expect(r.text.slice(0, r.caret).endsWith('[[chg]]')).toBe(true);
+    // at the caret, when the person put it there
+    expect(putBack(src, tr, 'chg', 'narration', 3).text.startsWith('Pre[[chg]]')).toBe(true);
+  });
+
+  it('says what changed in an original, and finds the old words still in the translation', () => {
+    const c = changeOf('Now −3 − 5 is −8.', 'Now −3 − 5 is −7.')!;
+    expect([c.from, c.to]).toEqual(['−8', '−7']);
+    expect('Now −3 − 5 is −7.'.slice(...c.ranges[0]!)).toBe('−7.');
+    expect(staleRanges('Maintenant −3 − 5 donne −8.', c.from)).toEqual([[24, 27]]);
+    expect(changeOf('Same text.', 'Same text.')).toBeNull();
+    expect(termRanges("L'opposé et les opposés", 'opposé')).toEqual([
+      [2, 8],
+      [16, 23],
     ]);
   });
 });

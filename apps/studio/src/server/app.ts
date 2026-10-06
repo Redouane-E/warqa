@@ -1,5 +1,5 @@
 // The studio's HTTP API (Hono). createApp() is used by the server entry and by the tests.
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
 import { faviconSvg, webManifest } from '@warqa/brand';
@@ -34,6 +34,7 @@ import type {
   EditorCatalog,
   Issue,
   JobType,
+  LanguageInfo,
   LessonDetail,
   ReviewImportResult,
   ReviewInfo,
@@ -1042,28 +1043,8 @@ export function createApp(opts: AppOptions) {
     const batches = (Array.isArray(body.batches) ? (body.batches as unknown[]) : [])
       .filter((b): b is unknown[] => Array.isArray(b))
       .map((b) => b.filter(ok));
-    const lessonLang = (p.loadLessonRaw(lid) as { lang?: string }).lang;
-    let moved = 0;
-    for (const lang of p.book.langs.filter((l) => l !== lessonLang)) {
-      let st = p.loadStrings(lid, lang);
-      if (!st) continue;
-      for (const batch of batches) {
-        const kept: Strings = {};
-        const went: Strings = {};
-        for (const [k, v] of Object.entries(st)) {
-          const mv = batch.find((m) => k.startsWith(m.from));
-          if (!mv) kept[k] = v;
-          else {
-            moved++;
-            if (mv.to !== null) went[mv.to + k.slice(mv.from.length)] = v;
-          }
-        }
-        // a moved key never overwrites one that stays
-        st = { ...went, ...kept };
-      }
-      p.saveStrings(lid, lang, st);
-    }
-    return c.json({ moved });
+    // the translations move with their people's checks and the records of what they were made from
+    return c.json({ moved: P.moveStringKeys(p, lid, batches) });
   });
 
   app.put('/api/projects/:id/lessons/:lid/strings/:lang', async (c) => {
@@ -1082,7 +1063,8 @@ export function createApp(opts: AppOptions) {
         ([k, v]) => known.has(k) && (typeof v === 'string' ? v.length : v.text.length),
       ),
     );
-    p.saveStrings(lid, lang, clean);
+    // typed by hand: recorded as made from the original as it is now (the next translation run keeps it)
+    P.saveTypedStrings(p, lid, lang, clean);
     if (!p.book.langs.includes(lang)) {
       p.book.langs.push(lang);
       p.saveBook();
@@ -1210,11 +1192,18 @@ export function createApp(opts: AppOptions) {
       }
     });
 
-  function reviewInfo(p: P.Project, lang: string): ReviewInfo {
-    const lessons = reviewLessons(p).filter((l) => l.lang !== lang);
+  /** Each lesson's number among the chapters to make (as Make and the editor's kicker say it). */
+  const chapterNumbers = (plan: P.BookPlan | undefined): Map<string, number> =>
+    new Map((plan?.chapters ?? []).filter((c) => c.include).map((c, i) => [c.id, i + 1]));
+
+  function reviewInfo(p: P.Project, lang: string, only?: string): ReviewInfo {
+    const lessons = reviewLessons(p).filter((l) => l.lang !== lang && (!only || l.id === only));
     const plan = planOf(p);
+    const numbers = chapterNumbers(plan);
     const items = lessons.length
-      ? (P.reviewQueue(p, lang, { lessons: lessons.map((l) => l.id), ...(plan ? { plan } : {}) }) as ReviewItem[])
+      ? (P.reviewQueue(p, lang, { lessons: lessons.map((l) => l.id), ...(plan ? { plan } : {}) }) as ReviewItem[]).map(
+          (i) => (numbers.has(i.lesson) ? { ...i, chapter: numbers.get(i.lesson)! } : i),
+        )
       : [];
     const counts: ReviewInfo['counts'] = {
       machine: 0,
@@ -1230,14 +1219,203 @@ export function createApp(opts: AppOptions) {
       if (i.flags.length) counts.flagged++;
       counts.total++;
     }
+    // "Translate again · about $0.001": one string of an average length
+    let perString: number | undefined;
+    try {
+      const chars = items.length ? items.reduce((a, i) => a + i.source.length, 0) / items.length : 0;
+      perString = chars ? P.costOf(P.resolveRole('translator', p.config), 1500 + chars / 3.5, chars / 3) : undefined;
+    } catch {
+      perString = undefined;
+    }
     return {
       lang,
       sourceLangs: Object.fromEntries(lessons.map((l) => [l.id, l.lang])),
-      lessons: lessons.map((l) => ({ id: l.id, title: l.title })),
+      lessons: lessons.map((l) => ({
+        id: l.id,
+        title: l.title,
+        ...(numbers.has(l.id) ? { n: numbers.get(l.id)! } : {}),
+      })),
       items,
       counts,
+      ...(perString !== undefined ? { perString } : {}),
     };
   }
+
+  /* ---------- the book's languages (Translate & narrate) ---------- */
+
+  /** "ar-MA-MounaNeural" → "Mouna"; other engines' voice ids stay as they are. */
+  const voiceName = (id: string) => /^[a-z]{2,3}-[A-Z]{2}-(.+?)(?:Multilingual)?Neural$/.exec(id)?.[1] ?? id;
+  /** What a voice reads when the book has no recording of its own yet (the Models board's sentences). */
+  const SAMPLE_TEXT: Record<string, string> = {
+    ar: 'طرح عدد يعني إضافة مقابله.',
+    ary: 'الطرح هو نزيدو المقابل ديال العدد.',
+    fr: 'Soustraire, c’est ajouter l’opposé.',
+    en: 'Subtracting is adding the opposite.',
+  };
+  const engineOf = (p: P.Project) => {
+    try {
+      return P.ttsProvider(p.config.tts.provider, p.config.worker ? { worker: p.config.worker } : {});
+    } catch {
+      return undefined;
+    }
+  };
+  /** The book's first recording in a language that still matches the voice chosen (a sample that costs nothing). */
+  function sampleClip(p: P.Project, lessons: Lesson[], lang: string): string | undefined {
+    for (const l of lessons) {
+      const clips = p.audioFiles(l.id, lang);
+      if (!Object.keys(clips).length) continue;
+      const changed = new Set(P.changedBeats(p, l.id, lang, undefined, l));
+      const beat = l.beats.find((b) => clips[b.id] && !changed.has(b.id));
+      if (beat) return join(p.audioDir(l.id, lang), clips[beat.id]!);
+    }
+    return undefined;
+  }
+
+  function languagesInfo(p: P.Project): LanguageInfo[] {
+    // each lesson is parsed once for the whole summary (it asks about every language)
+    const lessons = reviewLessons(p);
+    const loaded = new Map(lessons.map((l) => [l.id, l]));
+    const plan = planOf(p);
+    const engine = engineOf(p);
+    const engineId = p.config.tts.provider;
+    const free = !engine?.costPerMChars;
+    const available = !caps.ttsUnavailable.includes(engineId);
+    const originals = new Set(lessons.map((l) => l.lang));
+    return p.book.langs.map((lang): LanguageInfo => {
+      const mine = lessons.filter((l) => l.lang !== lang);
+      const original = !mine.length && lessons.length > 0;
+      let texts = 0;
+      let translated = 0;
+      let checked = 0;
+      let stale = 0;
+      let problems = 0;
+      let missing = 0;
+      if (original || !lessons.length)
+        for (const l of lessons) {
+          texts += collectStrings(l).length;
+          translated = texts;
+        }
+      else
+        for (const i of P.reviewQueue(p, lang, { lessons: mine.map((l) => l.id), loaded, ...(plan ? { plan } : {}) })) {
+          texts++;
+          if (i.state === 'missing') missing++;
+          else translated++;
+          if (i.state === 'approved' || i.state === 'edited') checked++;
+          if (i.state === 'stale') stale++;
+          if (i.problems.length) problems++;
+        }
+      // narration: every lesson written in this language or translated into it
+      const audio = { chapters: 0, narrated: 0, changed: 0, unrecorded: 0, seconds: 0 };
+      let toNarrate = 0;
+      const voiced = engineId !== 'none';
+      const voice = voiced ? P.voiceFor(p, lang) : undefined;
+      for (const l of lessons) {
+        if (l.lang !== lang && !p.loadStrings(l.id, lang)) continue;
+        audio.chapters++;
+        // a book with no voice has nothing recorded to compare
+        if (!voiced) continue;
+        const clips = p.audioFiles(l.id, lang);
+        const changed = P.changedBeats(p, l.id, lang, voice, l);
+        audio.changed += changed.length;
+        const unrecorded = l.beats.filter((b) => !clips[b.id]);
+        audio.unrecorded += unrecorded.length;
+        if (!unrecorded.length) audio.narrated++;
+        let t: ReturnType<P.Project['loadTimings']>;
+        try {
+          t = p.loadTimings(l.id, lang);
+        } catch {
+          t = undefined;
+        }
+        for (const b of l.beats) if (clips[b.id] && t?.[b.id]) audio.seconds += t[b.id]!.dur;
+        if (!free) {
+          const loc = l.lang === lang ? l : localize(l, p.loadStrings(l.id, lang));
+          const redo = new Set([...changed, ...unrecorded.map((b) => b.id)]);
+          for (const b of loc.beats) if (redo.has(b.id)) toNarrate += (b.speak ?? b.narration).length;
+        }
+      }
+      const v = P.voiceFor(p, lang);
+      let translateUsd: number | undefined;
+      if (!original && lessons.length && (missing || stale)) {
+        try {
+          translateUsd = P.estimateTranslate(p, lang, { lessons: mine.map((l) => l.id), loaded })?.usd;
+        } catch {
+          translateUsd = undefined;
+        }
+      }
+      const narrateUsd = !free && engine?.costPerMChars ? (toNarrate * engine.costPerMChars) / 1e6 : undefined;
+      return {
+        lang,
+        role:
+          original || (!lessons.length && originals.size === 0 && lang === p.book.defaultLang)
+            ? 'original'
+            : 'translation',
+        texts,
+        chapters: original ? lessons.length : mine.length,
+        translated,
+        checked,
+        stale,
+        problems,
+        missing,
+        audio,
+        voice: {
+          engine: engineId,
+          id: v.voice,
+          name: engineId === 'none' ? '' : voiceName(v.voice),
+          free,
+          available,
+          sample:
+            engineId !== 'none' &&
+            (!!sampleClip(p, lessons, lang) || (available && free && !!SAMPLE_TEXT[lang.split('-')[0]!])),
+        },
+        ...(translateUsd !== undefined || narrateUsd !== undefined
+          ? {
+              estimate: {
+                ...(translateUsd !== undefined ? { translate: translateUsd } : {}),
+                ...(narrateUsd !== undefined ? { narrate: narrateUsd } : {}),
+              },
+            }
+          : {}),
+      };
+    });
+  }
+
+  app.get('/api/projects/:id/languages', (c) => c.json({ languages: languagesInfo(project(c.req.param('id'))) }));
+
+  /**
+   * A sample of a language's voice: the book's own recording when it has one that matches the voice chosen, else a
+   * free engine reading one sentence (kept). A paid engine is never asked for a sample.
+   */
+  app.get('/api/projects/:id/voices/:lang/sample', async (c) => {
+    const p = project(c.req.param('id'));
+    const lang = reviewLang(c.req.param('lang'));
+    if (p.config.tts.provider === 'none') throw new ApiError(404, 'this book has no voice');
+    const clip = sampleClip(p, reviewLessons(p), lang);
+    if (clip) return sendFile(c.req.raw, clip, { cache: 'no-store' });
+    const engine = engineOf(p);
+    const text = SAMPLE_TEXT[lang.split('-')[0]!];
+    if (!engine || engine.costPerMChars || !text) throw new ApiError(404, 'no sample of this voice yet');
+    if (caps.ttsUnavailable.includes(p.config.tts.provider))
+      throw new ApiError(409, `the "${p.config.tts.provider}" voice needs the desktop version of Warqa`, {
+        desktopOnly: true,
+      });
+    const v = P.voiceFor(p, lang);
+    const dir = p.path('cache', 'tts', 'samples');
+    const base = `${v.provider}-${v.voice}-${lang}`.replace(/[^\w.-]+/g, '_');
+    for (const ext of ['mp3', 'wav']) {
+      const f = join(dir, `${base}.${ext}`);
+      if (existsSync(f)) return sendFile(c.req.raw, f, { cache: 'no-store' });
+    }
+    let r: Awaited<ReturnType<typeof engine.synth>>;
+    try {
+      r = await engine.synth(text, { voice: v.voice, lang, rate: v.rate });
+    } catch (e) {
+      throw new ApiError(500, `the voice could not read the sample: ${(e as Error).message}`);
+    }
+    mkdirSync(dir, { recursive: true });
+    const f = join(dir, `${base}.${r.ext}`);
+    writeFileSync(f, r.audio);
+    return sendFile(c.req.raw, f, { cache: 'no-store' });
+  });
 
   app.get('/api/projects/:id/review/:lang', (c) => {
     const id = c.req.param('id');
@@ -1245,10 +1423,14 @@ export function createApp(opts: AppOptions) {
     const raw = c.req.param('lang');
     if (raw.endsWith('.csv')) {
       const lang = reviewLang(raw.slice(0, -4));
-      const csv = P.reviewCsv(reviewInfo(p, lang).items as P.ReviewItem[]);
+      // one chapter (?lesson=ch05) or the whole book
+      const only = c.req.query('lesson');
+      const lid = only ? lessonIdOf(p, only) : undefined;
+      const csv = P.reviewCsv(reviewInfo(p, lang, lid).items as P.ReviewItem[]);
+      const name = `${p.book.id.replace(/[^\w.-]+/g, '_')}-review-${lang}${lid ? `-${lid}` : ''}.csv`;
       return c.body(csv, 200, {
         'content-type': 'text/csv; charset=utf-8',
-        'content-disposition': `attachment; filename="${p.book.id.replace(/[^\w.-]+/g, '_')}-review-${lang}.csv"`,
+        'content-disposition': `attachment; filename="${name}"`,
         'cache-control': 'no-store',
       });
     }
@@ -1260,6 +1442,7 @@ export function createApp(opts: AppOptions) {
     key: z.string().min(1).max(300),
     text: z.string().max(20000).optional(),
     approve: z.boolean().optional(),
+    keep: z.boolean().optional(),
   });
 
   /** A person approves a string, or saves their own wording (state "edited"); approve: false withdraws it. */
@@ -1273,6 +1456,8 @@ export function createApp(opts: AppOptions) {
       state = P.reviewString(p, lid, lang, body.key, {
         ...(body.text !== undefined ? { text: body.text } : {}),
         ...(body.approve !== undefined ? { approve: body.approve } : {}),
+        ...(body.keep ? { keep: true } : {}),
+        by: 'studio',
       });
     } catch (e) {
       throw new ApiError(422, (e as Error).message);
@@ -1289,7 +1474,11 @@ export function createApp(opts: AppOptions) {
     const p = project(c.req.param('id'));
     const lang = reviewLang(c.req.param('lang'));
     const body = z
-      .object({ items: z.array(z.object({ lesson: z.string().max(64), key: z.string().min(1).max(300) })).max(5000) })
+      .object({
+        items: z.array(z.object({ lesson: z.string().max(64), key: z.string().min(1).max(300) })).max(5000),
+        // false: withdraw these approvals (Undo of approving many)
+        approve: z.boolean().optional(),
+      })
       .parse(await jsonBody(c));
     const known = new Set(p.lessonIds());
     let approved = 0;
@@ -1297,7 +1486,7 @@ export function createApp(opts: AppOptions) {
     for (const it of body.items) {
       try {
         if (!LESSON_ID.test(it.lesson) || !known.has(it.lesson)) throw new Error(`no lesson "${it.lesson}"`);
-        P.reviewString(p, it.lesson, lang, it.key, {});
+        P.reviewString(p, it.lesson, lang, it.key, body.approve === false ? { approve: false } : { by: 'studio' });
         approved++;
       } catch (e) {
         errors.push({ key: `${it.lesson}/${it.key}`, error: (e as Error).message });
@@ -1331,13 +1520,20 @@ export function createApp(opts: AppOptions) {
       });
       const cell = (v: string) => (/[",\n\r]/.test(v) ? `"${v.replace(/"/g, '""')}"` : v);
       const csv = kept.map((r) => r.map(cell).join(',')).join('\r\n');
-      let r: ReviewImportResult;
+      // ?dry=1: what the file would change, nothing written (the side sheet shows it before Apply)
+      const dry = c.req.query('dry') === '1';
+      let r: ReturnType<typeof P.importReviewCsv>;
       try {
-        r = P.importReviewCsv(p, lang, csv);
+        r = P.importReviewCsv(p, lang, csv, { dry });
       } catch (e) {
         throw new ApiError(422, (e as Error).message);
       }
-      return c.json({ edited: r.edited, approved: r.approved, errors: [...errors, ...r.errors] });
+      return c.json({
+        edited: r.edited,
+        approved: r.approved,
+        errors: [...errors, ...r.errors],
+        ...(dry ? { changes: r.changes } : {}),
+      } satisfies ReviewImportResult);
     },
   );
 

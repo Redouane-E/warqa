@@ -233,6 +233,16 @@ describe('localization', () => {
     const issues = checkStrings(lesson, tr, 'fr').map((i) => i.message);
     expect(issues.some((m) => m.includes('beat.rule.narration') && m.includes('marks'))).toBe(true);
     expect(issues.some((m) => m.includes('answer boxes'))).toBe(true);
+    // coded, so tools can say it in the reader's language: which marks the translation lost
+    const coded = checkStrings(lesson, { ...tr, 'beat.intro.title': 'Prix: $5' }, 'fr');
+    const marks = coded.find((i) => i.code === 'marks')!;
+    expect(marks.key).toBe('beat.rule.narration');
+    expect(marks.got).toEqual([]);
+    expect(marks.want).toContain('keep');
+    expect(coded.find((i) => i.code === 'boxes')?.key).toBe('q.p-diffs.rows.0.template');
+    expect(coded.find((i) => i.code === 'dollars')?.key).toBe('beat.intro.title');
+    const { 'beat.intro.title': _gone, ...without } = table;
+    expect(checkStrings(lesson, without, 'fr').find((i) => i.code === 'missing')?.key).toBe('beat.intro.title');
   });
 });
 

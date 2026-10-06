@@ -226,7 +226,8 @@ server.registerTool(
     const p = open(project);
     const issues = checkStrings(p.loadLesson(id), strings, lang);
     if (issues.some((i) => i.level === 'error')) return json({ saved: false, issues });
-    p.saveStrings(id, lang, strings);
+    // recorded as made from the original as it is now, so the next translation run keeps the agent's wording
+    P.saveTypedStrings(p, id, lang, strings);
     const loc = localize(p.loadLesson(id), strings);
     return json({ saved: true, validation: validateLesson(loc, { lang }).issues.filter((i) => i.level === 'error') });
   },

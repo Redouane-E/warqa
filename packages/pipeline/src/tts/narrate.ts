@@ -8,6 +8,7 @@ import { join } from 'node:path';
 import { baseLang, sameLetters } from '@warqa/i18n';
 import { type BeatTiming, localize, spokenText, type Timings } from '@warqa/lesson';
 import type { Project } from '../project/index.js';
+import { loadNarrated, narrationKey, saveNarrated } from '../stages/sources.js';
 import { markTiming } from './align.js';
 import { mp3Duration, wavDuration } from './mp3.js';
 import { ttsProvider, workerAlign } from './providers.js';
@@ -78,6 +79,9 @@ export async function narrateLesson(
     chars: 0,
   };
 
+  // what each recording is made from, kept with the book: a beat whose text or voice changes since is "changed"
+  const narrated = loadNarrated(project, lessonId, lang) ?? { beats: {} };
+  const made = { provider: provider.id, voice, rate };
   for (const beat of lesson.beats) {
     if (opts.beats && !opts.beats.includes(beat.id)) continue;
     let speakSrc = beat.speak ?? beat.narration;
@@ -102,6 +106,7 @@ export async function narrateLesson(
     if (!opts.force && old && old.key === key && existing) {
       // the audio is unchanged; marks may have moved, so re-derive them from the cached word times
       timings[beat.id] = old.timing;
+      narrated.beats[beat.id] = narrationKey(made, beat);
       report.cached.push(beat.id);
       opts.onProgress?.({ beat: beat.id, status: 'cached' });
       continue;
@@ -137,6 +142,8 @@ export async function narrateLesson(
       for (const other of ['mp3', 'wav'])
         if (other !== r.ext) rmSync(join(audioDir, `${beat.id}.${other}`), { force: true });
       timings[beat.id] = timing;
+      narrated.beats[beat.id] = narrationKey(made, beat);
+      saveNarrated(project, lessonId, lang, narrated);
       cache[beat.id] = { key, ext: r.ext, timing, estimated: mt.estimated };
       if (mt.estimated.length) report.estimated[beat.id] = mt.estimated;
       report.synthesized.push(beat.id);
@@ -153,6 +160,8 @@ export async function narrateLesson(
   }
   // drop timings of beats that no longer exist
   for (const id of Object.keys(timings)) if (!lesson.beats.some((b) => b.id === id)) delete timings[id];
+  for (const id of Object.keys(narrated.beats)) if (!lesson.beats.some((b) => b.id === id)) delete narrated.beats[id];
   project.saveTimings(lessonId, lang, timings);
+  saveNarrated(project, lessonId, lang, narrated);
   return report;
 }

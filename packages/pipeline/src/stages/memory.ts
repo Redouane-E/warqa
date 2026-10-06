@@ -2,11 +2,12 @@
 //   tm/<src>-<tgt>.json             source text → translation (machine, edited or approved), book-wide
 //   lessons/<id>/review.<lang>.json key → {status, src}: strings a person approved or edited
 // A string a person approved is never overwritten by the model; the same sentence in a later chapter reuses it.
-import { createHash } from 'node:crypto';
 import { normalizeForMatch } from '@warqa/i18n';
 import { checkStrings, collectStrings, type Lesson, type Strings } from '@warqa/lesson';
 import type { Project } from '../project/index.js';
+import { normText, srcHash } from './hash.js';
 import type { BookPlan } from './plan.js';
+import { changedSource, loadSources, markTranslated } from './sources.js';
 
 export type TmStatus = 'machine' | 'edited' | 'approved';
 
@@ -17,8 +18,10 @@ export interface TmEntry {
   at: string;
 }
 
-const norm = (s: string) => s.normalize('NFC').replace(/\s+/g, ' ').trim();
-export const srcHash = (s: string) => createHash('sha1').update(norm(s)).digest('hex').slice(0, 12);
+const norm = normText;
+
+export { srcHash };
+
 const words = (s: string) =>
   new Set(
     normalizeForMatch(s.replace(/\[\[\w+\]\]|\$[^$]*\$/g, ' '))
@@ -62,6 +65,15 @@ export class TranslationMemory {
     this.dirty = true;
   }
 
+  /** A person's check withdrawn (Undo): their entry for this sentence, when it still holds this text, is the model's again. */
+  demote(source: string, text: string): void {
+    const e = this.entries[norm(source)];
+    if (e && e.status !== 'machine' && e.text === text) {
+      e.status = 'machine';
+      this.dirty = true;
+    }
+  }
+
   /** Earlier translations that share words with `source` (people's versions first), for consistent wording. */
   similar(source: string, n = 8): [string, TmEntry][] {
     const w = words(source);
@@ -96,6 +108,8 @@ export interface ReviewMark {
   /** Hash of the source text when it was reviewed: a changed source makes the review stale. */
   src: string;
   at: string;
+  /** Where the check came from: the studio, a spreadsheet, the command line. */
+  by?: 'studio' | 'sheet' | 'cli';
 }
 export type ReviewFile = Record<string, ReviewMark>;
 
@@ -162,6 +176,30 @@ export function glossaryIssues(
 
 export type ReviewState = 'machine' | 'approved' | 'edited' | 'stale' | 'missing';
 
+/** What part of a lesson a string is ("narration", "question"…), for people. */
+export type StringField =
+  | 'lesson-title'
+  | 'unit'
+  | 'title'
+  | 'narration'
+  | 'part'
+  | 'question'
+  | 'choice'
+  | 'answer'
+  | 'cue';
+
+export interface ReviewProblem {
+  code: 'missing' | 'marks' | 'speak-marks' | 'boxes' | 'dollars' | 'glossary';
+  /** Marks or answer boxes the translation lost, and those it has that the original doesn't. */
+  lost?: string[];
+  extra?: string[];
+  /** Glossary: the original's term and the agreed translation. */
+  term?: string;
+  expected?: string;
+  /** Approving waits until it is fixed (marks, answer boxes, $). */
+  blocking: boolean;
+}
+
 export interface ReviewItem {
   lesson: string;
   key: string;
@@ -170,37 +208,129 @@ export interface ReviewItem {
   source: string;
   text: string;
   state: ReviewState;
-  /** Glossary misses and string-table problems (marks, answer boxes). */
+  /** Glossary misses and string-table problems (marks, answer boxes), in English (the spreadsheet, the CLI). */
   flags: string[];
+  /** The beat it belongs to (1-based), with its title in the original language. */
+  beat?: { n: number; id: string; title: string };
+  field: StringField;
+  /** For a part on the stage: its component and the property ("number line", "label"). */
+  part?: { type: string; path: string };
+  problems: ReviewProblem[];
+  /** Every glossary term the original uses, and whether the translation uses the agreed one. */
+  glossary: { term: string; expected: string; used: boolean }[];
+  /** "Original changed": the original as it was when this was translated or checked. */
+  before?: string;
+  /** Checked by a person: when, and where from. */
+  reviewed?: { at: string; by?: ReviewMark['by'] };
 }
+
+/** Where each string of a lesson sits: its beat and what part of it. */
+export function stringPlaces(
+  lesson: Lesson,
+): Map<string, { beat?: ReviewItem['beat']; field: StringField; part?: ReviewItem['part'] }> {
+  const out = new Map<string, { beat?: ReviewItem['beat']; field: StringField; part?: ReviewItem['part'] }>();
+  const nodeBeat = new Map<string, { n: number; id: string; title: string; type: string }>();
+  const qBeat = new Map<string, { n: number; id: string; title: string }>();
+  lesson.beats.forEach((b, i) => {
+    for (const n of b.scene.add) nodeBeat.set(n.id, { n: i + 1, id: b.id, title: b.title, type: n.type });
+    for (const q of b.questions ?? []) qBeat.set(q.id, { n: i + 1, id: b.id, title: b.title });
+  });
+  const beatOf = (id: string) => {
+    const i = lesson.beats.findIndex((b) => b.id === id);
+    return i < 0 ? undefined : { n: i + 1, id, title: lesson.beats[i]!.title };
+  };
+  for (const e of collectStrings(lesson)) {
+    const k = e.key.split('.');
+    if (k[0] === 'lesson') out.set(e.key, { field: k[1] === 'unit' ? 'unit' : 'lesson-title' });
+    else if (k[0] === 'beat') {
+      const beat = beatOf(k[1]!);
+      const field: StringField = k[2] === 'narration' ? 'narration' : k[2] === 'title' ? 'title' : 'cue';
+      out.set(e.key, { ...(beat ? { beat } : {}), field });
+    } else if (k[0] === 'node') {
+      const nb = nodeBeat.get(k[1]!);
+      out.set(e.key, {
+        ...(nb ? { beat: { n: nb.n, id: nb.id, title: nb.title } } : {}),
+        field: 'part',
+        ...(nb ? { part: { type: nb.type, path: k.slice(2).join('.') } } : {}),
+      });
+    } else if (k[0] === 'q') {
+      const beat = qBeat.get(k[1]!);
+      const f = k[2];
+      const field: StringField =
+        f === 'resolve'
+          ? 'cue'
+          : f === 'options' || f === 'items' || f === 'rows' || f === 'cols' || f === 'wrong'
+            ? 'choice'
+            : f === 'accept' || f === 'answers'
+              ? 'answer'
+              : 'question';
+      out.set(e.key, { ...(beat ? { beat } : {}), field });
+    } else out.set(e.key, { field: 'question' });
+  }
+  return out;
+}
+
+/** The marks or answer boxes one list has that the other lacks. */
+const minus = (a: string[] = [], b: string[] = []) => a.filter((x) => !b.includes(x));
 
 /** Every translatable string of a language with its review state and problems, chapter by chapter. */
 export function reviewQueue(
   project: Project,
   lang: string,
-  opts: { lessons?: string[]; plan?: BookPlan } = {},
+  opts: { lessons?: string[]; plan?: BookPlan; loaded?: Map<string, Lesson> } = {},
 ): ReviewItem[] {
   const out: ReviewItem[] = [];
   for (const id of opts.lessons ?? project.lessonIds()) {
-    const lesson = project.loadLesson(id);
+    const lesson = opts.loaded?.get(id) ?? project.loadLesson(id);
     if (lesson.lang === lang) continue;
     const strings = project.loadStrings(id, lang) ?? {};
     const review = loadReview(project, id, lang);
+    const sources = loadSources(project, id, lang);
+    const places = stringPlaces(lesson);
     const flags = new Map<string, string[]>();
-    const add = (k: string, m: string) => flags.set(k, [...(flags.get(k) ?? []), m]);
+    const problems = new Map<string, ReviewProblem[]>();
+    const add = (k: string, m: string, p: ReviewProblem) => {
+      flags.set(k, [...(flags.get(k) ?? []), m]);
+      problems.set(k, [...(problems.get(k) ?? []), p]);
+    };
     for (const g of glossaryIssues(lesson, strings, opts.plan, lang))
-      add(g.key, `glossary: “${g.term}” → “${g.expected}”`);
+      add(g.key, `glossary: “${g.term}” → “${g.expected}”`, {
+        code: 'glossary',
+        term: g.term,
+        expected: g.expected,
+        blocking: false,
+      });
     const entries = collectStrings(lesson);
     const full = Object.fromEntries(entries.map((e) => [e.key, strings[e.key] ?? e.text]));
     for (const i of checkStrings(lesson, full, lang)) {
-      const k = entries.find((e) => i.message.includes(e.key))?.key;
-      if (k) add(k, i.message);
+      const k = i.key ?? entries.find((e) => i.message.includes(e.key))?.key;
+      if (!k || !i.code) continue;
+      add(k, i.message, {
+        code: i.code,
+        ...(i.want ? { lost: minus(i.want, i.got) } : {}),
+        ...(i.got ? { extra: minus(i.got, i.want) } : {}),
+        blocking: i.level === 'error',
+      });
     }
+    const terms = (opts.plan?.glossary ?? [])
+      .map((g) => [g.terms[lesson.lang], g.terms[lang]] as const)
+      .filter((x): x is readonly [string, string] => !!x[0] && !!x[1]);
     for (const e of entries) {
       const text = strings[e.key];
       const r = review[e.key];
+      // a person's check is stale when the original changed since; a model's translation too (from its record)
+      const changed = changedSource(sources, e.key, e.text);
       const state: ReviewState =
-        typeof text !== 'string' ? 'missing' : !r ? 'machine' : r.src === srcHash(e.text) ? r.status : 'stale';
+        typeof text !== 'string'
+          ? 'missing'
+          : r
+            ? r.src === srcHash(e.text)
+              ? r.status
+              : 'stale'
+            : changed
+              ? 'stale'
+              : 'machine';
+      const place = places.get(e.key) ?? { field: 'question' as const };
       out.push({
         lesson: id,
         key: e.key,
@@ -210,6 +340,13 @@ export function reviewQueue(
         text: typeof text === 'string' ? text : '',
         state,
         flags: flags.get(e.key) ?? [],
+        ...place,
+        problems: problems.get(e.key) ?? [],
+        glossary: terms
+          .filter(([src]) => uses(e.text, src))
+          .map(([term, expected]) => ({ term, expected, used: typeof text === 'string' && uses(text, expected) })),
+        ...(state === 'stale' && changed ? { before: changed.t } : {}),
+        ...(r && state !== 'stale' ? { reviewed: { at: r.at, ...(r.by ? { by: r.by } : {}) } } : {}),
       });
     }
   }
@@ -225,7 +362,13 @@ export function reviewString(
   lessonId: string,
   lang: string,
   key: string,
-  opts: { text?: string; approve?: boolean },
+  opts: {
+    text?: string;
+    approve?: boolean;
+    /** "Keep mine" for a changed original: checked again as it is, an edited wording staying edited. */
+    keep?: boolean;
+    by?: ReviewMark['by'];
+  },
 ): ReviewItem['state'] {
   const lesson = project.loadLesson(lessonId);
   const entry = collectStrings(lesson).find((e) => e.key === key);
@@ -238,13 +381,27 @@ export function reviewString(
   const problems = checkStrings(lesson, { ...strings, [key]: text }, lang).filter((i) => i.message.includes(key));
   if (problems.some((i) => i.level === 'error')) throw new Error(problems.map((i) => i.message).join('; '));
   if (opts.text !== undefined) strings[key] = opts.text;
-  const status: ReviewMark['status'] = opts.text !== undefined && opts.text !== old ? 'edited' : 'approved';
+  const status: ReviewMark['status'] =
+    opts.text !== undefined && opts.text !== old
+      ? 'edited'
+      : opts.keep && review[key]
+        ? review[key].status
+        : 'approved';
   if (opts.approve === false) delete review[key];
-  else review[key] = { status, src: srcHash(entry.text), at: new Date().toISOString() };
+  else
+    review[key] = {
+      status,
+      src: srcHash(entry.text),
+      at: new Date().toISOString(),
+      ...(opts.by ? { by: opts.by } : {}),
+    };
   project.saveStrings(lessonId, lang, strings);
   saveReview(project, lessonId, lang, review);
+  // checked against the original as it is now
+  if (opts.approve !== false) markTranslated(project, lesson, lang, [key]);
   const tm = new TranslationMemory(project, lesson.lang, lang);
-  tm.set(entry.text, text, opts.approve === false ? 'machine' : status, lessonId);
+  if (opts.approve === false) tm.demote(entry.text, text);
+  else tm.set(entry.text, text, status, lessonId);
   tm.save();
   return opts.approve === false ? 'machine' : status;
 }
@@ -329,13 +486,23 @@ export function parseCsv(text: string): string[][] {
 const YES = /^\s*(y|yes|x|ok|oui|o|نعم|✓|✔|1|true)\s*$/i;
 
 /** Apply a reviewed spreadsheet: changed translations become "edited", rows marked ok become "approved". */
+export interface ImportChange {
+  lesson: string;
+  key: string;
+  kind: 'edited' | 'approved';
+  before: string;
+  after: string;
+}
+
 export function importReviewCsv(
   project: Project,
   lang: string,
   csv: string,
-): { edited: number; approved: number; errors: { key: string; error: string }[] } {
+  opts: { dry?: boolean } = {},
+): { edited: number; approved: number; errors: { key: string; error: string }[]; changes: ImportChange[] } {
   const [head, ...rows] = parseCsv(csv);
-  if (!head) return { edited: 0, approved: 0, errors: [] };
+  const changes: ImportChange[] = [];
+  if (!head) return { edited: 0, approved: 0, errors: [], changes };
   const col = (name: string) => head.findIndex((h) => h.trim().toLowerCase() === name);
   const [li, ki, ti, oi] = [col('lesson'), col('key'), col('translation'), col('ok')];
   if (li < 0 || ki < 0 || ti < 0) throw new Error('the sheet needs the columns lesson, key and translation');
@@ -351,14 +518,19 @@ export function importReviewCsv(
     const before = current.get(lesson)![key];
     const text = r[ti] ?? '';
     const ok = oi >= 0 && YES.test(r[oi] ?? '');
+    const was = typeof before === 'string' ? before : (before?.text ?? '');
     try {
-      if (text.trim() && text !== before) {
-        reviewString(project, lesson, lang, key, { text });
+      if (text.trim() && text !== was) {
+        if (opts.dry) dryCheck(project, lesson, lang, key, text);
+        else reviewString(project, lesson, lang, key, { text, by: 'sheet' });
+        changes.push({ lesson, key, kind: 'edited', before: was, after: text });
         edited++;
       } else if (ok) {
         const review = loadReview(project, lesson, lang)[key];
         if (!review) {
-          reviewString(project, lesson, lang, key, {});
+          if (opts.dry) dryCheck(project, lesson, lang, key, was);
+          else reviewString(project, lesson, lang, key, { by: 'sheet' });
+          changes.push({ lesson, key, kind: 'approved', before: was, after: was });
           approved++;
         }
       }
@@ -366,5 +538,17 @@ export function importReviewCsv(
       errors.push({ key: `${lesson}/${key}`, error: (e as Error).message });
     }
   }
-  return { edited, approved, errors };
+  return { edited, approved, errors, changes };
+}
+
+/** What `reviewString` would refuse, without writing anything (the import's preview). */
+function dryCheck(project: Project, lessonId: string, lang: string, key: string, text: string): void {
+  const lesson = project.loadLesson(lessonId);
+  if (!collectStrings(lesson).some((e) => e.key === key)) throw new Error(`no string "${key}" in ${lessonId}`);
+  if (!text) throw new Error(`"${key}" has no ${lang} translation yet`);
+  const strings = project.loadStrings(lessonId, lang) ?? {};
+  const problems = checkStrings(lesson, { ...strings, [key]: text }, lang).filter(
+    (i) => i.key === key && i.level === 'error',
+  );
+  if (problems.length) throw new Error(problems.map((i) => i.message).join('; '));
 }

@@ -14,6 +14,7 @@ import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, statSync,
 import { dirname, join, resolve } from 'node:path';
 import { Book, type Lesson, parseLesson, Strings, Timings } from '@warqa/lesson';
 import * as z from 'zod';
+import { baselineSources } from '../stages/sources.js';
 import { loadPacks } from './packs.js';
 
 export const PipelineConfig = z
@@ -117,6 +118,15 @@ export class Project {
   }
 
   saveLesson(id: string, lesson: unknown): void {
+    // translations and recordings made before their sources were recorded get a record of the lesson as it was,
+    // so this change shows as "Original changed" / "changed since"
+    if (this.hasLesson(id)) {
+      try {
+        baselineSources(this, id, this.loadLesson(id));
+      } catch {
+        /* an unreadable old lesson: nothing to compare with */
+      }
+    }
     writeJson(join(this.lessonDir(id), 'lesson.json'), lesson);
   }
 

@@ -298,6 +298,146 @@ describe('translation review', () => {
   });
 });
 
+describe('the book’s languages (Translate & narrate)', () => {
+  type Lang = {
+    lang: string;
+    role: string;
+    texts: number;
+    translated: number;
+    checked: number;
+    audio: { chapters: number; narrated: number; changed: number; seconds: number };
+    voice: { engine: string; name: string; sample: boolean };
+  };
+  type Item = Review['items'][number] & {
+    beat?: { n: number; id: string };
+    field: string;
+    problems: { code: string; lost?: string[]; blocking: boolean }[];
+    glossary: { term: string; expected: string; used: boolean }[];
+    before?: string;
+    reviewed?: { by?: string };
+    chapter?: number;
+  };
+
+  it('sums up each language: the original, how much is translated and checked, its voice and recordings', async () => {
+    const { languages } = await get<{ languages: Lang[] }>(`/api/projects/${id}/languages`);
+    const en = languages.find((l) => l.lang === 'en')!;
+    const fr = languages.find((l) => l.lang === 'fr')!;
+    expect(en.role).toBe('original');
+    expect(en.texts).toBeGreaterThan(20);
+    expect(fr.role).toBe('translation');
+    expect(fr.translated).toBeGreaterThan(20);
+    expect(fr.checked).toBeGreaterThan(0); // the earlier review tests checked some
+    expect(fr.audio.narrated).toBeGreaterThan(0);
+    expect(fr.audio.seconds).toBeGreaterThan(10);
+    expect(fr.voice.name).toBeTruthy();
+    expect(fr.voice.sample).toBe(true);
+    // the sample is the book's own recording: nothing is synthesized
+    const sample = await app.request(`/api/projects/${id}/voices/fr/sample`);
+    expect(sample.status).toBe(200);
+    expect(sample.headers.get('content-type')).toMatch(/audio/);
+  });
+
+  it('says where each string sits, its coded problems and the glossary term it should use', async () => {
+    const { items, lessons } = await get<{ items: Item[]; lessons: { id: string; n?: number }[] }>(
+      `/api/projects/${id}/review/fr`,
+    );
+    const narr = items.find((i) => i.key === 'beat.rule.narration')!;
+    expect(narr.field).toBe('narration');
+    expect(narr.beat).toMatchObject({ n: 3, id: 'rule' });
+    expect(narr.chapter).toBe(lessons.find((l) => l.id === 'ch05')?.n);
+    const glossed = items.find((i) => i.glossary.some((g) => g.expected === 'zzsymétrique'))!;
+    expect(glossed.glossary[0]).toMatchObject({ term: 'opposite', used: false });
+    expect(glossed.problems.some((p) => p.code === 'glossary' && !p.blocking)).toBe(true);
+  });
+
+  it('keeps a person’s wording when its original changes, and lets them keep it', async () => {
+    const res = await app.request(
+      `/api/projects/${id}/review/fr/strings`,
+      json('POST', { lesson: 'ch05', key: 'beat.intro.title', text: 'Soustraire, à ma façon' }),
+    );
+    expect(((await res.json()) as { item: Item }).item.reviewed?.by).toBe('studio');
+    // the author changes the original
+    const lesson = JSON.parse(readFileSync(join(dir, 'lessons', 'ch05', 'lesson.json'), 'utf8'));
+    const was = lesson.beats.find((b: { id: string }) => b.id === 'intro').title;
+    lesson.beats.find((b: { id: string }) => b.id === 'intro').title = 'Subtracting, told again';
+    const put = await app.request(`/api/projects/${id}/lessons/ch05?force=1`, json('PUT', lesson));
+    expect(put.status).toBe(200);
+    let item = (await get<{ items: Item[] }>(`/api/projects/${id}/review/fr`)).items.find(
+      (i) => i.key === 'beat.intro.title',
+    )!;
+    expect(item).toMatchObject({ state: 'stale', before: was, text: 'Soustraire, à ma façon' });
+    const kept = await app.request(
+      `/api/projects/${id}/review/fr/strings`,
+      json('POST', { lesson: 'ch05', key: 'beat.intro.title', keep: true }),
+    );
+    item = ((await kept.json()) as { item: Item }).item;
+    expect(item.state).toBe('edited');
+    expect(item.before).toBeUndefined();
+  });
+
+  it('takes back approvals given many at once', async () => {
+    const { items } = await get<{ items: Item[] }>(`/api/projects/${id}/review/fr`);
+    const shown = items.filter((i) => i.lesson === 'ch05' && i.state === 'machine' && !i.problems.length).slice(0, 3);
+    const body = { items: shown.map((i) => ({ lesson: i.lesson, key: i.key })) };
+    expect(await (await app.request(`/api/projects/${id}/review/fr/approve`, json('POST', body))).json()).toMatchObject(
+      { approved: 3 },
+    );
+    await app.request(`/api/projects/${id}/review/fr/approve`, json('POST', { ...body, approve: false }));
+    const after = (await get<{ items: Item[] }>(`/api/projects/${id}/review/fr`)).items;
+    expect(shown.map((s) => after.find((i) => i.key === s.key && i.lesson === s.lesson)?.state)).toEqual([
+      'machine',
+      'machine',
+      'machine',
+    ]);
+  });
+
+  it('keeps a translation typed by hand as made from the original as it is now', async () => {
+    const lesson = JSON.parse(readFileSync(join(dir, 'lessons', 'ch05', 'lesson.json'), 'utf8'));
+    lesson.beats.find((b: { id: string }) => b.id === 'ex1').title = '−3 − 5, again';
+    expect((await app.request(`/api/projects/${id}/lessons/ch05?force=1`, json('PUT', lesson))).status).toBe(200);
+    let item = (await get<{ items: Item[] }>(`/api/projects/${id}/review/fr`)).items.find(
+      (i) => i.lesson === 'ch05' && i.key === 'beat.ex1.title',
+    )!;
+    expect(item.state).toBe('stale');
+    // an API client (or the MCP server) saves its own wording for it
+    const strings = JSON.parse(readFileSync(join(dir, 'lessons', 'ch05', 'strings.fr.json'), 'utf8'));
+    strings['beat.ex1.title'] = '−3 − 5, encore';
+    const put = await app.request(`/api/projects/${id}/lessons/ch05/strings/fr`, json('PUT', strings));
+    expect(put.status).toBe(200);
+    item = (await get<{ items: Item[] }>(`/api/projects/${id}/review/fr`)).items.find(
+      (i) => i.lesson === 'ch05' && i.key === 'beat.ex1.title',
+    )!;
+    expect(item.state).toBe('machine');
+    expect(item.text).toBe('−3 − 5, encore');
+  });
+
+  it('has no sample for a book without a voice', async () => {
+    const book = JSON.parse(readFileSync(join(dir, 'warqa.json'), 'utf8'));
+    const was = book.pipeline.tts?.provider;
+    await app.request(`/api/projects/${id}/settings`, json('PUT', { tts: { provider: 'none' } }));
+    expect((await app.request(`/api/projects/${id}/voices/fr/sample`)).status).toBe(404);
+    const { languages } = await get<{ languages: Lang[] }>(`/api/projects/${id}/languages`);
+    expect(languages.every((l) => !l.voice.sample)).toBe(true);
+    await app.request(`/api/projects/${id}/settings`, json('PUT', { tts: { provider: was ?? 'edge' } }));
+  });
+
+  it('previews a spreadsheet before it changes anything, and exports one chapter', async () => {
+    const { items } = await get<{ items: Item[] }>(`/api/projects/${id}/review/fr`);
+    const e = items.find((i) => i.lesson === 'ch05' && i.state === 'machine' && i.kind === 'text')!;
+    const sheet = ['lesson,key,translation,ok', `ch05,${e.key},"${e.text} (relu)",`].join('\n');
+    const dry = await app.request(`/api/projects/${id}/review/fr/import?dry=1`, { method: 'POST', body: sheet });
+    expect(await dry.json()).toMatchObject({
+      edited: 1,
+      changes: [{ key: e.key, kind: 'edited', before: e.text, after: `${e.text} (relu)` }],
+    });
+    const strings = JSON.parse(readFileSync(join(dir, 'lessons', 'ch05', 'strings.fr.json'), 'utf8'));
+    expect(strings[e.key]).toBe(e.text);
+    const csv = await app.request(`/api/projects/${id}/review/fr.csv?lesson=ch05`);
+    expect(csv.headers.get('content-disposition')).toMatch(/integers-review-fr-ch05\.csv/);
+    expect((await csv.text()).split('\r\n').slice(1, -1).every((r) => r.startsWith('ch05,'))).toBe(true);
+  });
+});
+
 describe('player data', () => {
   it('carries typeset math and the book’s component packs', async () => {
     const d = await get<{ math?: Record<string, string>; packs?: string[] }>(`/api/projects/${id}/lessons/mx/player`);

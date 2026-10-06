@@ -21,6 +21,14 @@ export interface Issue {
   level: 'error' | 'warn';
   beat?: string;
   message: string;
+  /**
+   * What kind of translation problem it is (from `checkStrings`), for tools that explain it in the reader's
+   * language: the string's key, and what the original has (`want`) against what the translation has (`got`).
+   */
+  code?: 'missing' | 'marks' | 'speak-marks' | 'boxes' | 'dollars';
+  key?: string;
+  want?: string[];
+  got?: string[];
 }
 
 export interface CompiledBeat {

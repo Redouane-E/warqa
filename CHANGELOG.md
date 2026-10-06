@@ -122,6 +122,17 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **Translate & narrate, one workspace (redesign 4e).** Step 4 shows every language as a card: the original, and
+  for each translation how much is translated and checked by a person, its voice with a sample, and whether it
+  is narrated (or how many beats changed since). Under the cards, one language's review queue: marks and formulas
+  locked, a lost mark put back in one click, the glossary term each sentence should use, "Original changed" with
+  what changed (now for the model's translations too), Keep mine or Translate again, approving what is shown with
+  Undo, and the spreadsheet (per chapter) with a preview before it changes anything. The book-wide Review page and
+  the editor's Translations tab are replaced (their addresses lead here). Translation jobs save chunk by chunk,
+  report their spend, and redo the model's translations whose original changed; a person's wording is never
+  translated over. New: `GET /api/projects/:id/languages`, `GET …/voices/:lang/sample`, review `keep`, bulk Undo,
+  import `?dry=1`, CSV `?lesson=`; the `translate` job takes `keys`. Each lesson folder now keeps
+  `sources.<lang>.json` and `narrated.<lang>.json` (what translations and recordings were made from).
 - **Marks, threads and Regenerate with Compare (redesign 4d3).** The narration shows each mark as a chip on the word
   it waits for; the caret in a mark chooses it, and "Add a mark" names a new one. Listen plays the beat's recorded
   narration. Under the stage, the beat's timeline places the marks at their times with a playhead; choosing one

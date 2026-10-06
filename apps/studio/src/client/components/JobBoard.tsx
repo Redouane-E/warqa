@@ -87,6 +87,9 @@ export function useJobStream(jobId: string | null, onEnd?: (job: JobInfo, events
 interface Row {
   key: string;
   chapter?: string;
+  /** The chapter's number among those to make and its title (translate and narrate say them). */
+  n?: number;
+  title?: string;
   stage: string;
   status: string;
   detail?: string;
@@ -103,6 +106,12 @@ function rowsOf(events: JobEvent[]): Row[] {
     rows.set(key, {
       key,
       ...(e.chapter ? { chapter: e.chapter } : {}),
+      ...(e.n !== undefined ? { n: e.n } : prev?.n !== undefined ? { n: prev.n } : {}),
+      ...(e.title !== undefined && e.stage !== 'write'
+        ? { title: e.title }
+        : prev?.title !== undefined
+          ? { title: prev.title }
+          : {}),
       stage: e.stage,
       status: e.status ?? 'start',
       ...(e.detail !== undefined ? { detail: e.detail } : prev?.detail !== undefined ? { detail: prev.detail } : {}),
@@ -137,7 +146,13 @@ function RowView({ r, live }: { r: Row; live: boolean }) {
         )}
       </span>
       <span className="job-row-name">
-        {r.chapter && <span className="job-chapter">{r.chapter}</span>}
+        {r.n !== undefined ? (
+          <span className="job-chapter">
+            <span className="mono">{String(r.n).padStart(2, '0')}</span> <bdi>{r.title}</bdi>
+          </span>
+        ) : (
+          r.chapter && <span className="job-chapter">{r.chapter}</span>
+        )}
         {stageLabel(r.stage, i18n)}
       </span>
       <span className="job-row-detail">
@@ -498,6 +513,47 @@ function buildToast(
   return null;
 }
 
+/** The language a translate or narrate job works on. */
+const jobLang = (job: JobInfo): string | undefined =>
+  typeof job.args.lang === 'string'
+    ? job.args.lang
+    : Array.isArray(job.args.langs)
+      ? String((job.args.langs as unknown[])[0] ?? '')
+      : undefined;
+
+/** "French is translated · 214 texts · $0.01" with Open (that language's review queue). */
+function langToast(job: JobInfo, projectId: string, i18n: I18n): ToastOptions | null {
+  const { t, usd, langName } = i18n;
+  const lang = jobLang(job);
+  if (job.status !== 'done' || !lang) return null;
+  const open = {
+    label: t('tray.open'),
+    run: () => navigate(`/project/${encodeURIComponent(projectId)}?step=voice&lang=${encodeURIComponent(lang)}`),
+  };
+  if (job.type === 'translate') {
+    const r = job.result as { strings?: number; usd?: number } | undefined;
+    return {
+      text: t('tray.toastTranslated', {
+        lang: langName(lang),
+        texts: t('voice.texts', { n: r?.strings ?? 0 }),
+        cost: usd(r?.usd ?? 0),
+      }),
+      tone: 'good',
+      action: open,
+    };
+  }
+  if (job.type === 'narrate') {
+    const r = job.result as { clips?: { synthesized: number }[] } | undefined;
+    const beats = (r?.clips ?? []).reduce((a, c) => a + c.synthesized, 0);
+    return {
+      text: t('tray.toastNarrated', { lang: langName(lang), beats: t('common.beats', { n: beats }) }),
+      tone: 'good',
+      action: open,
+    };
+  }
+  return null;
+}
+
 type View = 'hidden' | 'open' | 'pill';
 
 interface Tracked {
@@ -552,7 +608,11 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       if (viewRef.current === 'open' && inTray) return;
       if (viewRef.current === 'open') setView('pill');
       const made =
-        job.type === 'build' && projectId ? buildToast(job, events, projectId, i18n, () => setView('open')) : null;
+        job.type === 'build' && projectId
+          ? buildToast(job, events, projectId, i18n, () => setView('open'))
+          : projectId
+            ? langToast(job, projectId, i18n)
+            : null;
       toast(
         made ?? {
           text: `${jobLabel(job.type, i18n)} · ${i18n.t(`job.status.${job.status}` as MsgKey)}`,
@@ -671,6 +731,18 @@ function Tray({
   // making lessons says which chapter: "Making chapter 6 · Integers in daily life", "Chapter 6 is made"
   const madeTitle =
     prog && cur && prog.count > 1 ? t('tray.madeMany', { n: prog.count }) : t('tray.made', { n: cur?.n ?? 0 });
+  // translating and narrating name the language: "Translating into French", "French is translated"
+  const lang = info ? jobLang(info) : undefined;
+  const langTitle =
+    info && lang && (info.type === 'translate' || info.type === 'narrate')
+      ? status === 'done'
+        ? t(info.type === 'translate' ? 'tray.translated' : 'tray.narrated', { lang: i18n.langName(lang) })
+        : status === 'cancelled' && info.type === 'translate'
+          ? t('tray.trStopped')
+          : live
+            ? t(info.type === 'translate' ? 'tray.translating' : 'tray.narrating', { lang: i18n.langName(lang) })
+            : undefined
+      : undefined;
   // "Stopped after beat 4" only when the writing itself was cut short
   const stoppedAt = status === 'cancelled' && cur?.beat && !cur.done && cur.write !== 'done' ? cur.beat.i : undefined;
   const title: ReactNode =
@@ -695,7 +767,7 @@ function Tray({
         </>
       )
     ) : info ? (
-      jobLabel(info.type, i18n)
+      (langTitle ?? jobLabel(info.type, i18n))
     ) : (
       t('job.title')
     );
@@ -715,8 +787,8 @@ function Tray({
           .filter(Boolean)
           .join(' · ')
       : [
-          info ? jobLabel(info.type, i18n) : t('job.title'),
-          pct !== undefined && live ? `${num(pct)} %` : !live ? t(`job.status.${status}` as MsgKey) : '',
+          langTitle ?? (info ? jobLabel(info.type, i18n) : t('job.title')),
+          pct !== undefined && live ? `${num(pct)} %` : !live && !langTitle ? t(`job.status.${status}` as MsgKey) : '',
           spent ? usd(spent) : '',
         ]
           .filter(Boolean)
@@ -835,7 +907,9 @@ function Tray({
         </span>
       </header>
       <div className="tray-body">
-        {live && !prog && <p className="tray-note">{t('tray.keeps')}</p>}
+        {live && !prog && (
+          <p className="tray-note">{info?.type === 'translate' ? t('tray.trNote') : t('tray.keeps')}</p>
+        )}
         {status === 'queued' && <p className="tray-note">{t('job.queued')}</p>}
         {lost && live && <p className="tray-note">{t('job.reconnecting')}</p>}
         <p className="visually-hidden" aria-live="polite">

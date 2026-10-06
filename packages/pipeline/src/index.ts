@@ -23,6 +23,7 @@ export * from './stages/illustrate.js';
 export * from './stages/learn.js';
 export * from './stages/memory.js';
 export * from './stages/plan.js';
+export * from './stages/sources.js';
 export * from './stages/storyboard.js';
 export * from './stages/translate.js';
 export * from './stages/write.js';

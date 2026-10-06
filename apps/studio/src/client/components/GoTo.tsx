@@ -3,7 +3,7 @@
 
 import type { IconName } from '@warqa/brand';
 import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'react';
-import type { JobType } from '../../shared/types';
+import type { JobType, LanguageInfo } from '../../shared/types';
 import { useStatus } from '../App';
 import { api, errorText, type ProjectListItem } from '../api';
 import { useI18n } from '../i18n';
@@ -34,7 +34,7 @@ const fold = (s: string) =>
 
 export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) {
   const i18n = useI18n();
-  const { t, lang, usd, num } = i18n;
+  const { t, lang, usd, num, langName } = i18n;
   const place = usePlace();
   const jobs = useJobs();
   const toast = useToast();
@@ -42,6 +42,9 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
   const [q, setQ] = useState('');
   const [books, setBooks] = useState<ProjectListItem[]>([]);
   const [cost, setCost] = useState<string>('');
+  // the book's languages (what translating and narrating each still needs) and its glossary
+  const [langs, setLangs] = useState<LanguageInfo[]>([]);
+  const [glossary, setGlossary] = useState<Record<string, string>[]>([]);
   const [active, setActive] = useState(0);
   const listId = useId();
   const box = useRef<HTMLDivElement>(null);
@@ -62,11 +65,23 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
       .projects()
       .then((r) => setBooks(r.projects))
       .catch(() => setBooks([]));
-    if (bookId)
+    if (bookId) {
       api
         .estimate(bookId)
         .then((e) => setCost(e.error ? '' : `≈ ${usd(e.p50)} – ${usd(e.p90)}`))
         .catch(() => setCost(''));
+      api
+        .languages(bookId)
+        .then((r) => setLangs(r.languages))
+        .catch(() => setLangs([]));
+      api
+        .project(bookId)
+        .then((d) => setGlossary((d.plan?.glossary ?? []).map((g) => g.terms)))
+        .catch(() => setGlossary([]));
+    } else {
+      setLangs([]);
+      setGlossary([]);
+    }
     return () => {
       if (opener?.isConnected && (!document.activeElement || document.activeElement === document.body))
         opener.focus({ preventScroll: true });
@@ -122,6 +137,34 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
           icon: 'play',
           run: run('build'),
         });
+      // translate or narrate a language that still needs it (Translate & narrate's cards)
+      for (const l of langs) {
+        const tr = l.estimate?.translate;
+        const trLeft = l.role === 'translation' && (l.missing > 0 || (tr !== undefined ? tr > 0 : l.stale > 0));
+        if (book.lessons.length && trLeft && can('translate'))
+          out.push({
+            id: `a-tr-${l.lang}`,
+            group: 'actions',
+            label: t('goto.translate', { lang: l.lang === 'ary' ? t('lang.ary.short') : langName(l.lang) }),
+            hint: tr ? t('learn.est.cost', { cost: usd(Math.max(tr, 0.001)) }) : t('goto.spends'),
+            icon: 'language',
+            run: run('translate', { lang: l.lang, chapters: book.lessons.map((x) => x.id) }),
+          });
+        const narrLeft = (l.role === 'original' || l.translated > 0) && (l.audio.changed > 0 || l.audio.unrecorded > 0);
+        if (narrLeft && l.voice.engine !== 'none' && l.voice.available && can('narrate'))
+          out.push({
+            id: `a-nr-${l.lang}`,
+            group: 'actions',
+            label: t('goto.narrate', { lang: langName(l.lang) }),
+            hint: l.voice.free
+              ? t('voice.free')
+              : l.estimate?.narrate !== undefined
+                ? t('learn.est.cost', { cost: usd(l.estimate.narrate) })
+                : t('goto.spends'),
+            icon: 'voice',
+            run: run('narrate', { lang: l.lang }),
+          });
+      }
       if (book.lessons.length && status?.qa !== false && can('qa'))
         out.push({ id: 'a-check', group: 'actions', label: t('goto.check'), icon: 'preview', run: run('qa') });
       if (book.lessons.length && can('export'))
@@ -150,7 +193,20 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
         label: t('goto.review'),
         hint: book.title,
         icon: 'language',
-        run: to(`${base}/review`),
+        run: to(`${base}?step=voice`),
+      });
+      // the glossary's terms, found by any of their languages ("integer nombre relatif عدد صحيح نسبي")
+      glossary.forEach((terms, k) => {
+        const words = Object.values(terms).filter(Boolean);
+        if (words.length)
+          out.push({
+            id: `g-${k}`,
+            group: 'settings',
+            label: t('goto.glossary', { terms: words.join(' · ') }),
+            hint: book.title,
+            icon: 'book',
+            run: to(`${base}?step=plan#glossary`),
+          });
       });
       for (const l of book.lessons)
         out.push({
@@ -186,7 +242,7 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
     out.push({ id: 'g-learn', group: 'books', label: t('learn.home.title'), icon: 'book', run: to('/learn') });
     out.push({ id: 'g-ai', group: 'settings', label: t('nav.ai'), icon: 'key', run: to('/ai') });
     return out;
-  }, [book, place.lesson, books, cost, lang, t, num, jobs, toast, onClose, status]);
+  }, [book, place.lesson, books, cost, lang, t, num, jobs, toast, onClose, status, langs, glossary, langName, usd]);
 
   const shown = useMemo(() => {
     const f = fold(q.trim());

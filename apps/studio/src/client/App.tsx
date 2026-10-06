@@ -23,11 +23,10 @@ import { KeysPage } from './pages/Keys';
 import { LearnCoursePage, LearnHomePage, LearnNewPage, LearnPlayerPage } from './pages/Learn';
 import { LessonPage } from './pages/Lesson';
 import { ProjectPage } from './pages/Project';
-import { ReviewPage } from './pages/Review';
 import { SettingsPage } from './pages/Settings';
 import { WelcomePage } from './pages/Welcome';
 import { PlaceProvider } from './place';
-import { go, match, useLocation } from './router';
+import { go, match, navigate, useLocation } from './router';
 
 /* ---------- server status (providers, presets, engines) shared by every screen ---------- */
 
@@ -38,13 +37,27 @@ interface StatusCtx {
 const StatusContext = createContext<StatusCtx>({ status: null, reload: async () => {} });
 export const useStatus = () => useContext(StatusContext);
 
+/** An address that moved: replaced at once by where it lives now. */
+function Redirect({ to }: { to: string }) {
+  useEffect(() => navigate(to, { replace: true }), [to]);
+  return null;
+}
+
 function Routes() {
-  const { path } = useLocation();
+  const { path, query } = useLocation();
   let m: Record<string, string> | null;
   if ((m = match('/project/:id/lesson/:lid', path)))
     return <LessonPage key={`${m.id}/${m.lid}`} id={m.id!} lid={m.lid!} />;
   if ((m = match('/project/:id/settings', path))) return <SettingsPage key={m.id} id={m.id!} />;
-  if ((m = match('/project/:id/review', path))) return <ReviewPage key={m.id} id={m.id!} />;
+  // the book-wide review moved into Translate & narrate (redesign 4e)
+  if ((m = match('/project/:id/review', path))) {
+    const lang = query.get('lang');
+    return (
+      <Redirect
+        to={`/project/${encodeURIComponent(m.id!)}?step=voice${lang ? `&lang=${encodeURIComponent(lang)}` : ''}`}
+      />
+    );
+  }
   if ((m = match('/project/:id', path))) return <ProjectPage key={m.id} id={m.id!} />;
   // learning on your own
   if (path === '/learn') return <LearnHomePage />;

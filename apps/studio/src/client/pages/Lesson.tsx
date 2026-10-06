@@ -33,7 +33,6 @@ import {
   type Timings,
   wordsOf,
 } from './editor/shared';
-import { Translations } from './Translations';
 
 /** `?beat=3` is the third beat (index 2); anything else is the first. */
 const beatOf = (v: string | null) => Math.max(0, (Number.parseInt(v ?? '', 10) || 1) - 1);
@@ -267,7 +266,12 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
     keyMoves.current = { cues: [], renames: new Map() };
     if (batches.length) await api.moveStrings(id, lid, batches);
   }, [id, lid]);
-  const tab = query.get('tab') === 'translations' ? 'translations' : 'beats';
+  // the Translations tab moved to Translate & narrate (redesign 4e): its address goes there, this chapter chosen
+  const oldTab = query.get('tab') === 'translations';
+  useEffect(() => {
+    if (oldTab)
+      navigate(`/project/${encodeURIComponent(id)}?step=voice&chapter=${encodeURIComponent(lid)}`, { replace: true });
+  }, [oldTab, id, lid]);
   usePublishBook(
     id,
     'make',
@@ -447,7 +451,6 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const beatsLen = lesson?.beats.length ?? 0;
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if (tab !== 'beats') return;
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
         e.preventDefault();
         if (dirty) void save();
@@ -468,7 +471,7 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
     };
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
-  }, [dirty, save, tab, sel, beatsLen, setSel]);
+  }, [dirty, save, sel, beatsLen, setSel]);
 
   const byBeat = useMemo(() => {
     const m = new Map<string, Issue[]>();
@@ -557,11 +560,6 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
     });
   };
   const general = issues.filter((x) => !x.beat);
-  const setTab = (tb: 'beats' | 'translations') =>
-    navigate(
-      `/project/${encodeURIComponent(id)}/lesson/${encodeURIComponent(lid)}${tb === 'translations' ? '?tab=translations' : `?beat=${i + 1}`}`,
-      { replace: true },
-    );
   const unitTitle =
     detail.unit && (typeof detail.unit.title === 'string' ? detail.unit.title : detail.unit.title[lessonLang]);
   const kicker = [
@@ -675,100 +673,78 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
           </h1>
         </div>
         <div className="lesson-tools">
-          <div className="lesson-tabs" role="tablist" aria-label={lesson.title}>
-            <button role="tab" type="button" aria-selected={tab === 'beats'} onClick={() => setTab('beats')}>
-              {t('editor.beats')}
-            </button>
-            <button
-              role="tab"
-              type="button"
-              aria-selected={tab === 'translations'}
-              onClick={() => setTab('translations')}
-            >
-              {t('editor.translations')}
-            </button>
+          <div className="preview-in">
+            <span className="muted small" aria-hidden="true">
+              {t('editor.previewIn')}
+            </span>
+            <Menu
+              label={t('editor.previewInLang', { lang: langName(shown) })}
+              className="preview-lang"
+              button={
+                <>
+                  <span lang={shown}>{langName(shown)}</span>
+                  <Icon name="next" size={16} className="menu-chevron" />
+                </>
+              }
+              items={[
+                ...detail.langs.map((l) => ({
+                  key: l,
+                  label: <span lang={l}>{langName(l)}</span>,
+                  checked: l === shown,
+                  onSelect: () => setPreviewLang(l),
+                })),
+                ...waiting.map((l) => ({
+                  key: l,
+                  label: (
+                    <span className="menu-waiting">
+                      <span lang={l}>{langName(l)}</span>
+                      <span className="small muted">{t('editor.notTranslated')}</span>
+                    </span>
+                  ),
+                  checked: false,
+                  disabled: true,
+                })),
+              ]}
+            />
           </div>
-          {tab === 'beats' && (
-            <>
-              <div className="preview-in">
-                <span className="muted small" aria-hidden="true">
-                  {t('editor.previewIn')}
-                </span>
-                <Menu
-                  label={t('editor.previewInLang', { lang: langName(shown) })}
-                  className="preview-lang"
-                  button={
-                    <>
-                      <span lang={shown}>{langName(shown)}</span>
-                      <Icon name="next" size={16} className="menu-chevron" />
-                    </>
-                  }
-                  items={[
-                    ...detail.langs.map((l) => ({
-                      key: l,
-                      label: <span lang={l}>{langName(l)}</span>,
-                      checked: l === shown,
-                      onSelect: () => setPreviewLang(l),
-                    })),
-                    ...waiting.map((l) => ({
-                      key: l,
-                      label: (
-                        <span className="menu-waiting">
-                          <span lang={l}>{langName(l)}</span>
-                          <span className="small muted">{t('editor.notTranslated')}</span>
-                        </span>
-                      ),
-                      checked: false,
-                      disabled: true,
-                    })),
-                  ]}
-                />
-              </div>
-              {/* the toast announces a save; this line only shows the state */}
-              <div className="save-state">
-                {saving ? (
-                  <>
-                    <span className="spinner" aria-hidden="true" /> {t('common.saving')}
-                  </>
-                ) : dirty ? (
-                  <span className="dirty">{t('common.unsaved')}</span>
-                ) : (
-                  <>
-                    <Icon name="check" size={18} className="good" />{' '}
-                    {savedAt
-                      ? t('editor.savedAt', {
-                          time: new Intl.DateTimeFormat(i18n.locale, { timeStyle: 'short' }).format(savedAt),
-                        })
-                      : t('common.saved')}
-                  </>
-                )}
-              </div>
-              {blocked > 0 && (
-                <Button variant="danger" onClick={() => void save(true)}>
-                  {t('editor.saveAnyway')}
-                </Button>
-              )}
-              {/* it stays in place when there is nothing to save (aria-disabled keeps the focus on it) */}
-              <Button
-                variant={dirty ? 'primary' : 'default'}
-                busy={saving}
-                aria-disabled={!dirty || undefined}
-                className={dirty ? '' : 'is-idle'}
-                onClick={() => dirty && void save()}
-                aria-keyshortcuts="Control+S Meta+S"
-              >
-                {t('editor.save')}
-              </Button>
-              <Button
-                icon="fullscreen"
-                className="lift-btn"
-                title={t('editor.lift')}
-                onClick={() => stage.current?.lift()}
-              >
-                {t('editor.preview')}
-              </Button>
-            </>
+          {/* the toast announces a save; this line only shows the state */}
+          <div className="save-state">
+            {saving ? (
+              <>
+                <span className="spinner" aria-hidden="true" /> {t('common.saving')}
+              </>
+            ) : dirty ? (
+              <span className="dirty">{t('common.unsaved')}</span>
+            ) : (
+              <>
+                <Icon name="check" size={18} className="good" />{' '}
+                {savedAt
+                  ? t('editor.savedAt', {
+                      time: new Intl.DateTimeFormat(i18n.locale, { timeStyle: 'short' }).format(savedAt),
+                    })
+                  : t('common.saved')}
+              </>
+            )}
+          </div>
+          {blocked > 0 && (
+            <Button variant="danger" onClick={() => void save(true)}>
+              {t('editor.saveAnyway')}
+            </Button>
           )}
+          {/* it stays in place when there is nothing to save (aria-disabled keeps the focus on it) */}
+          <Button
+            variant={dirty ? 'primary' : 'default'}
+            busy={saving}
+            aria-disabled={!dirty || undefined}
+            className={dirty ? '' : 'is-idle'}
+            onClick={() => dirty && void save()}
+            aria-keyshortcuts="Control+S Meta+S"
+          >
+            {t('editor.save')}
+          </Button>
+          <Button icon="fullscreen" className="lift-btn" title={t('editor.lift')} onClick={() => stage.current?.lift()}>
+            {t('editor.preview')}
+          </Button>
         </div>
       </header>
       {blocked > 0 && <Notice tone="warn">{t('editor.blocked', { n: blocked })}</Notice>}
@@ -785,229 +761,219 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
         </Notice>
       )}
 
-      {tab === 'translations' ? (
-        <Translations
-          id={id}
-          lid={lid}
-          detail={detail}
-          onSaved={(d) => setDetail(d)}
-          onPreview={() => setReloadKey((k) => k + 1)}
+      <div className="editor-work">
+        <BeatList
+          beats={beats}
+          sel={i}
+          lang={lessonLang}
+          issues={byBeat}
+          {...(minutes ? { minutes } : {})}
+          onSelect={setSel}
+          onOpen={openSheet}
+          onMove={move}
+          onAdd={() => addBeat()}
         />
-      ) : (
-        <div className="editor-work">
-          <BeatList
-            beats={beats}
-            sel={i}
-            lang={lessonLang}
-            issues={byBeat}
-            {...(minutes ? { minutes } : {})}
-            onSelect={setSel}
-            onOpen={openSheet}
-            onMove={move}
-            onAdd={() => addBeat()}
-          />
-          <div className="editor-main">
-            <div className="beat-bar">
-              <BeatHead
-                index={i}
-                title={beat.title}
-                lang={lessonLang}
-                {...(timeOf(beat) ? { time: timeOf(beat) } : {})}
-                playerRef={playerRef}
-              />
-              <span className="beat-bar-end">
-                <label className="check">
-                  <input
-                    type="checkbox"
-                    checked={threads}
-                    onChange={(e) => {
-                      setThreads(e.target.checked);
-                      try {
-                        localStorage.setItem('warqa-studio:threads', e.target.checked ? '1' : '0');
-                      } catch {
-                        /* storage unavailable */
-                      }
-                    }}
-                  />
-                  <span>{t('editor.showThreads')}</span>
-                </label>
-                <Button
-                  ref={detailsBtn}
-                  variant="quiet"
-                  icon="edit"
-                  aria-expanded={sheetOpen}
-                  onClick={() => (sheetOpen ? setInspecting(false) : openSheet())}
-                >
-                  {t('editor.details', { n: i + 1 })}
-                </Button>
-              </span>
-            </div>
-            <Stage
-              ref={stage}
-              id={id}
-              lid={lid}
-              bookId={detail.bookId}
-              lang={shown}
-              beat={i}
-              reloadKey={reloadKey}
-              stale={dirty}
-              label={t('editor.stageLabel', { n: i + 1 })}
-              strip={detail.chapter ? t('editor.kicker.chapter', { n: detail.chapter }) : String(lesson.title)}
-              langName={langName(shown)}
+        <div className="editor-main">
+          <div className="beat-bar">
+            <BeatHead
+              index={i}
+              title={beat.title}
+              lang={lessonLang}
+              {...(timeOf(beat) ? { time: timeOf(beat) } : {})}
               playerRef={playerRef}
-              onBeat={(k) => {
-                if (k !== i) setSel(k);
-              }}
-              onData={(d) => {
-                setTimings(d.timings);
-                setAudio(d.audio);
-              }}
-              candidate={view === 'after' && cand ? beat.id : undefined}
-              zoneRef={zoneRef}
-              below={
-                view === 'after' && cand ? null : (
-                  <MarkTimeline
-                    {...(timeOf(beat) ? { time: timeOf(beat) } : {})}
-                    marks={beatMarks}
-                    withCues={withCues}
-                    selMark={selMark}
-                    onSelect={(m, at) => {
-                      setSelMark(m);
-                      // the stage just after that mark's cues have played
-                      playerRef.current?.showAt(i, at + 0.7);
-                    }}
-                    playerRef={playerRef}
-                    beat={i}
-                    lang={shown}
-                  />
-                )
-              }
-              overlay={
-                threads && !(view === 'after' && cand) ? (
-                  <Threads
-                    zoneRef={zoneRef}
-                    playerRef={playerRef}
-                    beat={beat}
-                    index={i}
-                    selMark={selMark}
-                    actionName={actionName}
-                  />
-                ) : null
-              }
-            >
-              {judged && !(view === 'after' && cand) && (
-                <JudgeNote
-                  {...judged}
-                  compact={!!selMark && threads}
-                  onUse={(note) => {
-                    setInstructions((cur) => ({ ...cur, [beat.id]: note }));
-                    setFocusSheet(true);
-                    setInspecting(true);
-                    requestAnimationFrame(() =>
-                      document.querySelector<HTMLElement>('.beat-sheet .regen textarea')?.focus(),
-                    );
+            />
+            <span className="beat-bar-end">
+              <label className="check">
+                <input
+                  type="checkbox"
+                  checked={threads}
+                  onChange={(e) => {
+                    setThreads(e.target.checked);
+                    try {
+                      localStorage.setItem('warqa-studio:threads', e.target.checked ? '1' : '0');
+                    } catch {
+                      /* storage unavailable */
+                    }
                   }}
                 />
-              )}
-              {rewriting[beat.id] && <Writing n={i + 1} />}
-            </Stage>
-            <NarrationBox
-              beat={beat}
-              lang={lessonLang}
-              {...(timeOf(beat, lessonLang) ? { time: timeOf(beat, lessonLang) } : {})}
-              {...(audio[lessonLang]?.[beat.id] ? { audio: audio[lessonLang]![beat.id]! } : {})}
-              selMark={selMark}
-              onSelectMark={setSelMark}
-              onChange={(s) => updateBeat((b) => void (b.narration = s))}
-            />
-            {!!general.length && (
-              <section className="lesson-issues" aria-labelledby="lesson-issues">
-                <h2 id="lesson-issues" className="small-title">
-                  {t('editor.lessonIssues')}
-                </h2>
-                <IssueList issues={general} />
-              </section>
-            )}
+                <span>{t('editor.showThreads')}</span>
+              </label>
+              <Button
+                ref={detailsBtn}
+                variant="quiet"
+                icon="edit"
+                aria-expanded={sheetOpen}
+                onClick={() => (sheetOpen ? setInspecting(false) : openSheet())}
+              >
+                {t('editor.details', { n: i + 1 })}
+              </Button>
+            </span>
           </div>
-          <SideSheet
-            open={sheetOpen}
-            onClose={() => {
-              setFocusSheet(false);
-              setInspecting(false);
+          <Stage
+            ref={stage}
+            id={id}
+            lid={lid}
+            bookId={detail.bookId}
+            lang={shown}
+            beat={i}
+            reloadKey={reloadKey}
+            stale={dirty}
+            label={t('editor.stageLabel', { n: i + 1 })}
+            strip={detail.chapter ? t('editor.kicker.chapter', { n: detail.chapter }) : String(lesson.title)}
+            langName={langName(shown)}
+            playerRef={playerRef}
+            onBeat={(k) => {
+              if (k !== i) setSel(k);
             }}
-            title={
-              <>
-                <span className="insp-count mono">{t('editor.beatOf', { i: num(i + 1), n: num(beats.length) })}</span>
-                <bdi lang={lessonLang} dir="auto" className="insp-name">
-                  {beat.title}
-                </bdi>
-              </>
+            onData={(d) => {
+              setTimings(d.timings);
+              setAudio(d.audio);
+            }}
+            candidate={view === 'after' && cand ? beat.id : undefined}
+            zoneRef={zoneRef}
+            below={
+              view === 'after' && cand ? null : (
+                <MarkTimeline
+                  {...(timeOf(beat) ? { time: timeOf(beat) } : {})}
+                  marks={beatMarks}
+                  withCues={withCues}
+                  selMark={selMark}
+                  onSelect={(m, at) => {
+                    setSelMark(m);
+                    // the stage just after that mark's cues have played
+                    playerRef.current?.showAt(i, at + 0.7);
+                  }}
+                  playerRef={playerRef}
+                  beat={i}
+                  lang={shown}
+                />
+              )
             }
-            className="beat-sheet"
-            takeFocus={focusSheet}
-            returnFocus={() => detailsBtn.current}
+            overlay={
+              threads && !(view === 'after' && cand) ? (
+                <Threads
+                  zoneRef={zoneRef}
+                  playerRef={playerRef}
+                  beat={beat}
+                  index={i}
+                  selMark={selMark}
+                  actionName={actionName}
+                />
+              ) : null
+            }
           >
-            <Inspector
-              // by its place: editing the beat's id (Edit as JSON) keeps the inspector as it is
-              key={i}
-              beat={beat}
-              index={i}
-              lessonLang={lessonLang}
-              langs={detail.bookLangs.filter((l) => l !== lessonLang)}
-              moves={detail.moves}
-              issues={byBeat.get(beat.id) ?? []}
-              catalog={catalog}
-              parts={parts[beat.id] ?? []}
-              allIds={beats.flatMap((b) => b.scene?.add?.map((n) => n.id) ?? [])}
-              allQuestionIds={beats.flatMap((b) => ((b.questions ?? []) as { id?: string }[]).map((q) => q.id ?? ''))}
-              update={updateBeat}
-              replace={(b) => {
-                if (b.id !== beat.id) renameKeys('beat', beat.id, b.id);
-                update((l) => void (l.beats[i] = b));
-              }}
-              renameNode={(from, to) => {
-                renameKeys('node', from, to);
-                update((l) => renameNode(l, i, from, to));
-              }}
-              moveKeys={moveKeys}
-              renameKeys={renameKeys}
-              onGoTo={setSel}
-              regen={{
-                busy: !!rewriting[beat.id],
-                error: regenErrors[beat.id] ?? '',
-                disabled: dirty,
-                ...(detail.rewriteUsd !== undefined
-                  ? { cost: t('learn.est.cost', { cost: i18n.usd(detail.rewriteUsd) }) }
-                  : {}),
-                instruction: instructions[beat.id] ?? '',
-                setInstruction: (v) => setInstructions((cur) => ({ ...cur, [beat.id]: v })),
-                start: startRegen,
-              }}
-              {...(cand
-                ? {
-                    compare: {
-                      narration: String((cand.beat as { narration?: string } | undefined)?.narration ?? ''),
-                      ...(cand.instruction ? { instruction: cand.instruction } : {}),
-                      view,
-                      setView,
-                      keepNew: () => void keepNew(),
-                      keepOld: () => void keepOld(),
-                      ...(cand.changed ? { changed: true } : {}),
-                      ...(regenErrors[beat.id] ? { error: regenErrors[beat.id] } : {}),
-                      again: () => void startRegen(cand.instruction ?? instructions[beat.id] ?? ''),
-                      disabled: dirty || !!rewriting[beat.id],
-                    },
-                  }
-                : {})}
-              selMark={selMark}
-              onSelectMark={setSelMark}
-              onDuplicate={() => addBeat(beat)}
-              onDelete={deleteBeat}
-              canDelete={beats.length > 1}
-            />
-          </SideSheet>
+            {judged && !(view === 'after' && cand) && (
+              <JudgeNote
+                {...judged}
+                compact={!!selMark && threads}
+                onUse={(note) => {
+                  setInstructions((cur) => ({ ...cur, [beat.id]: note }));
+                  setFocusSheet(true);
+                  setInspecting(true);
+                  requestAnimationFrame(() =>
+                    document.querySelector<HTMLElement>('.beat-sheet .regen textarea')?.focus(),
+                  );
+                }}
+              />
+            )}
+            {rewriting[beat.id] && <Writing n={i + 1} />}
+          </Stage>
+          <NarrationBox
+            beat={beat}
+            lang={lessonLang}
+            {...(timeOf(beat, lessonLang) ? { time: timeOf(beat, lessonLang) } : {})}
+            {...(audio[lessonLang]?.[beat.id] ? { audio: audio[lessonLang]![beat.id]! } : {})}
+            selMark={selMark}
+            onSelectMark={setSelMark}
+            onChange={(s) => updateBeat((b) => void (b.narration = s))}
+          />
+          {!!general.length && (
+            <section className="lesson-issues" aria-labelledby="lesson-issues">
+              <h2 id="lesson-issues" className="small-title">
+                {t('editor.lessonIssues')}
+              </h2>
+              <IssueList issues={general} />
+            </section>
+          )}
         </div>
-      )}
+        <SideSheet
+          open={sheetOpen}
+          onClose={() => {
+            setFocusSheet(false);
+            setInspecting(false);
+          }}
+          title={
+            <>
+              <span className="insp-count mono">{t('editor.beatOf', { i: num(i + 1), n: num(beats.length) })}</span>
+              <bdi lang={lessonLang} dir="auto" className="insp-name">
+                {beat.title}
+              </bdi>
+            </>
+          }
+          className="beat-sheet"
+          takeFocus={focusSheet}
+          returnFocus={() => detailsBtn.current}
+        >
+          <Inspector
+            // by its place: editing the beat's id (Edit as JSON) keeps the inspector as it is
+            key={i}
+            beat={beat}
+            index={i}
+            lessonLang={lessonLang}
+            langs={detail.bookLangs.filter((l) => l !== lessonLang)}
+            moves={detail.moves}
+            issues={byBeat.get(beat.id) ?? []}
+            catalog={catalog}
+            parts={parts[beat.id] ?? []}
+            allIds={beats.flatMap((b) => b.scene?.add?.map((n) => n.id) ?? [])}
+            allQuestionIds={beats.flatMap((b) => ((b.questions ?? []) as { id?: string }[]).map((q) => q.id ?? ''))}
+            update={updateBeat}
+            replace={(b) => {
+              if (b.id !== beat.id) renameKeys('beat', beat.id, b.id);
+              update((l) => void (l.beats[i] = b));
+            }}
+            renameNode={(from, to) => {
+              renameKeys('node', from, to);
+              update((l) => renameNode(l, i, from, to));
+            }}
+            moveKeys={moveKeys}
+            renameKeys={renameKeys}
+            onGoTo={setSel}
+            regen={{
+              busy: !!rewriting[beat.id],
+              error: regenErrors[beat.id] ?? '',
+              disabled: dirty,
+              ...(detail.rewriteUsd !== undefined
+                ? { cost: t('learn.est.cost', { cost: i18n.usd(detail.rewriteUsd) }) }
+                : {}),
+              instruction: instructions[beat.id] ?? '',
+              setInstruction: (v) => setInstructions((cur) => ({ ...cur, [beat.id]: v })),
+              start: startRegen,
+            }}
+            {...(cand
+              ? {
+                  compare: {
+                    narration: String((cand.beat as { narration?: string } | undefined)?.narration ?? ''),
+                    ...(cand.instruction ? { instruction: cand.instruction } : {}),
+                    view,
+                    setView,
+                    keepNew: () => void keepNew(),
+                    keepOld: () => void keepOld(),
+                    ...(cand.changed ? { changed: true } : {}),
+                    ...(regenErrors[beat.id] ? { error: regenErrors[beat.id] } : {}),
+                    again: () => void startRegen(cand.instruction ?? instructions[beat.id] ?? ''),
+                    disabled: dirty || !!rewriting[beat.id],
+                  },
+                }
+              : {})}
+            selMark={selMark}
+            onSelectMark={setSelMark}
+            onDuplicate={() => addBeat(beat)}
+            onDelete={deleteBeat}
+            canDelete={beats.length > 1}
+          />
+        </SideSheet>
+      </div>
     </div>
   );
 }

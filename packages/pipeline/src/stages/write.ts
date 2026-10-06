@@ -25,6 +25,7 @@ import type { Project } from '../project/index.js';
 import { EXAMPLE_BEAT, langName, languageRules, TEACHING_PRINCIPLES, WRITER_SYSTEM } from '../prompts/index.js';
 import { geoNote } from './geo.js';
 import { type BookPlan, glossaryText, type PlanChapter } from './plan.js';
+import { loadSources, type SourceFile, saveSources } from './sources.js';
 import type { StoryBeat, Storyboard } from './storyboard.js';
 
 const At = z.union([z.string(), z.number(), z.object({ mark: z.string(), offset: z.number() })]);
@@ -527,6 +528,8 @@ export async function rewriteBeat(
 export interface BeatSwap {
   previous: Beat;
   dropped: Record<string, Strings>;
+  /** The records of what those translations were made from. */
+  droppedSources?: Record<string, SourceFile>;
 }
 
 /** The translation keys that a new version of a beat makes stale: its own, its parts' and its questions'. */
@@ -550,15 +553,21 @@ export function applyBeat(project: Project, lessonId: string, beat: Beat): BeatS
   const old = lesson.beats[idx]!;
   const stale = staleKeys(old, beat);
   const dropped: Record<string, Strings> = {};
+  const droppedSources: Record<string, SourceFile> = {};
   for (const lang of project.book.langs.filter((l) => l !== lesson.lang)) {
     const st = project.loadStrings(lessonId, lang);
     if (!st) continue;
     dropped[lang] = Object.fromEntries(Object.entries(st).filter(([k]) => stale(k)));
     project.saveStrings(lessonId, lang, Object.fromEntries(Object.entries(st).filter(([k]) => !stale(k))));
+    const src = loadSources(project, lessonId, lang);
+    if (src) {
+      droppedSources[lang] = Object.fromEntries(Object.entries(src).filter(([k]) => stale(k)));
+      saveSources(project, lessonId, lang, Object.fromEntries(Object.entries(src).filter(([k]) => !stale(k))));
+    }
   }
   lesson.beats[idx] = beat;
   project.saveLesson(lessonId, lesson);
-  return { previous: old, dropped };
+  return { previous: old, dropped, ...(Object.keys(droppedSources).length ? { droppedSources } : {}) };
 }
 
 /** Undo `applyBeat`: the previous beat back, and the translations dropped with the swap. */
@@ -572,4 +581,6 @@ export function restoreBeat(project: Project, lessonId: string, swap: BeatSwap):
     const st = project.loadStrings(lessonId, lang) ?? {};
     project.saveStrings(lessonId, lang, { ...st, ...back });
   }
+  for (const [lang, back] of Object.entries(swap.droppedSources ?? {}))
+    saveSources(project, lessonId, lang, { ...(loadSources(project, lessonId, lang) ?? {}), ...back });
 }

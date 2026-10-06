@@ -40,6 +40,8 @@ export interface JobCtx {
           total?: number;
           usd?: number;
           n?: number;
+          /** The chapter's title (translate, narrate) or the written beat's (write). */
+          title?: string;
           estimate?: number;
           limit?: number;
         },
@@ -234,33 +236,60 @@ export const RUNNERS: Record<JobType, Runner> = {
     const langs = strList(ctx.args.langs) ?? strList(ctx.args.lang);
     if (!langs?.length) throw new Error('Choose a language to translate into.');
     const llm = ctx.llm();
+    const start = llm.totalUsd;
+    const spent = () => +(llm.totalUsd - start).toFixed(4);
     const plan = loadPlanSafe(p);
     const ids = chaptersOf(p, ctx.args.chapters).filter((id) => p.hasLesson(id));
+    // "Translate again" on rows of the review queue: these keys only
+    const keys = strList(ctx.args.keys);
+    const order = plan?.chapters.filter((c) => c.include) ?? [];
+    const limit = p.config.budget.usd;
+    let strings = 0;
     for (const lang of langs) {
-      for (const id of ids) {
+      let estimate: number | undefined;
+      try {
+        estimate = P.estimateTranslate(p, lang, { lessons: ids, ...(keys ? { keys } : {}) })?.usd;
+      } catch {
+        estimate = undefined;
+      }
+      for (const [k, id] of ids.entries()) {
         ctx.checkpoint();
         const lesson = p.loadLesson(id);
         if (lesson.lang === lang) continue;
         const stage = `translate:${lang}`;
-        ctx.progress({ stage, status: 'start', detail: P.resolveRole('translator', p.config) }, id);
-        await P.translateLesson(p, id, lang, {
+        // the tray names the chapter ("chapter 5 of 8") and what the run should cost against the book's limit
+        const n = order.findIndex((c) => c.id === id) + 1;
+        const head = {
+          stage,
+          title: order[n - 1]?.title ?? lesson.title,
+          index: k,
+          total: ids.length,
+          ...(n > 0 ? { n } : {}),
+          ...(estimate !== undefined ? { estimate: +estimate.toFixed(4) } : {}),
+          ...(limit !== undefined ? { limit } : {}),
+        };
+        ctx.progress({ ...head, status: 'start', detail: P.resolveRole('translator', p.config), usd: spent() }, id);
+        const out = await P.translateLesson(p, id, lang, {
           llm,
           ...(plan ? { plan: plan as unknown as P.BookPlan } : {}),
           force: !!ctx.args.force,
+          ...(keys ? { keys } : {}),
+          // each chunk is saved before it is reported: Stop between chunks keeps what is translated
           onChunk: (e) =>
             ctx.progress(
-              { stage, status: 'beat', detail: `${e.keys} strings`, index: e.chunk - 1, total: e.total },
+              { stage, status: 'beat', detail: `${e.keys} strings`, index: e.chunk - 1, total: e.total, usd: spent() },
               id,
             ),
         });
-        ctx.progress({ stage, status: 'done' }, id);
+        strings += Object.keys(out).length;
+        ctx.progress({ stage, status: 'done', usd: spent() }, id);
       }
       if (!p.book.langs.includes(lang)) {
         p.book.langs.push(lang);
         p.saveBook();
       }
     }
-    return { langs, lessons: ids };
+    return { langs, lessons: ids, strings, usd: spent() };
   },
 
   async narrate(ctx) {
@@ -268,8 +297,12 @@ export const RUNNERS: Record<JobType, Runner> = {
     const langs = strList(ctx.args.langs) ?? strList(ctx.args.lang) ?? p.book.langs;
     const ids = chaptersOf(p, ctx.args.chapters).filter((id) => p.hasLesson(id));
     const out: { lesson: string; lang: string; synthesized: number; cached: number; failed: number }[] = [];
-    for (const id of ids) {
+    const plan = loadPlanSafe(p);
+    const order = plan?.chapters.filter((c) => c.include) ?? [];
+    let usd = 0;
+    for (const [k, id] of ids.entries()) {
       const lesson = p.loadLesson(id);
+      const n = order.findIndex((c) => c.id === id) + 1;
       for (const lang of langs) {
         ctx.checkpoint();
         if (lang !== lesson.lang && !p.loadStrings(id, lang)) {
@@ -279,7 +312,19 @@ export const RUNNERS: Record<JobType, Runner> = {
         const stage = `narrate:${lang}`;
         const total = lesson.beats.length;
         let i = 0;
-        ctx.progress({ stage, status: 'start', detail: String(ctx.args.engine ?? p.config.tts.provider) }, id);
+        ctx.progress(
+          {
+            stage,
+            status: 'start',
+            detail: String(ctx.args.engine ?? p.config.tts.provider),
+            title: order[n - 1]?.title ?? lesson.title,
+            ...(n > 0 ? { n } : {}),
+            index: k,
+            total: ids.length,
+            usd,
+          },
+          id,
+        );
         const r = await P.narrateLesson(p, id, lang, {
           ...(typeof ctx.args.engine === 'string' ? { provider: ctx.args.engine } : {}),
           ...(typeof ctx.args.voice === 'string' && ctx.args.voice ? { voice: ctx.args.voice } : {}),
@@ -304,17 +349,24 @@ export const RUNNERS: Record<JobType, Runner> = {
           failed: r.failed.length,
         });
         for (const f of r.failed.slice(0, 5)) ctx.log(`${id} ${lang} ${f.beat}: ${f.error}`, 'error');
+        // a paid voice: what these characters cost (the free ones say "free")
+        try {
+          usd += (r.chars * (P.ttsProvider(r.provider).costPerMChars ?? 0)) / 1e6;
+        } catch {
+          /* an engine without a price */
+        }
         ctx.progress(
           {
             stage,
             status: r.failed.length ? 'error' : 'done',
             detail: `${r.provider}/${r.voice}: ${r.synthesized.length} new, ${r.cached.length} cached${r.failed.length ? `, ${r.failed.length} failed` : ''}`,
+            usd: +usd.toFixed(4),
           },
           id,
         );
       }
     }
-    return { clips: out };
+    return { clips: out, usd: +usd.toFixed(4) };
   },
 
   async export(ctx) {
@@ -692,7 +744,12 @@ export class Jobs {
         // stopped partway goes on from there. Not after the last beat: the lesson is saved just after it (Stop is
         // taken at "write done"). Pages read are only saved at the end of a reading, so not there either.
         const between = 'index' in e && e.index !== undefined && e.total !== undefined && e.index + 1 < e.total;
-        if (e.status === 'done' || e.status === 'skip' || (e.stage === 'write' && e.status === 'beat' && between))
+        // translation chunks too (each is saved before its event)
+        if (
+          e.status === 'done' ||
+          e.status === 'skip' ||
+          ((e.stage === 'write' || e.stage.startsWith('translate:')) && e.status === 'beat' && between)
+        )
           checkpoint();
       },
       log: (message, level = 'info') => this.emit(j, { kind: 'log', message, level }),
