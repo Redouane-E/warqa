@@ -412,6 +412,18 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
     setSelMark(null);
   }, [sel]);
 
+  // ?compare=1 (Compare from the Check step): the beat's new version on the stage, its details open
+  const compareAsked = query.get('compare') === '1';
+  const compared = useRef(false);
+  useEffect(() => {
+    if (!compareAsked || compared.current || !detail || !lesson) return;
+    const bid = lesson.beats[sel]?.id;
+    if (!bid || !detail.candidates?.[bid]) return;
+    compared.current = true;
+    setAfterBeat(bid);
+    setInspecting(true);
+  }, [compareAsked, detail, lesson, sel]);
+
   const save = useCallback(
     async (force = false) => {
       if (!lesson) return;

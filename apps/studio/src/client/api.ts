@@ -3,6 +3,7 @@
 import type { KeyCheck } from '../shared/providers';
 import type {
   BookPlan,
+  CheckDetail,
   EditorCatalog,
   EstimateInfo,
   GeoLayerInfo,
@@ -185,6 +186,22 @@ export const api = {
       `/api/projects/${encodeURIComponent(id)}/review/${encodeURIComponent(lang)}/import${dry ? '?dry=1' : ''}`,
       new Raw(csv, 'text/csv'),
     ),
+  /** A chapter's check in one language (the Check step). */
+  check: (id: string, lid: string, lang: string) =>
+    req<CheckDetail>(
+      'GET',
+      `/api/projects/${encodeURIComponent(id)}/check/${encodeURIComponent(lid)}?lang=${encodeURIComponent(lang)}`,
+    ),
+  /** The book's questions as flashcards: Anki (tab-separated) or CSV. */
+  flashcardsUrl: (id: string, lang: string, format: 'anki' | 'csv') =>
+    withBase(
+      `/api/projects/${encodeURIComponent(id)}/flashcards/${encodeURIComponent(lang)}${format === 'csv' ? '?format=csv' : ''}`,
+    ),
+  scormUrl: (id: string) => withBase(`/api/projects/${encodeURIComponent(id)}/scorm.zip`),
+  videoUrl: (id: string, lid: string, lang: string) =>
+    withBase(`/api/projects/${encodeURIComponent(id)}/videos/${encodeURIComponent(lid)}/${encodeURIComponent(lang)}`),
+  /** The whole book as a zip (a backup). */
+  archiveUrl: (id: string) => withBase(`/api/projects/${encodeURIComponent(id)}/archive`),
   /** Where the review queue downloads as CSV (a link): the whole book, or one chapter. */
   reviewCsvUrl: (id: string, lang: string, lesson?: string) =>
     withBase(
@@ -235,4 +252,26 @@ export async function waitForJob(jobId: string, every = 700): Promise<JobInfo> {
     if (job.status === 'done' || job.status === 'error' || job.status === 'cancelled') return job;
     await new Promise((ok) => setTimeout(ok, every));
   }
+}
+
+/**
+ * Save a file the API makes (a backup, flashcards, a package): fetched, then handed to the browser as a download
+ * under the name the server gives. Works the same on the desktop and in the web app, with or without its
+ * service worker.
+ */
+export async function saveFile(url: string, fallbackName: string): Promise<{ name: string; bytes: number }> {
+  const res = await fetch(url);
+  if (!res.ok) {
+    const body = (await res.json().catch(() => ({}))) as { error?: string };
+    throw new Error(body.error ?? `HTTP ${res.status}`);
+  }
+  const name = /filename="([^"]+)"/.exec(res.headers.get('content-disposition') ?? '')?.[1] ?? fallbackName;
+  const blob = await res.blob();
+  const href = URL.createObjectURL(blob);
+  const a = Object.assign(document.createElement('a'), { href, download: name });
+  document.body.append(a);
+  a.click();
+  a.remove();
+  setTimeout(() => URL.revokeObjectURL(href), 60_000);
+  return { name, bytes: blob.size };
 }

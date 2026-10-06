@@ -1,5 +1,5 @@
 // Book projects on disk: discovery under --root, summaries for the home page and the project page, creation.
-import { existsSync, mkdirSync, readdirSync, statSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, statSync, writeFileSync } from 'node:fs';
 import { basename, dirname, join, resolve } from 'node:path';
 import { LANG_INFO } from '@warqa/i18n';
 import { checkStrings, type Lesson, type LText, localize, ltext, safeParseLesson, validateLesson } from '@warqa/lesson';
@@ -14,7 +14,8 @@ import type {
   StepId,
   StepState,
 } from '../shared/types.js';
-import { panelKeyPath, zipReady } from './zip.js';
+import { checkSummary } from './checks.js';
+import { panelKeyPath, panelZipPath, zipPath, zipReady } from './zip.js';
 
 export const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
 
@@ -252,7 +253,19 @@ export function lessonSummary(p: P.Project, id: string): LessonSummary | null {
   } catch {
     errors++;
   }
-  return { id, title, lang: lesson.lang, langs, beats: lesson.beats.length, hasAudio, errors, warnings, updated };
+  const questions = lesson.beats.reduce((a, b) => a + (b.questions?.length ?? 0), 0);
+  return {
+    id,
+    title,
+    lang: lesson.lang,
+    langs,
+    beats: lesson.beats.length,
+    questions,
+    hasAudio,
+    errors,
+    warnings,
+    updated,
+  };
 }
 
 function steps(
@@ -406,15 +419,78 @@ export function projectDetail(id: string, p: P.Project, jobs: ProjectDetail['job
     ledger: P.ledgerSummary(p.path('.ledger.jsonl')),
     document: doc,
     ...(pdf ? { pdf: basename(pdf) } : {}),
-    exportInfo: {
-      exported: s.exported,
-      zip: zipReady(p.root),
-      ...(s.exported ? { at: mtime(p.path('dist', 'index.html')) } : {}),
-    },
+    exportInfo: exportInfo(p, s.exported),
     jobs,
     next: nextStep(s.steps),
     roles,
-    ...(existsSync(panelKeyPath(p.root)) ? { panelKit: { at: mtime(panelKeyPath(p.root)) } } : {}),
+    ...(existsSync(panelKeyPath(p.root))
+      ? {
+          panelKit: {
+            at: mtime(panelKeyPath(p.root)),
+            ...(existsSync(panelZipPath(p.root)) ? { bytes: statSync(panelZipPath(p.root)).size } : {}),
+          },
+        }
+      : {}),
+    ...(() => {
+      const checks = checkSummary(p);
+      return Object.keys(checks).length ? { checks } : {};
+    })(),
+  };
+}
+
+/** The newest change under a folder (files only), 0 when there is nothing. */
+function newestUnder(dir: string): number {
+  if (!existsSync(dir)) return 0;
+  let max = 0;
+  for (const f of readdirSync(dir, { withFileTypes: true })) {
+    const full = join(dir, f.name);
+    max = Math.max(max, f.isDirectory() ? newestUnder(full) : statSync(full).mtimeMs);
+  }
+  return max;
+}
+
+/**
+ * What the Share step says of the export: when, the zip's size, whether the lessons changed after it (a lesson, its
+ * strings, timings or audio, the book's assets or the settings an export shows), and the SCORM package and videos.
+ */
+function exportInfo(p: P.Project, exported: boolean): ProjectDetail['exportInfo'] {
+  const zip = zipReady(p.root);
+  const at = exported ? mtime(p.path('dist', 'index.html')) : 0;
+  // only what an export holds: each lesson, its strings, timings and audio, and the book's assets (not the
+  // editor's candidates and history, the review marks, drafts or settings)
+  const exportedOf = (lid: string) => {
+    const dir = p.path('lessons', lid);
+    if (!existsSync(dir)) return 0;
+    return Math.max(
+      ...readdirSync(dir)
+        .filter((f) => f === 'lesson.json' || /^(strings|timings)\.[\w-]+\.json$/.test(f))
+        .map((f) => mtime(join(dir, f))),
+      newestUnder(join(dir, 'audio')),
+      0,
+    );
+  };
+  // the book's own settings (title, languages, digits…) changed since: the export shows the old ones
+  const fp = p.path('cache', 'exported-book.json');
+  const bookChanged = exported && existsSync(fp) && readFileSync(fp, 'utf8') !== P.bookFingerprint(p);
+  const changed = Math.max(0, newestUnder(p.path('assets')), ...p.lessonIds().map(exportedOf));
+  const scorm = p.path('dist-scorm.zip');
+  const videos = existsSync(p.root)
+    ? readdirSync(p.root).flatMap((f) => {
+        const m = /^(.+)\.([\w-]+)\.mp4$/.exec(f);
+        if (!m || !p.hasLesson(m[1]!)) return [];
+        const st = statSync(p.path(f));
+        return [{ lesson: m[1]!, lang: m[2]!, bytes: st.size, at: st.mtimeMs }];
+      })
+    : [];
+  return {
+    exported,
+    zip,
+    ...(exported ? { at } : {}),
+    ...(zip ? { zipBytes: statSync(zipPath(p.root)).size } : {}),
+    // a little slack: the export itself touches nothing under lessons/
+    ...(exported && (changed > at + 1000 || bookChanged) ? { stale: true } : {}),
+    ...(existsSync(scorm) ? { scorm: { at: mtime(scorm), bytes: statSync(scorm).size } } : {}),
+    ...(videos.length ? { videos } : {}),
   };
 }
 

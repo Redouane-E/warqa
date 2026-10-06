@@ -103,6 +103,7 @@ export function WebApp({ bridge, serviceWorker }: { bridge: Bridge; serviceWorke
       topbarStatus: <WebStatus bridge={bridge} serviceWorker={sw} />,
       homeActions: <HomeActions />,
       projectActions: (id: string) => <ProjectActions id={id} />,
+      ...(__WARQA_REPO__ ? { desktopUrl: `${__WARQA_REPO__}#readme` } : {}),
       // the start guide (now in the studio): the test model in test mode, and the bundled example book
       guide: {
         ...(fake ? { fakeModel: FAKE_MODEL } : {}),

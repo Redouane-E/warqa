@@ -15,7 +15,9 @@ export type JobType =
   | 'improve'
   | 'geo'
   | 'panel'
-  | 'learn';
+  | 'learn'
+  | 'scorm'
+  | 'video';
 export const JOB_TYPES: JobType[] = [
   'ingest',
   'plan',
@@ -30,6 +32,8 @@ export const JOB_TYPES: JobType[] = [
   'geo',
   'panel',
   'learn',
+  'scorm',
+  'video',
 ];
 
 export type JobStatus = 'queued' | 'running' | 'done' | 'error' | 'cancelled';
@@ -140,6 +144,10 @@ export interface Capabilities {
   keyStore: 'file' | 'browser';
   /** The optional Python worker (OCR fallback, local voices) can be used. */
   worker: boolean;
+  /** Playwright's Chromium can run here (the checks, the judge, videos). */
+  playwright?: boolean;
+  /** ffmpeg can run here (videos). */
+  ffmpeg?: boolean;
 }
 
 export interface StatusInfo {
@@ -172,6 +180,8 @@ export interface LessonSummary {
   lang: string;
   langs: string[];
   beats: number;
+  /** Questions in it (the Share step's facts). */
+  questions?: number;
   hasAudio: Record<string, boolean>;
   errors: number;
   warnings: number;
@@ -296,9 +306,26 @@ export interface ProjectDetail extends ProjectSummary {
   stale?: Record<string, string[]>;
   document: DocSummary | null;
   pdf?: string;
-  exportInfo: { exported: boolean; zip: boolean; at?: number };
-  /** A teacher review kit was exported (its zip and key can be downloaded). */
-  panelKit?: { at: number };
+  exportInfo: {
+    exported: boolean;
+    zip: boolean;
+    at?: number;
+    /** The zip's size in bytes. */
+    zipBytes?: number;
+    /** A lesson, its strings or audio, or the book changed after the export. */
+    stale?: boolean;
+    /** The SCORM package, once made. */
+    scorm?: { at: number; bytes: number };
+    /** The videos made, by lesson and language. */
+    videos?: { lesson: string; lang: string; bytes: number; at: number }[];
+  };
+  /** A teacher review kit was exported (its zip can be downloaded). */
+  panelKit?: { at: number; bytes?: number };
+  /** The latest check of each chapter, per language: how many beats need attention. */
+  checks?: Record<
+    string,
+    { lang: string; at: number; beats: number; attention: number; flagged?: string[]; stale?: boolean }[]
+  >;
   jobs: JobInfo[];
   next: StepId;
   /** Model per role as resolved now (or an error message). */
@@ -534,6 +561,68 @@ export interface LanguageInfo {
   };
   /** What the missing part costs, in USD, when known. */
   estimate?: { translate?: number; narrate?: number };
+}
+
+/* ---------- the Check step (redesign 4f) ---------- */
+
+export type QaKind = 'blank' | 'overlap' | 'overflow' | 'offstage' | 'error' | 'compile';
+
+export interface CheckIssue {
+  kind: QaKind;
+  /** The checker's own words (English), for errors. */
+  message: string;
+  /** The parts involved, with a name a person reads ("label t1"). */
+  nodes?: { id: string; type: string; text?: string }[];
+  /** Where on the stage (1600 × 900). */
+  box?: { x: number; y: number; w: number; h: number };
+  from?: number;
+  to?: number;
+  fit?: number;
+}
+
+export interface CheckBeat {
+  id: string;
+  /** 1-based. */
+  n: number;
+  title: string;
+  move: string;
+  /** A question beat (the judge does not score it). */
+  ask: boolean;
+  /** Its narration in the language checked, with [[marks]]. */
+  narration: string;
+  score?: number;
+  problem?: string;
+  fix?: string;
+  issues: CheckIssue[];
+  /** Picture URLs (small and full), when a check saved them. */
+  thumb?: string;
+  shot?: string;
+  dur?: number;
+  /** It changed after the check. */
+  changed?: boolean;
+  /** Scored under 4, or an automatic finding. */
+  attention: boolean;
+}
+
+export interface CheckDetail {
+  lesson: string;
+  lang: string;
+  /** Its number among the chapters to make. */
+  chapter?: number;
+  title: string;
+  /** The languages the lesson has, and when each was last checked. */
+  langs: { lang: string; checked?: number }[];
+  beats: CheckBeat[];
+  /** When this chapter and language were last checked. */
+  checked?: number;
+  /** The lesson changed after the check. */
+  stale?: boolean;
+  /** The judge's verdict scored the lesson as it is now (Improve starts from it). */
+  fresh?: boolean;
+  /** The judge, when a Checker model is set: what scoring the whole chapter costs, and one beat. */
+  judge?: { model: string; lessonUsd?: number; beatUsd?: number };
+  /** What rewriting one beat costs. */
+  rewriteUsd?: number;
 }
 
 /* ---------- judge, map layers, teacher panel ---------- */

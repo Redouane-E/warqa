@@ -355,6 +355,20 @@ export function estimateTranslate(
   }
 }
 
+/**
+ * What the judge costs to score some beats: one picture and its narration each, four beats per call. Undefined when
+ * no judge model resolves or it has no price.
+ */
+export function estimateJudge(project: Project, beats: number): number | undefined {
+  if (!beats) return 0;
+  try {
+    const calls = Math.ceil(beats / 4);
+    return costOf(resolveRole('judge', project.config), calls * 400 + beats * (1600 + 150), beats * 150);
+  } catch {
+    return undefined;
+  }
+}
+
 /** What writing one beat again costs (the writer model, with its usual repairs), shown beside Regenerate. */
 export function estimateBeat(project: Project): number | undefined {
   const doc = loadDocument(project);

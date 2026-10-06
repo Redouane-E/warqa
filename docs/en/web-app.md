@@ -39,7 +39,8 @@ without CORS headers, so the web app rewrites them).
 - **Your data → Delete all my books and keys** wipes everything; **Keys → Forget all my keys** removes the keys.
 - Clearing the browser's site data deletes your books: use **Download backup** on a book (a zip of the whole
   project). **Import a backup** on the home screen brings it back, here or in another browser; the same zip is a
-  normal project folder for the desktop version.
+  normal project folder for the desktop version. A backup leaves out what is made again (the exported site,
+  caches, videos) and hidden files; an import does the same, so export the book again after importing it.
 - Your books can be open in one tab at a time; a second tab offers to take them over (the first one saves first).
 
 ## What needs the desktop version
@@ -47,11 +48,12 @@ without CORS headers, so the web app rewrites them).
 | Feature | In the browser |
 | --- | --- |
 | Edge voices (`edge`, Python) and the local Python worker (`worker`) | Not available (shown as "desktop version only"). Use an online voice or no voice. |
-| Visual checks, "Improve with the judge" (both render beats with Playwright) | Not available. |
-| Teacher review kits (export) | Not available; the lesson preview's "Rating mode" works. |
+| The Check step's checks and "Improve weak beats" (both render beats with Playwright) | Not available (the step says "Desktop version only"). A book checked on the desktop shows its checks here too. |
+| Teacher review kits ("Ask teachers") | Works. |
 | Component packs (`pipeline.components`, code) | Refused, so that a shared book cannot run code next to your keys. Books that use them open in the desktop version. |
 | Display math (`math` nodes) typeset to SVG with MathJax | Not available; the player shows the TeX source as text. Inline `$…$` math in text and equations works. |
-| Video export, SCORM, flashcards | Not in the studio (CLI). |
+| SCORM package, flashcards (Anki, CSV), backup | Work (the Share step). |
+| Video export | Not available (Playwright and ffmpeg). |
 
 ### Providers and voices that work from a web page
 

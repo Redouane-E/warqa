@@ -196,8 +196,8 @@ export function flashcards(project: Project, lang: string): Card[] {
   return cards;
 }
 
-/** Tab-separated file Anki imports directly (File → Import; "Allow HTML" on). */
-export function exportAnki(project: Project, lang: string, out = project.path(`flashcards.${lang}.txt`)): string {
+/** The flashcards as a tab-separated file Anki imports directly (File → Import; "Allow HTML" on). */
+export function ankiText(project: Project, lang: string): string {
   const clean = (s: string) => s.replace(/\t/g, ' ').replace(/\r?\n/g, '<br>');
   const lines = [
     '#separator:tab',
@@ -205,22 +205,56 @@ export function exportAnki(project: Project, lang: string, out = project.path(`f
     '#tags column:3',
     ...flashcards(project, lang).map((c) => `${clean(c.front)}\t${clean(c.back)}\t${c.tags}`),
   ];
-  writeFileSync(out, `${lines.join('\n')}\n`);
-  return out;
+  return `${lines.join('\n')}\n`;
 }
 
-/** CSV flashcards (front, back) for other tools. */
-export function exportCsv(project: Project, lang: string, out = project.path(`flashcards.${lang}.csv`)): string {
+/** The flashcards as CSV (front, back) for other tools, with a BOM so spreadsheets read Arabic right. */
+export function csvText(project: Project, lang: string): string {
   const q = (s: string) =>
     `"${s
       .replace(/<br>/g, '\n')
       .replace(/<[^>]+>/g, '')
       .replace(/"/g, '""')}"`;
-  writeFileSync(
-    out,
-    `\ufefffront,back\n${flashcards(project, lang)
-      .map((c) => `${q(c.front)},${q(c.back)}`)
-      .join('\n')}\n`,
-  );
+  return `\ufefffront,back\n${flashcards(project, lang)
+    .map((c) => `${q(c.front)},${q(c.back)}`)
+    .join('\n')}\n`;
+}
+
+/** Tab-separated file Anki imports directly (File → Import; "Allow HTML" on). */
+export function exportAnki(project: Project, lang: string, out = project.path(`flashcards.${lang}.txt`)): string {
+  writeFileSync(out, ankiText(project, lang));
   return out;
+}
+
+/** CSV flashcards (front, back) for other tools. */
+export function exportCsv(project: Project, lang: string, out = project.path(`flashcards.${lang}.csv`)): string {
+  writeFileSync(out, csvText(project, lang));
+  return out;
+}
+
+/**
+ * What a backup of a book leaves out: what is made again from it (the exported site and packages, caches other than
+ * the paid model answers and the voices, videos, flashcard files, the full-size pictures of checks), and every hidden
+ * file but the spending ledger (a `.env` with keys, `.git`, system files). The saved checks, the judge's scores and the
+ * small pictures are kept: they cost time or money.
+ */
+export const BACKUP_SKIP =
+  /^dist\/|^dist-panel\/|^dist-panel-key\.json$|^cache\/(?!llm\/|tts\/)|^dist[^/]*\.zip$|^flashcards\.|\.mp4$|^qa\/.*\.png$|^qa\/.*index\.txt$|(^|\/)\.(?!ledger\.jsonl$)/;
+
+/** A book as one zip (its folder, without what BACKUP_SKIP leaves out), to move it or keep a copy. */
+export function archiveProject(project: Project): Uint8Array {
+  const name =
+    project.root
+      .replace(/[\\/]+$/, '')
+      .split(/[\\/]/)
+      .pop() ?? 'book.warqa';
+  const files: Record<string, Uint8Array | [Uint8Array, { level: 0 }]> = {};
+  for (const rel of listFiles(project.root)) {
+    const r = rel.replace(/\\/g, '/');
+    if (BACKUP_SKIP.test(r)) continue;
+    const data = new Uint8Array(readFileSync(join(project.root, rel)));
+    // audio, images and fonts are compressed already: stored as they are
+    files[`${name}/${r}`] = /\.(mp3|wav|png|jpe?g|webp|woff2?)$/i.test(r) ? [data, { level: 0 }] : data;
+  }
+  return zipSync(files, { level: 6 });
 }

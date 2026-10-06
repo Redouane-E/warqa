@@ -17,7 +17,8 @@ interface Options {
 }
 
 /** Folders of a project that a backup leaves out (rebuilt for free, or desktop by-products). */
-const SKIP = /^(dist|qa)\/|^cache\/(?!llm\/|tts\/)|^dist[^/]*\.zip$|^flashcards\.|\.mp4$/;
+// what a backup leaves out: the same list as the desktop's (what is made again; the saved checks are kept)
+const SKIP = P.BACKUP_SKIP;
 const MAX_IMPORT = 1024 * 1024 * 1024;
 
 const slugOf = (s: string) =>
@@ -70,6 +71,9 @@ function write(dir: string, prefix: string, names: string[], files: Record<strin
     // never outside the project folder
     if (!rel || rel.split('/').some((s) => s === '..' || s === '') || rel.includes('\\') || rel.startsWith('/'))
       continue;
+    // nor what this browser makes itself: an exported site (dist/), caches, hidden files. A book's pages then only
+    // ever come from this studio's own export (a zip could carry scripts that would run as this site)
+    if (P.BACKUP_SKIP.test(rel)) continue;
     const target = join(dir, rel);
     vfs.mkdirSync(dirname(target), { recursive: true });
     vfs.writeFileSync(target, files[name]!);

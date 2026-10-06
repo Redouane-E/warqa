@@ -246,7 +246,18 @@ export function exportSite(project: Project, opts: ExportOptions = {}): ExportRe
       dir,
       ...(book.subtitle ? { description: ltext(book.subtitle, defaultLang) } : {}),
     });
+  // the book's settings this export shows, so the studio can tell when they changed since (not the models or keys)
+  if (!opts.out) {
+    mkdirSync(project.path('cache'), { recursive: true });
+    writeFileSync(project.path('cache', 'exported-book.json'), bookFingerprint(project));
+  }
   return { out, lessons: ids, langs, audio: audioCount };
+}
+
+/** What of a book's settings its export shows: everything but the pipeline's (models, voices, limit), and its packs. */
+export function bookFingerprint(project: Project): string {
+  const { pipeline: _, ...book } = project.book;
+  return JSON.stringify({ book, components: project.config.components ?? [] });
 }
 
 /** List files of a directory recursively (for zips and reports). */

@@ -163,6 +163,8 @@ async function start(opts: InitOptions) {
       jobsUnavailable: desktopOnlyJobs,
       keyStore: 'browser',
       worker: false,
+      playwright: false,
+      ffmpeg: false,
     },
     defaultTts: 'none',
     ...(opts.fake ? { llm: { fake: fakeModel } } : {}),

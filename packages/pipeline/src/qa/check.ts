@@ -9,6 +9,25 @@ export interface QaIssue {
   id: string;
   kind: 'blank' | 'overlap' | 'overflow' | 'offstage' | 'error' | 'compile';
   message: string;
+  /** The parts involved (overlap: both; overflow, offstage: one), by node id. */
+  nodes?: string[];
+  /** Where on the stage (1600 × 900): the overlapping area, or the part's box. */
+  box?: { x: number; y: number; w: number; h: number };
+  /** Blank: from when to when (seconds after the narration starts). */
+  from?: number;
+  to?: number;
+  /** Overflow: the scale the part had to shrink to (0–1). */
+  fit?: number;
+}
+
+/** One beat as the check saw it: how long it lasts and where it ends. */
+export interface QaBeat {
+  id: string;
+  index: number;
+  dur: number;
+  end: number;
+  ask: boolean;
+  move: string;
 }
 
 export interface QaOptions {
@@ -25,6 +44,10 @@ export interface QaOptions {
   viewport?: { width: number; height: number };
   /** Look at the lesson on the white Sheet or the navy Board (default: the book's theme). */
   theme?: 'sheet' | 'board';
+  /** Also write a small JPEG (480 × 270) of each end shot, `bNN_end.jpg`, for a contact sheet. */
+  thumbs?: boolean;
+  /** After each beat is checked (i is 0-based). */
+  onBeat?: (i: number, n: number) => void;
 }
 
 export interface QaResult {
@@ -32,9 +55,25 @@ export interface QaResult {
   beats: number;
   shots: string[];
   sheets: string[];
+  /** Each beat's length and end, in order. */
+  beatInfo: QaBeat[];
+  /** The small end pictures written (`thumbs`), by beat index. */
+  thumbs: Record<number, string>;
+  /** The end shots, by beat index. */
+  ends: Record<number, string>;
 }
 
 type PW = typeof import('playwright');
+
+/** Can Playwright be loaded here (the desktop, with it installed)? Its browsers may still need installing. */
+export function hasPlaywright(): boolean {
+  try {
+    import.meta.resolve('playwright');
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 export async function loadPlaywright(): Promise<PW> {
   try {
@@ -97,6 +136,9 @@ export async function checkLesson(opts: QaOptions): Promise<QaResult> {
   const issues: QaIssue[] = [];
   const shots: string[] = [];
   const sheets: string[] = [];
+  const beatInfo: QaBeat[] = [];
+  const ends: Record<number, string> = {};
+  const thumbs: Record<number, string> = {};
   const url = new URL(opts.url);
   if (opts.lang) url.searchParams.set('lang', opts.lang);
   if (opts.theme) url.searchParams.set('theme', opts.theme);
@@ -120,6 +162,7 @@ export async function checkLesson(opts: QaOptions): Promise<QaResult> {
       overflows: { id: string; fit: number }[];
       issues: { level: string; message: string }[];
     };
+    beatInfo.push({ id: r.id, index: i, dur: r.dur, end: r.end, ask: r.ask, move: r.move });
     for (const is of r.issues)
       if (is.level === 'error') issues.push({ beat: i, id: r.id, kind: 'compile', message: is.message });
     if (!r.ask && r.move !== 'finish') {
@@ -133,6 +176,8 @@ export async function checkLesson(opts: QaOptions): Promise<QaResult> {
             id: r.id,
             kind: 'blank',
             message: `picture empty from ${start.toFixed(1)} s to ${end.toFixed(1)} s after the narration starts; show the subject at once`,
+            from: +start.toFixed(1),
+            to: +end.toFixed(1),
           });
       }
     }
@@ -143,23 +188,44 @@ export async function checkLesson(opts: QaOptions): Promise<QaResult> {
           id: r.id,
           kind: 'overflow',
           message: `node "${o.id}" had to shrink to ${Math.round(o.fit * 100)} % to fit its slot; shorten it or give it a larger slot`,
+          nodes: [o.id],
+          fit: +o.fit.toFixed(2),
+          ...(r.boxes.find((b) => b.id === o.id) ? { box: r.boxes.find((b) => b.id === o.id)!.box } : {}),
         });
     const live = r.boxes;
     for (let a = 0; a < live.length; a++) {
       const A = live[a]!;
       if (A.box.x < -2 || A.box.y < -2 || A.box.x + A.box.w > 1602 || A.box.y + A.box.h > 902)
-        issues.push({ beat: i, id: r.id, kind: 'offstage', message: `node "${A.id}" extends outside the stage` });
+        issues.push({
+          beat: i,
+          id: r.id,
+          kind: 'offstage',
+          message: `node "${A.id}" extends outside the stage`,
+          nodes: [A.id],
+          box: A.box,
+        });
       for (let b = a + 1; b < live.length; b++) {
         const B = live[b]!;
         if (A.slot === B.slot && A.slot !== 'full') continue;
         const ov = overlap(A.box, B.box);
-        if (ov > 0.25)
+        if (ov > 0.25) {
+          // where they meet: the common area of the two boxes
+          const x = Math.max(A.box.x, B.box.x);
+          const y = Math.max(A.box.y, B.box.y);
           issues.push({
             beat: i,
             id: r.id,
             kind: 'overlap',
             message: `nodes "${A.id}" (${A.slot}) and "${B.id}" (${B.slot}) overlap; use slots that do not share space (e.g. upper + lower, start + end)`,
+            nodes: [A.id, B.id],
+            box: {
+              x,
+              y,
+              w: Math.min(A.box.x + A.box.w, B.box.x + B.box.w) - x,
+              h: Math.min(A.box.y + A.box.h, B.box.y + B.box.h) - y,
+            },
           });
+        }
       }
     }
     if (opts.shots) {
@@ -171,13 +237,37 @@ export async function checkLesson(opts: QaOptions): Promise<QaResult> {
         const f = join(opts.shots, `b${String(i).padStart(2, '0')}_${m}.png`);
         await page.locator('.wq-frame').screenshot({ path: f });
         shots.push(f);
+        if (m === 'end') ends[i] = f;
       }
     }
+    opts.onBeat?.(i, n);
+  }
+  // small pictures for a contact sheet, drawn in a blank page (the lesson's own page may forbid data: images)
+  if (opts.thumbs && Object.keys(ends).length) {
+    const { readFileSync } = await import('node:fs');
+    const tp = await browser.newPage();
+    for (const [k, f] of Object.entries(ends)) {
+      const src = `data:image/png;base64,${readFileSync(f).toString('base64')}`;
+      const jpg = (await tp.evaluate(async (s: string) => {
+        const img = new Image();
+        img.src = s;
+        await img.decode();
+        const c = document.createElement('canvas');
+        c.width = 480;
+        c.height = 270;
+        c.getContext('2d')!.drawImage(img, 0, 0, 480, 270);
+        return c.toDataURL('image/jpeg', 0.72);
+      }, src)) as string;
+      const out = f.replace(/\.png$/, '.jpg');
+      writeFileSync(out, Buffer.from(jpg.split(',')[1]!, 'base64'));
+      thumbs[Number(k)] = out;
+    }
+    await tp.close();
   }
   for (const e of errors) issues.push({ beat: -1, id: '', kind: 'error', message: e });
   if (opts.shots && shots.length) sheets.push(...(await contactSheets(page, shots, opts.shots)));
   await browser.close();
-  return { issues, beats: n, shots, sheets };
+  return { issues, beats: n, shots, sheets, beatInfo, thumbs, ends };
 }
 
 /** 2×2 contact sheets of screenshots (half size), built in the browser. */

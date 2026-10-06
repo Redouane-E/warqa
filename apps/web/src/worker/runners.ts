@@ -1,5 +1,6 @@
 // Job runners in the browser: the studio's own, except export (zipped here with fflate instead of the zip
-// command) and the visual checks (they drive a real browser with Playwright: desktop only).
+// command), the review kit and SCORM (the player bundle is fetched first), and the visual checks, the judge's
+// improvements and videos (they drive a real browser with Playwright, or ffmpeg: desktop only).
 import * as P from '@warqa/pipeline';
 import { dirname } from 'pathe';
 import { geoRunner, RUNNERS, type Runner } from '../../../studio/src/server/jobs';
@@ -10,8 +11,8 @@ import { vfs } from './vfs';
 
 /** Speech engines that run programs on the computer (Edge voices via Python, the local Python worker). */
 export const desktopOnlyVoices = ['edge', 'worker'];
-/** Jobs that need the desktop version: they drive a real browser (Playwright) or package for the desktop. */
-export const desktopOnlyJobs: JobType[] = ['qa', 'improve', 'panel'];
+/** Jobs that need the desktop version: they drive a real browser (Playwright) or ffmpeg. */
+export const desktopOnlyJobs: JobType[] = ['qa', 'improve', 'video'];
 
 /**
  * geoBoundaries' API allows web pages (CORS), but its download links go through github.com/<owner>/<repo>/raw/…,
@@ -53,6 +54,15 @@ export function browserRunners(base: string, onRunning: (n: number) => void = ()
     },
     async qa() {
       throw new Error('Visual checks drive a real browser, so they need the desktop version of Warqa.');
+    },
+    // the kit and the SCORM package are exported books: the player bundle comes first
+    async panel(ctx) {
+      await ensurePlayerBundle(base);
+      return RUNNERS.panel(ctx);
+    },
+    async scorm(ctx) {
+      await ensurePlayerBundle(base);
+      return RUNNERS.scorm(ctx);
     },
     geo: geoRunner({ fetch: corsFetch }),
   };

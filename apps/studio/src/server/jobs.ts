@@ -4,7 +4,7 @@
 // Cancelling is best effort: the job stops at the next stage boundary.
 import { spawnSync } from 'node:child_process';
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, rmSync, statSync } from 'node:fs';
 import { dirname } from 'node:path';
 import * as P from '@warqa/pipeline';
 import type { JobEvent, JobInfo, JobStatus, JobType } from '../shared/types.js';
@@ -382,7 +382,15 @@ export const RUNNERS: Record<JobType, Runner> = {
     } catch {
       zipped = false;
     }
-    if (!zipped) ctx.log('zip is not installed: the book folder is ready, but no .zip was made', 'warn');
+    // without the zip program, the same zip in JavaScript (a little slower): there is always one to download
+    if (!zipped) {
+      try {
+        P.zipFolder(r.out, zip);
+        zipped = existsSync(zip);
+      } catch (e) {
+        ctx.log(`the .zip could not be made: ${(e as Error).message}`, 'warn');
+      }
+    }
     ctx.progress({
       stage: 'export',
       status: 'done',
@@ -391,33 +399,48 @@ export const RUNNERS: Record<JobType, Runner> = {
     return { lessons: r.lessons, langs: r.langs, audio: r.audio, zip: zipped, url: `/books/${ctx.projectId}/` };
   },
 
-  async qa(ctx) {
+  qa: qaRunner(),
+
+  async scorm(ctx) {
     const p = ctx.project;
-    ctx.progress({ stage: 'export', status: 'start' });
-    const out = P.exportSite(p).out;
-    ctx.progress({ stage: 'export', status: 'done' });
-    const { server, url } = await P.serveStatic(out, 0);
-    const results: { lesson: string; lang: string; beats: number; issues: P.QaIssue[] }[] = [];
-    try {
-      const langs = strList(ctx.args.langs) ?? p.book.langs;
-      for (const id of chaptersOf(p, ctx.args.chapters).filter((x) => p.hasLesson(x))) {
-        for (const lang of langs) {
-          ctx.checkpoint();
-          ctx.progress({ stage: `qa:${lang}`, status: 'start' }, id);
-          const r = await P.checkLesson({ url: `${url}${id}/index.html`, lang });
-          results.push({ lesson: id, lang, beats: r.beats, issues: r.issues });
-          for (const i of r.issues.slice(0, 8))
-            ctx.log(`${id} ${lang} ${i.kind} ${i.id ? `${i.id}: ` : ''}${i.message}`, 'warn');
-          ctx.progress(
-            { stage: `qa:${lang}`, status: 'done', detail: r.issues.length ? `${r.issues.length} issues` : 'clean' },
-            id,
-          );
-        }
-      }
-    } finally {
-      server.close();
+    ctx.progress({ stage: 'scorm', status: 'start' });
+    const out = P.exportScorm(p);
+    const bytes = statSync(out).size;
+    ctx.progress({ stage: 'scorm', status: 'done', detail: `${Math.round(bytes / 1e5) / 10} MB` });
+    // `download`, not `url`: the tray's "Open the book" link reads `url`
+    return { bytes, download: `/api/projects/${encodeURIComponent(ctx.projectId)}/scorm.zip` };
+  },
+
+  /** One MP4 per chapter in a language (Playwright frames and ffmpeg: desktop only). */
+  async video(ctx) {
+    const p = ctx.project;
+    const lang = typeof ctx.args.lang === 'string' && ctx.args.lang ? ctx.args.lang : p.book.langs[0]!;
+    const ids = chaptersOf(p, ctx.args.chapters).filter((id) => p.hasLesson(id));
+    if (!ids.length) throw new Error('Make at least one lesson first.');
+    const plan = loadPlanSafe(p);
+    const order = plan?.chapters.filter((c) => c.include) ?? [];
+    const files: { lesson: string; lang: string; bytes: number; url: string }[] = [];
+    for (const [k, id] of ids.entries()) {
+      ctx.checkpoint();
+      const stage = `video:${lang}`;
+      const n = order.findIndex((c) => c.id === id) + 1;
+      ctx.progress(
+        { stage, status: 'start', title: order[n - 1]?.title ?? id, index: k, total: ids.length, ...(n ? { n } : {}) },
+        id,
+      );
+      const f = await P.exportVideo(p, id, {
+        lang,
+        onProgress: (e) => ctx.progress({ stage, status: 'beat', index: e.beat, total: e.beats }, id),
+      });
+      files.push({
+        lesson: id,
+        lang,
+        bytes: statSync(f).size,
+        url: `/api/projects/${encodeURIComponent(ctx.projectId)}/videos/${encodeURIComponent(id)}/${encodeURIComponent(lang)}`,
+      });
+      ctx.progress({ stage, status: 'done' }, id);
     }
-    return { results };
+    return { files };
   },
 
   async rewrite(ctx) {
@@ -524,17 +547,26 @@ export function improveRunner(deps: { judge?: P.ImproveOptions['judge'] } = {}):
     const threshold = clamp(ctx.args.threshold, 1, 5, 4);
     const rounds = Math.round(clamp(ctx.args.rounds, 1, 3, 1));
     const lang = typeof ctx.args.lang === 'string' && ctx.args.lang ? ctx.args.lang : undefined;
+    // the Check step: start from the saved verdict while its check still shows the lesson, judge again only what changed
+    const reuse = ctx.args.reuse === true;
+    const rejudge = ctx.args.rejudge === 'rewritten' ? ('rewritten' as const) : undefined;
     const llm = ctx.llm();
     const lessons = [];
     for (const id of ids) {
       ctx.checkpoint();
       ctx.progress({ stage: 'improve', status: 'start', detail: P.resolveRole('judge', p.config) }, id);
+      const l = lang ?? p.loadLesson(id).lang;
+      const saved = reuse ? P.loadVerdict(p, id, l) : [];
+      // the verdict comes from a check that still shows the lesson as it is (the Check step says the same)
+      const fresh = saved.length > 0 && P.checkFresh(p, id, l);
       const r = await P.improveLesson(p, id, {
         llm,
         threshold,
         rounds,
         ...(lang ? { lang } : {}),
         ...(deps.judge ? { judge: deps.judge } : {}),
+        ...(fresh ? { before: saved } : {}),
+        ...(rejudge ? { rejudge } : {}),
         onBeat: (e) =>
           ctx.progress(
             {
@@ -557,6 +589,97 @@ export function improveRunner(deps: { judge?: P.ImproveOptions['judge'] } = {}):
       );
     }
     return { lessons };
+  };
+}
+
+/**
+ * The checks of the Check step: per chapter and language, each beat drawn in a hidden browser (blank openings,
+ * overlaps, text that had to shrink, parts off the stage, errors), its end picture kept with a small copy, and, with
+ * `judge: true`, the judge's score from those pictures (it spends). Saved, so the Check step shows them later.
+ * `check` and `judge` replace Playwright and the vision model (tests).
+ */
+export function qaRunner(deps: { check?: typeof P.checkLesson; judge?: typeof P.judgeLesson } = {}): Runner {
+  return async (ctx) => {
+    const p = ctx.project;
+    ctx.progress({ stage: 'export', status: 'start' });
+    // a site of its own to look at: the book's export (and its zip) stays as the author made it
+    const out = P.exportSite(p, { out: p.path('cache', 'qa-site') }).out;
+    ctx.progress({ stage: 'export', status: 'done' });
+    const { server, url } = await P.serveStatic(out, 0);
+    const llm = ctx.args.judge === true ? ctx.llm() : undefined;
+    const plan = loadPlanSafe(p);
+    const order = plan?.chapters.filter((c) => c.include) ?? [];
+    const results: {
+      lesson: string;
+      lang: string;
+      beats: number;
+      issues: P.QaIssue[];
+      attention: number;
+      flagged: string[];
+      judged: boolean;
+    }[] = [];
+    try {
+      const ids = chaptersOf(p, ctx.args.chapters).filter((x) => p.hasLesson(x));
+      for (const [k, id] of ids.entries()) {
+        const lesson = p.loadLesson(id);
+        // the languages asked for that this lesson has (written in it, or translated)
+        const langs = (strList(ctx.args.langs) ?? p.book.langs).filter(
+          (l) => l === lesson.lang || !!p.loadStrings(id, l),
+        );
+        const n = order.findIndex((c) => c.id === id) + 1;
+        for (const lang of langs) {
+          ctx.checkpoint();
+          const stage = `qa:${lang}`;
+          ctx.progress(
+            {
+              stage,
+              status: 'start',
+              title: order[n - 1]?.title ?? lesson.title,
+              index: k,
+              total: ids.length,
+              ...(n ? { n } : {}),
+            },
+            id,
+          );
+          const saved = await P.checkChapter(p, id, lang, {
+            url: `${url}${id}/index.html`,
+            ...(llm ? { judge: { llm } } : {}),
+            ...(deps.check ? { check: deps.check } : {}),
+            ...(deps.judge ? { judgeFn: deps.judge } : {}),
+            onBeat: (i, total) => {
+              ctx.progress({ stage, status: 'beat', index: i, total }, id);
+              if (llm && i + 1 === total) ctx.progress({ stage: `judge:${lang}`, status: 'start' }, id);
+            },
+            // Stop while the beats were drawn: nothing is spent on the judge
+            beforeJudge: () => ctx.checkpoint(),
+          });
+          if (llm) ctx.progress({ stage: `judge:${lang}`, status: 'done' }, id);
+          const verdict = P.loadVerdict(p, id, lang);
+          const flagged = new Set([
+            ...saved.issues.map((x) => x.id).filter(Boolean),
+            ...verdict.filter((v) => v.score < 4).map((v) => v.id),
+          ]);
+          results.push({
+            lesson: id,
+            lang,
+            beats: saved.beats.length,
+            issues: saved.issues,
+            attention: flagged.size,
+            flagged: [...flagged],
+            judged: saved.judged,
+          });
+          for (const i of saved.issues.slice(0, 8))
+            ctx.log(`${id} ${lang} ${i.kind} ${i.id ? `${i.id}: ` : ''}${i.message}`, 'warn');
+          ctx.progress(
+            { stage, status: 'done', detail: flagged.size ? `${flagged.size} need attention` : 'clean' },
+            id,
+          );
+        }
+      }
+    } finally {
+      server.close();
+    }
+    return { results };
   };
 }
 

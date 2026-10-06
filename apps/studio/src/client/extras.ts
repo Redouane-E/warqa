@@ -11,6 +11,8 @@ export interface StudioExtras {
   homeActions?: ReactNode;
   /** In a project's header, next to Settings. */
   projectActions?: (id: string) => ReactNode;
+  /** Where to get the desktop version (the web app links to it where something needs it). */
+  desktopUrl?: string;
   /** The start guide's host parts. */
   guide?: {
     /** Test mode: the scripted model is offered as a provider, and new books use it for every role. */

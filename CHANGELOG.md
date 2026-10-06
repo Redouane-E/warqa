@@ -122,6 +122,18 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **Check and Share (redesign 4f).** Check shows a chapter as a contact sheet: the end of every beat with the judge's
+  score in red pen and a red frame where an automatic check found something (overlaps, text that had to shrink, parts
+  off the stage, an empty start), saved so they are there next time. A beat opens below with its finding circled, the
+  judge's note, its narration and what to change, then Regenerate (compare first) or Open in the editor. Improve weak
+  beats says its cost in a dialog first, reuses the judge's verdict and judges again only what it rewrote. Ask
+  teachers exports a review kit, now in the web app too. Share shows the exported book as a learner gets it (drawn by
+  the studio), what it holds, the zip's size and whether it is out of date, then SCORM for Moodle, flashcards for
+  Anki, videos (desktop) and a backup of the whole book. New: `GET /api/projects/:id/check/:lid`, check pictures,
+  flashcards, `scorm.zip`, videos and `archive` routes; `scorm` and `video` jobs; the `qa` job saves checks
+  (`qa/<lesson>/<lang>-check.json`) and can ask the judge. Backups keep the saved checks and the judge's scores, and
+  leave out hidden files (a `.env` in a book folder is never in a backup). The web app no longer imports an exported
+  site from a backup: it serves only what it exports itself.
 - **Translate & narrate, one workspace (redesign 4e).** Step 4 shows every language as a card: the original, and
   for each translation how much is translated and checked by a person, its voice with a sample, and whether it
   is narrated (or how many beats changed since). Under the cards, one language's review queue: marks and formulas

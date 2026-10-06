@@ -2,7 +2,7 @@
 // gets its own view: the chapter, its four stages, the beats as they are written and the money against the estimate.
 import { createContext, type ReactNode, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import type { JobEvent, JobInfo, JobStatus, JobType } from '../../shared/types';
-import { api } from '../api';
+import { api, saveFile } from '../api';
 import { withBase } from '../base';
 import { type I18n, useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
@@ -23,6 +23,9 @@ const STAGES = [
   'improve',
   'geo',
   'panel',
+  'judge',
+  'scorm',
+  'video',
 ];
 
 export function stageLabel(stage: string, i18n: I18n): string {
@@ -521,6 +524,74 @@ const jobLang = (job: JobInfo): string | undefined =>
       ? String((job.args.langs as unknown[])[0] ?? '')
       : undefined;
 
+/** What the Check and Share steps' jobs say when they end, with the next thing to do. */
+function shareToast(job: JobInfo, projectId: string, i18n: I18n): ToastOptions | null {
+  const { t } = i18n;
+  if (job.status !== 'done') return null;
+  const at = (path: string) => () => navigate(`/project/${encodeURIComponent(projectId)}${path}`);
+  if (job.type === 'qa') {
+    const r = (
+      job.result as { results?: { lesson: string; lang: string; attention: number; flagged?: string[] }[] } | undefined
+    )?.results;
+    // each beat once per chapter, whatever the languages checked (as the rail counts)
+    const byLesson = new Map<string, Set<string>>();
+    for (const x of r ?? []) byLesson.set(x.lesson, new Set([...(byLesson.get(x.lesson) ?? []), ...(x.flagged ?? [])]));
+    const n = [...byLesson.values()].reduce((a, set) => a + set.size, 0);
+    const one = r?.length === 1 ? r[0]! : undefined;
+    return {
+      text: n ? t('check.doneN', { n }) : t('check.doneGood'),
+      tone: 'good',
+      action: {
+        label: t('check.see'),
+        run: at(
+          one
+            ? `?step=check&chapter=${encodeURIComponent(one.lesson)}&lang=${encodeURIComponent(one.lang)}`
+            : '?step=check',
+        ),
+      },
+    };
+  }
+  if (job.type === 'improve') {
+    const r = (job.result as { lessons?: { lesson: string; rewritten: string[] }[] } | undefined)?.lessons ?? [];
+    const lesson = r[0]?.lesson;
+    return {
+      text: t('improve.done', { n: r.reduce((a, x) => a + x.rewritten.length, 0) }),
+      tone: 'good',
+      action: {
+        label: t('check.see'),
+        run: at(lesson ? `?step=check&chapter=${encodeURIComponent(lesson)}` : '?step=check'),
+      },
+    };
+  }
+  if (job.type === 'export') {
+    const url = (job.result as { url?: string } | undefined)?.url;
+    return {
+      text: t('share.bookReady'),
+      tone: 'good',
+      ...(url ? { action: { label: t('tray.open'), run: () => void window.open(url, '_blank', 'noreferrer') } } : {}),
+    };
+  }
+  if (job.type === 'scorm' || job.type === 'panel') {
+    const href =
+      job.type === 'scorm'
+        ? withBase(`/api/projects/${encodeURIComponent(projectId)}/scorm.zip`)
+        : withBase(`/api/projects/${encodeURIComponent(projectId)}/panel/kit.zip`);
+    const lessons = (job.result as { lessons?: string[] } | undefined)?.lessons?.length ?? 0;
+    return {
+      text:
+        job.type === 'scorm'
+          ? t('share.scorm.ready')
+          : t('panel.ready', { chapters: t('common.chapters', { n: lessons }) }),
+      tone: 'good',
+      action: {
+        label: t('common.download'),
+        run: () => void saveFile(href, job.type === 'scorm' ? `${projectId}-scorm.zip` : `${projectId}-review-kit.zip`),
+      },
+    };
+  }
+  return null;
+}
+
 /** "French is translated · 214 texts · $0.01" with Open (that language's review queue). */
 function langToast(job: JobInfo, projectId: string, i18n: I18n): ToastOptions | null {
   const { t, usd, langName } = i18n;
@@ -607,11 +678,13 @@ export function JobsProvider({ children }: { children: ReactNode }) {
       const inTray = !!document.activeElement?.closest('.tray');
       if (viewRef.current === 'open' && inTray) return;
       if (viewRef.current === 'open') setView('pill');
+      // a beat written again is announced by the page that asked for it (the editor, the Check step)
+      if (job.type === 'rewrite' && job.status === 'done') return;
       const made =
         job.type === 'build' && projectId
           ? buildToast(job, events, projectId, i18n, () => setView('open'))
           : projectId
-            ? langToast(job, projectId, i18n)
+            ? (langToast(job, projectId, i18n) ?? shareToast(job, projectId, i18n))
             : null;
       toast(
         made ?? {

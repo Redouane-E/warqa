@@ -5,7 +5,6 @@ import type {
   BookPlan,
   DocSummary,
   EstimateInfo,
-  ImproveResult,
   JobInfo,
   JobType,
   ProjectDetail,
@@ -16,7 +15,6 @@ import type {
 } from '../../shared/types';
 import { useStatus } from '../App';
 import { api, errorText } from '../api';
-import { withBase } from '../base';
 import { buildProgress, type ChapterRun, useJobStream, useJobs, writingBeat } from '../components/JobBoard';
 import { useConfirm, useToast, useUnsavedGuard } from '../components/overlays';
 import { Button, Field, Icon, LangTag, Loading, Notice } from '../components/ui';
@@ -25,8 +23,10 @@ import { useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
 import { bookPlaceOf, STEPS, useSetPlace } from '../place';
 import { confirmLeave, Link, navigate, useLocation } from '../router';
+import { CheckStep } from './Check';
 import { bookTitle } from './Home';
 import { LanguagesStep } from './Languages';
+import { ShareStep } from './Share';
 
 type Run = (type: JobType, args?: Record<string, unknown>) => Promise<void>;
 
@@ -1269,275 +1269,7 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
 
 /* ---------- ④ translate & narrate: pages/Languages.tsx ---------- */
 
-/* ---------- ⑤ export ---------- */
-
-function ShareStep({ p, run, live }: StepProps) {
-  const { t, ago } = useI18n();
-  const ex = p.exportInfo;
-  return (
-    <>
-      <p className="lede">{t('export.intro')}</p>
-      <div className="actions">
-        <Button
-          variant={ex.exported ? 'default' : 'primary'}
-          busy={live.has('export')}
-          disabled={!p.lessons.length}
-          onClick={() => run('export')}
-        >
-          {ex.exported ? t('export.again') : t('export.run')}
-        </Button>
-        {ex.exported && (
-          <a
-            className="btn btn-primary"
-            href={withBase(`/books/${encodeURIComponent(p.id)}/`)}
-            target="_blank"
-            rel="noreferrer"
-          >
-            <Icon name="open" />
-            <span>{t('export.open')}</span>
-          </a>
-        )}
-        {ex.zip && (
-          <a className="btn btn-default" href={withBase(`/api/projects/${encodeURIComponent(p.id)}/download`)} download>
-            <Icon name="download" />
-            <span>{t('export.download')}</span>
-          </a>
-        )}
-      </div>
-      {ex.at && <p className="muted">{t('export.last', { when: ago(ex.at) })}</p>}
-    </>
-  );
-}
-
-/* ---------- ⑤ check: the delivery checks, the judge, a teacher review kit ---------- */
-
-function CheckStep({ p, status, run, live }: StepProps) {
-  const { t } = useI18n();
-  const qa = status?.qa !== false;
-  return (
-    <>
-      <p className="lede">{t('check.intro')}</p>
-      <div className="qa-box">
-        <Button variant="quiet" busy={live.has('qa')} disabled={!p.lessons.length || !qa} onClick={() => run('qa')}>
-          {t('export.qa')}
-        </Button>
-        <p className="hint">{qa ? t('export.qaHint') : t('cap.qa')}</p>
-      </div>
-      <ImproveBox p={p} status={status} run={run} live={live} />
-      <PanelBox p={p} status={status} run={run} live={live} />
-    </>
-  );
-}
-
-/* ---------- improve with the judge ---------- */
-
-function ImproveBox({ p, status, run, live }: Omit<StepProps, 'reload'>) {
-  const { t, num, langName } = useI18n();
-  const [lesson, setLesson] = useState('');
-  const [threshold, setThreshold] = useState(4);
-  const can = !status?.capabilities?.jobsUnavailable.includes('improve');
-  const engine = p.config.tts.provider;
-  const canNarrate = engine !== 'none' && !status?.capabilities?.ttsUnavailable.includes(engine);
-  // the latest finished improve job of this session carries the report
-  const last = p.jobs.find((j) => j.type === 'improve' && j.status === 'done');
-  const report = (last?.result as ImproveResult | undefined)?.lessons ?? [];
-  const rewritten = report.filter((r) => r.rewritten.length).map((r) => r.lesson);
-  const again = async () => {
-    const author = new Map(p.lessons.map((l) => [l.id, l.lang]));
-    const langs = p.book.langs.filter((l) => rewritten.some((id) => author.get(id) !== l));
-    if (langs.length) await run('translate', { langs, chapters: rewritten });
-    if (canNarrate) await run('narrate', { chapters: rewritten });
-  };
-  return (
-    <section className="quality-box" aria-labelledby="improve-title">
-      <h3 id="improve-title">{t('improve.title')}</h3>
-      <p className="hint">{can ? t('improve.intro') : t('cap.improve')}</p>
-      {can && (
-        <>
-          <div className="form-row">
-            <Field label={t('improve.chapter')}>
-              {(fid) => (
-                <select id={fid} value={lesson} onChange={(e) => setLesson(e.target.value)} disabled={!can}>
-                  <option value="">{t('improve.all')}</option>
-                  {p.lessons.map((l) => (
-                    <option key={l.id} value={l.id}>
-                      {l.id} · {l.title[l.lang] ?? l.id}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Field>
-            <Field label={t('improve.threshold')}>
-              {(fid) => (
-                <select
-                  id={fid}
-                  value={threshold}
-                  onChange={(e) => setThreshold(Number(e.target.value))}
-                  disabled={!can}
-                >
-                  {[2, 3, 4, 5].map((n) => (
-                    <option key={n} value={n}>
-                      {num(n)} / {num(5)}
-                    </option>
-                  ))}
-                </select>
-              )}
-            </Field>
-          </div>
-          <div className="actions">
-            <Button
-              busy={live.has('improve')}
-              disabled={!p.lessons.length || !can}
-              onClick={() => run('improve', { ...(lesson ? { chapters: [lesson] } : {}), threshold })}
-            >
-              {t('improve.run')}
-            </Button>
-          </div>
-        </>
-      )}
-      {report.map((r) => {
-        const after = new Map(r.after.map((b) => [b.id, b.score]));
-        const failed = new Map(r.failed.map((f) => [f.id, f.error]));
-        return (
-          <div key={r.lesson} className="improve-report">
-            <h4>{t('improve.report', { lesson: r.lesson })}</h4>
-            {!r.rewritten.length && !r.failed.length ? <p className="muted">{t('improve.nothing')}</p> : null}
-            <div className="table-wrap">
-              <table className="table report-table">
-                <thead>
-                  <tr>
-                    <th scope="col">{t('improve.beat')}</th>
-                    <th scope="col" className="num">
-                      {t('improve.before')}
-                    </th>
-                    <th scope="col" className="num">
-                      {t('improve.after')}
-                    </th>
-                    <th scope="col">{t('improve.result')}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {r.before.map((b) => {
-                    const state = failed.has(b.id) ? 'failed' : r.rewritten.includes(b.id) ? 'rewritten' : 'kept';
-                    return (
-                      <tr key={b.id}>
-                        <td>
-                          <code>{b.id}</code>
-                          {b.problem && (
-                            <span className="muted small" dir="auto">
-                              {' '}
-                              · {b.problem}
-                            </span>
-                          )}
-                        </td>
-                        <td className="num">{num(b.score)}</td>
-                        <td className="num">{after.has(b.id) ? num(after.get(b.id)!) : '–'}</td>
-                        <td className={state === 'failed' ? 'bad' : state === 'rewritten' ? 'good' : 'muted'}>
-                          {t(`improve.status.${state}` as MsgKey)}
-                          {failed.get(b.id) && (
-                            <span className="small" dir="auto">
-                              {' '}
-                              · {failed.get(b.id)}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          </div>
-        );
-      })}
-      {!!rewritten.length && (
-        <Notice
-          tone="warn"
-          action={
-            <Button busy={live.has('translate') || live.has('narrate')} onClick={() => void again()}>
-              {t('improve.redoRun')}
-            </Button>
-          }
-        >
-          {t('improve.redo')}
-          {p.book.langs.length > 1 && (
-            <span className="muted small"> ({p.book.langs.map((l) => langName(l)).join(', ')})</span>
-          )}
-        </Notice>
-      )}
-    </section>
-  );
-}
-
-/* ---------- teacher review kit ---------- */
-
-function PanelBox({ p, status, run, live }: Omit<StepProps, 'reload'>) {
-  const { t, ago } = useI18n();
-  const [chosen, setChosen] = useState<string[] | null>(null);
-  const can = !status?.capabilities?.jobsUnavailable.includes('panel');
-  const ids = chosen ?? p.lessons.map((l) => l.id);
-  return (
-    <section className="quality-box" aria-labelledby="panel-title">
-      <h3 id="panel-title">{t('panel.title')}</h3>
-      <p className="hint">{can ? t('panel.intro') : t('cap.panel')}</p>
-      {can && p.lessons.length > 1 && (
-        <fieldset className="field">
-          <legend>{t('panel.chapters')}</legend>
-          <div className="checks">
-            {p.lessons.map((l) => (
-              <label key={l.id} className="check">
-                <input
-                  type="checkbox"
-                  checked={ids.includes(l.id)}
-                  onChange={(e) => setChosen(e.target.checked ? [...ids, l.id] : ids.filter((x) => x !== l.id))}
-                />
-                <span dir="auto">
-                  {l.id} · {l.title[l.lang] ?? l.id}
-                </span>
-              </label>
-            ))}
-          </div>
-        </fieldset>
-      )}
-      {can && (
-        <div className="actions">
-          <Button
-            busy={live.has('panel')}
-            disabled={!ids.length || !can}
-            onClick={() => run('panel', { chapters: ids })}
-          >
-            {t('panel.run')}
-          </Button>
-          {can && p.panelKit && (
-            <>
-              <a
-                className="btn btn-default"
-                href={withBase(`/api/projects/${encodeURIComponent(p.id)}/panel/kit.zip`)}
-                download
-              >
-                <Icon name="download" />
-                <span>{t('panel.zip')}</span>
-              </a>
-              <a
-                className="btn btn-quiet"
-                href={withBase(`/api/projects/${encodeURIComponent(p.id)}/panel/key.json`)}
-                download
-              >
-                <Icon name="key" />
-                <span>{t('panel.key')}</span>
-              </a>
-            </>
-          )}
-        </div>
-      )}
-      {can && p.panelKit && (
-        <p className="hint">
-          {t('panel.last', { when: ago(p.panelKit.at) })} · {t('panel.keyHint')}
-        </p>
-      )}
-    </section>
-  );
-}
+/* ---------- ⑤ check and ⑥ share: pages/Check.tsx and pages/Share.tsx ---------- */
 
 /* ---------- the page ---------- */
 
@@ -1571,6 +1303,12 @@ function Stepper({ p, current, onSelect }: { p: ProjectDetail; current: StepId; 
       const made = ids.filter((id) => p.lessons.some((l) => l.id === id)).length;
       return t('step.meta.made', { made, total: ids.length });
     }
+    // beats that need attention in the chapters' latest checks (red pen; said in full to a screen reader)
+    if (s === 'check' && p.checks) {
+      // each beat once per chapter, whatever the language it was checked in
+      const n = Object.values(p.checks).reduce((a, cs) => a + new Set(cs.flatMap((c) => c.flagged ?? [])).size, 0);
+      if (n) return `pen:${n}`;
+    }
     // languages every lesson has ("3/4"), all of them once done ("4 lang.")
     if (s === 'voice' && p.lessons.length && p.book.langs.length > 1) {
       const done = p.book.langs.filter((l) => p.lessons.every((ls) => ls.langs.includes(l))).length;
@@ -1600,7 +1338,19 @@ function Stepper({ p, current, onSelect }: { p: ProjectDetail; current: StepId; 
                   <span className="station-name">{t(`step.${s}` as MsgKey)}</span>
                   <span className="station-state">
                     {t(STATE_KEY[st])}
-                    {meta(s) && <span className="station-meta"> · {meta(s)}</span>}
+                    {meta(s).startsWith('pen:') ? (
+                      <span className="station-meta">
+                        {' · '}
+                        <span className="pen-text" aria-hidden="true">
+                          {num(Number(meta(s).slice(4)))}
+                        </span>
+                        <span className="visually-hidden">
+                          {t('step.meta.attention', { n: Number(meta(s).slice(4)) })}
+                        </span>
+                      </span>
+                    ) : (
+                      meta(s) && <span className="station-meta"> · {meta(s)}</span>
+                    )}
                     {p.next === s && st !== 'done' && <span className="next-badge">{t('project.nextBadge')}</span>}
                   </span>
                 </span>
@@ -1714,7 +1464,8 @@ export function ProjectPage({ id }: { id: string }) {
     );
 
   const current = step ?? p.next;
-  const bare = current === 'read' || current === 'plan' || current === 'make' || current === 'voice';
+  // every step is its own card with its own title (redesign 4b–4f)
+  const bare = true;
   const select = async (s: StepId) => {
     // a step with unsaved work (the plan) asks before it is closed
     if (s !== current && !(await confirmLeave())) return;

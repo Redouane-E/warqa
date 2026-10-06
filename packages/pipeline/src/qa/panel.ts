@@ -77,8 +77,9 @@ function kitPage(kit: string, links: { code: string; href: string }[]): string {
   return `<!doctype html>
 <html lang="ar" dir="rtl"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Warqa — ${kit}</title>
-<style>body{font:18px/1.6 system-ui,sans-serif;background:#121b18;color:#ece8dc;max-width:760px;margin:0 auto;padding:24px}
-a{color:#f0b45a}section{margin:0 0 28px}ol{font-size:22px}li{margin:6px 0}[dir=ltr]{text-align:left}</style></head>
+<style>body{font:18px/1.6 system-ui,sans-serif;background:#F4F6FA;color:#13172E;max-width:760px;margin:0 auto;padding:24px}
+a{color:#2A3CD1}section{margin:0 0 28px}ol{font-size:22px}li{margin:6px 0}[dir=ltr]{text-align:left}
+@media (prefers-color-scheme:dark){body{background:#0E1226;color:#EEF0FA}a{color:#8C9BFF}}</style></head>
 <body>
 <section><h1>تقييم دروس ورقة</h1>
 <p>افتح كل درس من القائمة وشاهده كما يشاهده التلاميذ. في كل خطوة اضغط على ★ (أو المفتاح R) وأعطِ نقطة من 1 إلى 5 لكل معيار. في النهاية اضغط «تنزيل تقييماتي» وأرسل الملف إلى منظم التقييم.</p></section>
@@ -87,7 +88,7 @@ a{color:#f0b45a}section{margin:0 0 28px}ol{font-size:22px}li{margin:6px 0}[dir=l
 <section dir="ltr" lang="en"><h2>Rate Warqa lessons</h2>
 <p>Open each lesson in the list and watch it as a pupil would. On each step press ★ (or the R key) and score each criterion from 1 to 5. At the end click “Download my ratings” and send the file to the organiser.</p></section>
 <ol dir="ltr">${list}</ol>
-<p dir="ltr" style="color:#9aaba3;font-size:14px">Kit ${kit}. Your ratings stay in this browser until you download them.</p>
+<p dir="ltr" style="opacity:.75;font-size:14px">Kit ${kit}. Your ratings stay in this browser until you download them.</p>
 </body></html>
 `;
 }

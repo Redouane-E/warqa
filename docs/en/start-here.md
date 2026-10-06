@@ -125,9 +125,13 @@ Start small: one chapter of 10 to 20 pages.
    what it has spent. **Stop** keeps the beats already written; **Make the rest** goes on from there.
 8. **Look and fix.** Click **Edit** to watch the lesson in the **Preview**. Change a sentence, or use
    **Regenerate this beat** with a short instruction such as "shorter, with a balance scale".
-9. **Translate & narrate** into the other languages.
-10. **Export.** Click **Export the book**, then **Open the book** to try it or **Download .zip** to share it.
-    The zip works offline. Moodle users: the SCORM package reports scores (see [exports.md](exports.md)).
+9. **Translate & narrate** into the other languages: each language is a card; under the cards, check the
+   translations sentence by sentence.
+10. **Check** (optional, desktop version): **Run the checks** shows the end of every beat, the judge's score in red
+    pen and what an automatic check found. **Improve weak beats** rewrites those scored under 4.
+11. **Share.** Click **Export the book**, then **Open the book** to try it or **Download .zip** to share it. The zip
+    works offline. Other ways: a SCORM package for Moodle (it reports scores, see [exports.md](exports.md)),
+    flashcards for Anki, videos (desktop version) and a backup of the whole book.
 
 ## When something goes wrong
 

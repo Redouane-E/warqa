@@ -127,7 +127,7 @@ test('a PDF becomes a planned, built and exported book (test model)', async ({ p
 
   // the project backup downloads too
   const download = page.waitForEvent('download');
-  await page.getByRole('button', { name: 'Download backup' }).click();
+  await page.locator('.project-side').getByRole('button', { name: 'Download backup' }).click();
   expect((await download).suggestedFilename()).toBe('textbook-en.warqa.zip');
 });
 

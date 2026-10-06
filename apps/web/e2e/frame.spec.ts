@@ -83,9 +83,9 @@ test('the tray follows you to other screens', async ({ page }) => {
   await page.goto('project/integers?step=export');
   await page.getByRole('button', { name: 'Export the book' }).click();
   expect(await jobDone(page)).toContain('pill-done');
-  // done: the tray folds to its pill and a message offers to open it again
+  // done: the tray folds to its pill and a message offers to open the book
   await expect(page.locator('.tray-pill')).toBeVisible();
-  await expect(page.locator('.toast')).toContainText('Done');
+  await expect(page.locator('.toast')).toContainText('Book ready');
   await page.locator('.strips').getByRole('link', { name: 'Books' }).click();
   await expect(page).toHaveURL(/\/warqa\/$/);
   await expect(page.locator('.tray-pill')).toBeVisible();

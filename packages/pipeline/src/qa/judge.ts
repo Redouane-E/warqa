@@ -34,7 +34,19 @@ export interface JudgeOptions {
   lang?: string;
   /** Beats per model call (each with one screenshot). */
   batch?: number;
+  /** End pictures already made (by beat index), e.g. by a saved check: nothing is rendered again. */
+  shots?: Record<number, string>;
+  /** Judge only these beats (by id), keeping the saved verdict of the others. */
+  beats?: string[];
 }
+
+/** The beats Improve rewrites: scored under the threshold, with a problem or a fix to go on. */
+export const weakBeats = (verdict: JudgeVerdict['beats'], threshold: number): JudgeVerdict['beats'] =>
+  verdict.filter((v) => v.score < threshold && (v.problem || v.fix));
+
+/** The judge's last verdict on a lesson in a language (empty when it never looked). */
+export const loadVerdict = (project: Project, lessonId: string, lang: string): JudgeVerdict['beats'] =>
+  project.readJson<JudgeVerdict['beats']>(`qa/${lessonId}/${lang}-judge.json`, []);
 
 /** Judge every lesson beat (questions excluded) from its rendered end frame. */
 export async function judgeLesson(
@@ -45,24 +57,28 @@ export async function judgeLesson(
   const base = project.loadLesson(lessonId);
   const lang = opts.lang ?? base.lang;
   const lesson = lang === base.lang ? base : localize(base, project.loadStrings(lessonId, lang));
-  const site = exportSite(project, { lessons: [lessonId], out: project.path('cache', 'judge-site'), pwa: false });
-  const { server, url } = await serveStatic(site.out, 0);
-  let shots: string[] = [];
-  try {
-    const r = await checkLesson({
-      url: `${url}${lessonId}/index.html`,
-      lang,
-      shots: project.path('qa', lessonId, `${lang}-judge`),
-      moments: ['end'],
-    });
-    shots = r.shots;
-  } finally {
-    server.close();
+  let shots: (string | undefined)[] = [];
+  if (opts.shots) shots = lesson.beats.map((_, i) => opts.shots![i]);
+  else {
+    const site = exportSite(project, { lessons: [lessonId], out: project.path('cache', 'judge-site'), pwa: false });
+    const { server, url } = await serveStatic(site.out, 0);
+    try {
+      const r = await checkLesson({
+        url: `${url}${lessonId}/index.html`,
+        lang,
+        shots: project.path('qa', lessonId, `${lang}-judge`),
+        moments: ['end'],
+      });
+      shots = r.shots;
+    } finally {
+      server.close();
+    }
   }
   const model = resolveRole('judge', project.config);
+  const only = opts.beats ? new Set(opts.beats) : undefined;
   const items = lesson.beats
     .map((b, i) => ({ b, shot: shots[i] }))
-    .filter(({ b, shot }) => shot && !b.questions?.length && b.move !== 'finish');
+    .filter(({ b, shot }) => shot && !b.questions?.length && b.move !== 'finish' && (!only || only.has(b.id)));
   const out: JudgeVerdict['beats'] = [];
   const size = opts.batch ?? 4;
   for (let k = 0; k < items.length; k += size) {
@@ -85,8 +101,15 @@ export async function judgeLesson(
     });
     out.push(...r.value.beats);
   }
-  project.writeJson(`qa/${lessonId}/${lang}-judge.json`, out);
-  return out;
+  // some beats judged again: the others keep their verdict (in the lesson's order)
+  const merged = only
+    ? lesson.beats.flatMap((b) => {
+        const v = out.find((x) => x.id === b.id) ?? loadVerdict(project, lessonId, lang).find((x) => x.id === b.id);
+        return v ? [v] : [];
+      })
+    : out;
+  project.writeJson(`qa/${lessonId}/${lang}-judge.json`, merged);
+  return merged;
 }
 
 export interface ImproveOptions {
@@ -99,6 +122,10 @@ export interface ImproveOptions {
   onBeat?: (e: { id: string; score: number; status: 'rewritten' | 'failed' | 'ok'; detail?: string }) => void;
   /** The judge to use (default: render with Playwright and ask the vision model). */
   judge?: typeof judgeLesson;
+  /** A fresh verdict to start from (no first judging pass). */
+  before?: JudgeVerdict['beats'];
+  /** After rewriting, judge again every beat (default) or only those rewritten. */
+  rejudge?: 'all' | 'rewritten';
 }
 
 export interface ImproveReport {
@@ -122,13 +149,14 @@ export async function improveLesson(project: Project, lessonId: string, opts: Im
   const threshold = opts.threshold ?? 4;
   const judgeOpts = { llm: opts.llm, ...(opts.lang ? { lang: opts.lang } : {}) };
   const judge = opts.judge ?? judgeLesson;
-  const before = await judge(project, lessonId, judgeOpts);
+  const before = opts.before ?? (await judge(project, lessonId, judgeOpts));
   let current = before;
   const rewritten: string[] = [];
   const failed: { id: string; error: string }[] = [];
   for (let round = 0; round < (opts.rounds ?? 1); round++) {
-    const weak = current.filter((v) => v.score < threshold && (v.problem || v.fix));
+    const weak = weakBeats(current, threshold);
     if (!weak.length) break;
+    const now: string[] = [];
     for (const v of weak) {
       try {
         await rewriteBeat(project, doc, plan, lessonId, v.id, {
@@ -136,13 +164,17 @@ export async function improveLesson(project: Project, lessonId: string, opts: Im
           instruction: `A reviewer looked at the rendered beat and scored it ${v.score}/5. Problem: ${v.problem ?? '(not stated)'}. Fix: ${v.fix ?? 'make the picture show what the narration says'}.`,
         });
         rewritten.push(v.id);
+        now.push(v.id);
         opts.onBeat?.({ id: v.id, score: v.score, status: 'rewritten' });
       } catch (e) {
         failed.push({ id: v.id, error: (e as Error).message });
         opts.onBeat?.({ id: v.id, score: v.score, status: 'failed', detail: (e as Error).message });
       }
     }
-    current = await judge(project, lessonId, judgeOpts);
+    // judged again: every beat, or only those just rewritten (the others keep their verdict)
+    if (opts.rejudge === 'rewritten') {
+      if (now.length) current = await judge(project, lessonId, { ...judgeOpts, beats: now });
+    } else current = await judge(project, lessonId, judgeOpts);
   }
   return { before, after: current, rewritten, failed };
 }

@@ -17,6 +17,7 @@ export * from './prompts/index.js';
 export * from './qa/check.js';
 export * from './qa/judge.js';
 export * from './qa/panel.js';
+export * from './qa/report.js';
 export * from './stages/build.js';
 export * from './stages/geo.js';
 export * from './stages/illustrate.js';

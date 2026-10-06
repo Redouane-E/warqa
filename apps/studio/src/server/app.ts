@@ -31,6 +31,7 @@ import { streamSSE } from 'hono/streaming';
 import * as z from 'zod';
 import type {
   Capabilities,
+  CheckDetail,
   EditorCatalog,
   Issue,
   JobType,
@@ -44,6 +45,7 @@ import type {
   StatusInfo,
 } from '../shared/types.js';
 import { JOB_TYPES } from '../shared/types.js';
+import { checkDetail } from './checks.js';
 import { safeJoin, sendFile } from './files.js';
 import { ingestAvailable, Jobs, type Runner } from './jobs.js';
 import { checkKey } from './keycheck';
@@ -153,6 +155,19 @@ export function createApp(opts: AppOptions) {
   const jobs = new Jobs(registry, opts.runners, opts.llm);
   const host = opts.host ?? '127.0.0.1';
   const caps: Capabilities = { ...DESKTOP, ...opts.capabilities };
+  // the desktop: can Playwright's browser and ffmpeg run here (checks, the judge, videos)? Asked once.
+  if (caps.platform === 'desktop') {
+    if (caps.playwright === undefined) {
+      caps.playwright = P.hasPlaywright();
+    }
+    if (caps.ffmpeg === undefined) {
+      try {
+        caps.ffmpeg = P.hasFfmpeg();
+      } catch {
+        caps.ffmpeg = false;
+      }
+    }
+  }
   const urlBase = (opts.urlBase ?? '/').replace(/^\/*/, '/').replace(/\/*$/, '/');
   /** "/api/…" → the same path under urlBase ("/warqa/api/…" in the web app). */
   const url = (path: string) => urlBase + path.replace(/^\/+/, '');
@@ -268,7 +283,7 @@ export function createApp(opts: AppOptions) {
         };
       }),
       ingest: ingestAvailable(),
-      qa: !caps.jobsUnavailable.includes('qa'),
+      qa: !caps.jobsUnavailable.includes('qa') && caps.playwright !== false,
       capabilities: caps,
     };
     return c.json(status);
@@ -572,6 +587,17 @@ export function createApp(opts: AppOptions) {
     const args = body.args && typeof body.args === 'object' && !Array.isArray(body.args) ? body.args : {};
     if (caps.jobsUnavailable.includes(body.type as JobType))
       throw new ApiError(400, `"${body.type}" needs the desktop version of Warqa`, { desktopOnly: true });
+    // the desktop without the programs these jobs drive: said before anything runs
+    if ((body.type === 'qa' || body.type === 'improve' || body.type === 'video') && caps.playwright === false)
+      throw new ApiError(
+        400,
+        'checks need Playwright’s Chromium on this computer: run `npx playwright install chromium`',
+        {
+          needs: 'playwright',
+        },
+      );
+    if (body.type === 'video' && caps.ffmpeg === false)
+      throw new ApiError(400, 'videos need ffmpeg on this computer', { needs: 'ffmpeg' });
     const engine = typeof args.engine === 'string' ? args.engine : project(id).config.tts.provider;
     if (caps.ttsUnavailable.includes(engine)) {
       if (body.type === 'narrate')
@@ -1588,6 +1614,85 @@ export function createApp(opts: AppOptions) {
     const p = project(id);
     if (!zipReady(p.root)) throw new ApiError(404, 'export the book first');
     return sendFile(c.req.raw, zipPath(p.root), { download: `${p.book.id}.zip` });
+  });
+
+  /* ---------- Check and Share (redesign 4f) ---------- */
+
+  /** A chapter's check in one language: each beat's picture, findings and score, merged with the lesson. */
+  app.get('/api/projects/:id/check/:lid', (c) => {
+    const id = c.req.param('id');
+    const p = project(id);
+    const lid = lessonIdOf(p, c.req.param('lid'));
+    const lesson = p.loadLesson(lid);
+    const want = c.req.query('lang');
+    const lang = want && LANG.test(want) ? want : lesson.lang;
+    const place = lessonPlace(p, lid);
+    const rewriteUsd = rewriteCost(p);
+    const d = checkDetail(p, lid, lang, {
+      ...(place.chapter ? { chapter: place.chapter } : {}),
+      link: (file, at) =>
+        url(
+          `/api/projects/${encodeURIComponent(id)}/qa/${encodeURIComponent(lid)}/${encodeURIComponent(lang)}/${file}?v=${Math.round(at)}`,
+        ),
+    });
+    return c.json({ ...d, ...(rewriteUsd !== undefined ? { rewriteUsd } : {}) } satisfies CheckDetail);
+  });
+
+  /** A check's end pictures, and nothing else of qa/. */
+  app.on(['GET', 'HEAD'], '/api/projects/:id/qa/:lid/:lang/:file', (c) => {
+    const p = project(c.req.param('id'));
+    const lid = lessonIdOf(p, c.req.param('lid'));
+    const lang = c.req.param('lang') ?? '';
+    const file = c.req.param('file') ?? '';
+    if (!LANG.test(lang) || !/^b\d{2}_end\.(png|jpg)$/.test(file)) throw new ApiError(403, 'not a check picture');
+    const f = safeJoin(p.path('qa', lid, lang), file);
+    if (!f) throw new ApiError(403, 'not a check picture');
+    return sendFile(c.req.raw, f, { cache: 'no-cache' });
+  });
+
+  /** The book's questions as flashcards in one language: Anki (tab-separated) or CSV. */
+  app.get('/api/projects/:id/flashcards/:lang', (c) => {
+    const p = project(c.req.param('id'));
+    const lang = c.req.param('lang');
+    if (!LANG.test(lang)) throw new ApiError(400, `not a language code: ${lang}`);
+    const csv = c.req.query('format') === 'csv';
+    const name = `${p.book.id.replace(/[^\w.-]+/g, '_')}-flashcards-${lang}.${csv ? 'csv' : 'txt'}`;
+    return c.body(csv ? P.csvText(p, lang) : P.ankiText(p, lang), 200, {
+      'content-type': csv ? 'text/csv; charset=utf-8' : 'text/plain; charset=utf-8',
+      'content-disposition': `attachment; filename="${name}"`,
+      'cache-control': 'no-store',
+    });
+  });
+
+  /** The SCORM package, once the scorm job has made it. */
+  app.get('/api/projects/:id/scorm.zip', (c) => {
+    const p = project(c.req.param('id'));
+    const f = p.path('dist-scorm.zip');
+    if (!existsSync(f)) throw new ApiError(404, 'make the SCORM package first');
+    return sendFile(c.req.raw, f, { download: `${p.book.id}-scorm.zip` });
+  });
+
+  /** A chapter's video in a language, once the video job has made it. */
+  app.get('/api/projects/:id/videos/:lid/:lang', (c) => {
+    const p = project(c.req.param('id'));
+    const lid = lessonIdOf(p, c.req.param('lid'));
+    const lang = c.req.param('lang');
+    if (!LANG.test(lang)) throw new ApiError(400, `not a language code: ${lang}`);
+    const f = p.path(`${lid}.${lang}.mp4`);
+    if (!existsSync(f)) throw new ApiError(404, 'make the video first');
+    return sendFile(c.req.raw, f, { download: `${p.book.id}-${lid}-${lang}.mp4` });
+  });
+
+  /** The whole book as a zip (a backup), without what is made again from it. */
+  app.get('/api/projects/:id/archive', (c) => {
+    const p = project(c.req.param('id'));
+    const zip = new Uint8Array(P.archiveProject(p));
+    const name = basename(p.root).replace(/[^\w.-]+/g, '_');
+    return c.body(zip, 200, {
+      'content-type': 'application/zip',
+      'content-disposition': `attachment; filename="${name}.zip"`,
+      'content-length': String(zip.byteLength),
+    });
   });
 
   app.all('/api/*', () => {
