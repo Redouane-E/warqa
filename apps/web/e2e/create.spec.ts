@@ -89,6 +89,28 @@ test('a PDF becomes a planned, built and exported book (test model)', async ({ p
   await ch01.getByRole('link', { name: 'Edit' }).click();
   await expect(page.locator('.stage-host .wq-player')).toBeVisible();
 
+  // a beat written again (its cost said first): the new version waits to be compared, then kept, then taken back
+  const sheet = page.locator('.beat-sheet');
+  if (!(await sheet.isVisible())) await page.getByRole('button', { name: 'Beat 1 details' }).click();
+  await expect(sheet.locator('.regen')).toContainText(/about \$/);
+  await sheet.getByRole('textbox', { name: 'What should change?' }).fill('Shorter.');
+  await sheet.getByRole('button', { name: 'Regenerate', exact: true }).click();
+  const rewritten = page.locator('.toast').filter({ hasText: 'Beat 1 rewritten' });
+  await expect(rewritten).toBeVisible({ timeout: 60_000 });
+  // from another beat, Compare goes back to beat 1 and shows its new version
+  await page.locator('.beat-list .beat-btn').nth(1).click();
+  await rewritten.getByRole('button', { name: 'Compare' }).click();
+  await expect(sheet.getByRole('heading', { name: 'A new version is ready' })).toBeVisible();
+  await expect(sheet.locator('.compare')).toContainText('Shorter.');
+  await expect(sheet.getByRole('button', { name: 'After' })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.stage-host .wq-player')).toBeVisible();
+  await sheet.getByRole('button', { name: 'Keep the new version' }).click();
+  const replaced = page.locator('.toast').filter({ hasText: 'Beat 1 replaced.' });
+  await expect(replaced).toContainText('Translate it again into French.');
+  await expect(sheet.getByRole('heading', { name: 'A new version is ready' })).toBeHidden();
+  await replaced.getByRole('button', { name: 'Undo' }).click();
+  await expect(page.locator('.toast').filter({ hasText: 'The old version is back.' })).toBeVisible();
+
   // export and download the book as a zip
   await page.goto('project/textbook-en?step=export');
   await page.getByRole('button', { name: 'Export the book' }).click();

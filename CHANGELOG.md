@@ -122,6 +122,17 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **Marks, threads and Regenerate with Compare (redesign 4d3).** The narration shows each mark as a chip on the word
+  it waits for; the caret in a mark chooses it, and "Add a mark" names a new one. Listen plays the beat's recorded
+  narration. Under the stage, the beat's timeline places the marks at their times with a playhead; choosing one
+  shows the stage at that moment, and threads run from each mark to the parts its cues move (the chosen mark's
+  parts boxed and named). The narration, the timeline, the cues and the stage keep the same mark chosen. The judge's
+  note on a beat sits on the stage in red pen and fills Regenerate's instruction. Regenerate shows its cost and no
+  longer replaces the beat at once: the new version waits beside the lesson, Before / After switches the stage
+  between them, and keeping it can be undone, with its translations. New studio routes:
+  `POST /api/projects/:id/lessons/:lid/beats/:bid/accept`, `…/restore`, `DELETE …/candidate`, and `?candidate=` on
+  the player data. Pipeline: `rewriteBeat({ candidate })`, `applyBeat`, `restoreBeat`, `staleKeys`, `estimateBeat`;
+  `writeChapter({ save: false })`.
 - **The beat inspector, generated from the lesson format (redesign 4d2).** The parts on a beat's stage each open a
   form built from their component's definition (lists fold to a line per item, translated fields say so, problems
   show on their field), and new parts come from the catalog; renaming a part carries its cues and questions along.

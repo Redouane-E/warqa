@@ -378,14 +378,26 @@ export const RUNNERS: Record<JobType, Runner> = {
     const plan = P.loadPlan(p);
     if (!plan) throw new Error('Regenerating a beat needs the book plan. Make the plan first.');
     ctx.progress({ stage: 'rewrite', status: 'start', detail: `${lessonId} › ${beatId}` });
-    await P.rewriteBeat(p, doc, plan, lessonId, beatId, {
+    const instruction =
+      typeof ctx.args.instruction === 'string' && ctx.args.instruction.trim() ? ctx.args.instruction.trim() : undefined;
+    // the editor compares first: the new version waits beside the lesson until the author keeps one; the beat as
+    // it was is kept with it, to tell the author when it was changed meanwhile
+    const candidate = ctx.args.candidate === true;
+    const base = candidate ? p.loadLesson(lessonId).beats.find((b) => b.id === beatId) : undefined;
+    const next = await P.rewriteBeat(p, doc, plan, lessonId, beatId, {
       llm: ctx.llm(),
-      ...(typeof ctx.args.instruction === 'string' && ctx.args.instruction.trim()
-        ? { instruction: ctx.args.instruction.trim() }
-        : {}),
+      ...(instruction ? { instruction } : {}),
+      ...(candidate ? { candidate } : {}),
     });
+    if (candidate)
+      p.writeJson(`lessons/${lessonId}/candidates/${beatId}.json`, {
+        beat: next.beats.find((b) => b.id === beatId),
+        ...(base ? { base } : {}),
+        at: Date.now(),
+        ...(instruction ? { instruction } : {}),
+      });
     ctx.progress({ stage: 'rewrite', status: 'done' });
-    return { lesson: lessonId, beat: beatId };
+    return { lesson: lessonId, beat: beatId, ...(candidate ? { candidate } : {}) };
   },
 
   async estimate(ctx) {

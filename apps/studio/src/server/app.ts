@@ -1,5 +1,5 @@
 // The studio's HTTP API (Hono). createApp() is used by the server entry and by the tests.
-import { existsSync, mkdirSync, readFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
 import { faviconSvg, webManifest } from '@warqa/brand';
@@ -765,6 +765,72 @@ export function createApp(opts: AppOptions) {
     return c.json(catalog);
   });
 
+  /**
+   * What writing one beat again costs. It reads the document and the plan: kept until they or the models change,
+   * and left out (not an error) when either cannot be read.
+   */
+  const rewriteCosts = new Map<string, { key: string; usd: number | undefined }>();
+  function rewriteCost(p: P.Project): number | undefined {
+    const mtime = (f: string) => (existsSync(f) ? statSync(f).mtimeMs : 0);
+    const key = [p.path('source', 'document.json'), p.path('plan.json'), p.path('warqa.json')].map(mtime).join('|');
+    const hit = rewriteCosts.get(p.root);
+    if (hit?.key === key) return hit.usd;
+    let usd: number | undefined;
+    try {
+      usd = P.estimateBeat(p);
+    } catch {
+      usd = undefined;
+    }
+    rewriteCosts.set(p.root, { key, usd });
+    return usd;
+  }
+
+  /** What the editor shows besides the lesson: waiting new versions of beats, the judge's notes, a rewrite's cost. */
+  function lessonExtras(
+    p: P.Project,
+    lid: string,
+    lang: string,
+    saved?: Lesson,
+  ): Pick<LessonDetail, 'candidates' | 'judge' | 'rewriteUsd'> {
+    const candidates: NonNullable<LessonDetail['candidates']> = {};
+    const dir = p.path('lessons', lid, 'candidates');
+    if (existsSync(dir))
+      for (const f of readdirSync(dir).filter((x) => x.endsWith('.json'))) {
+        const c = p.readJson<
+          { at?: number; instruction?: string; beat?: Record<string, unknown>; base?: unknown } | undefined
+        >(`lessons/${lid}/candidates/${f}`, undefined);
+        const bid = f.slice(0, -5);
+        // the beat was saved with changes after this version was written: keeping it replaces them
+        const now = saved?.beats.find((b) => b.id === bid);
+        if (c)
+          candidates[bid] = {
+            at: c.at ?? 0,
+            ...(c.instruction ? { instruction: c.instruction } : {}),
+            ...(c.beat ? { beat: c.beat } : {}),
+            ...(c.base && now && JSON.stringify(now) !== JSON.stringify(c.base) ? { changed: true } : {}),
+          };
+      }
+    // the judge looks at one language: the lesson's own when it was judged in it, else any
+    const judged = [lang, ...p.book.langs].find((l) => existsSync(p.path('qa', lid, `${l}-judge.json`)));
+    const judge: NonNullable<LessonDetail['judge']> = {};
+    if (judged)
+      for (const v of p.readJson<{ id: string; score: number; problem?: string; fix?: string }[]>(
+        `qa/${lid}/${judged}-judge.json`,
+        [],
+      ))
+        judge[v.id] = {
+          score: v.score,
+          ...(v.problem ? { problem: v.problem } : {}),
+          ...(v.fix ? { fix: v.fix } : {}),
+        };
+    const rewriteUsd = rewriteCost(p);
+    return {
+      ...(Object.keys(candidates).length ? { candidates } : {}),
+      ...(Object.keys(judge).length ? { judge } : {}),
+      ...(rewriteUsd !== undefined ? { rewriteUsd } : {}),
+    };
+  }
+
   /** "Chapter 5 · Unit 2": the lesson's number among the chapters to make, and the book unit holding it. */
   function lessonPlace(p: P.Project, lid: string): Pick<LessonDetail, 'chapter' | 'unit'> {
     let plan: ReturnType<typeof P.loadPlan>;
@@ -840,8 +906,88 @@ export function createApp(opts: AppOptions) {
       bookId: p.book.id,
       ...lessonPlace(p, lid),
       parts: stageParts(lesson),
+      ...lessonExtras(p, lid, lesson.lang, lesson),
     };
     return c.json(detail);
+  });
+
+  /* ---------- a beat written again (Regenerate): compare, keep the new version or the old one, undo ---------- */
+
+  const candidatePath = (lid: string, bid: string) => `lessons/${lid}/candidates/${bid}.json`;
+  const historyPath = (lid: string, bid: string) => `lessons/${lid}/history/${bid}.json`;
+  const beatParam = (c: Context) => {
+    const bid = c.req.param('bid') ?? '';
+    if (!/^[a-z][a-z0-9_-]{0,31}$/.test(bid)) throw new ApiError(400, `not a beat id: ${bid}`);
+    return bid;
+  };
+
+  app.post('/api/projects/:id/lessons/:lid/beats/:bid/accept', (c) => {
+    const p = project(c.req.param('id'));
+    const lid = lessonIdOf(p, c.req.param('lid'));
+    const bid = beatParam(c);
+    const cand = p.readJson<{ beat?: unknown } | undefined>(candidatePath(lid, bid), undefined);
+    if (!cand?.beat) throw new ApiError(404, `no new version of "${bid}" is waiting`);
+    const beat = cand.beat as Lesson['beats'][number];
+    // the later beats may have changed since it was written: it goes in only if it breaks nothing that worked
+    const parsed = safeParseLesson(p.loadLessonRaw(lid));
+    if (!parsed.success)
+      throw new ApiError(422, 'the lesson does not match the lesson format; fix it in the editor first');
+    const now = parsed.data as Lesson;
+    if (!now.beats.some((b) => b.id === bid)) throw new ApiError(404, `there is no beat "${bid}" any more`);
+    const errors = (l: Lesson) =>
+      validateLesson(l, { lang: l.lang })
+        .issues.filter((i) => i.level === 'error')
+        .map((i) => `${i.beat ?? ''}: ${i.message}`);
+    const before = new Set(errors(now));
+    const added = errors({ ...now, beats: now.beats.map((b) => (b.id === bid ? beat : b)) }).filter(
+      (e) => !before.has(e),
+    );
+    if (added.length)
+      throw new ApiError(409, `the new version no longer fits the beats after it: ${added.slice(0, 3).join('; ')}`);
+    const swap = P.applyBeat(p, lid, beat);
+    // the judge's notes were about the old version: they go, and come back with it
+    const verdicts: Record<string, unknown> = {};
+    for (const lang of p.book.langs) {
+      const f = `qa/${lid}/${lang}-judge.json`;
+      if (!existsSync(p.path(f))) continue;
+      const all = p.readJson<{ id: string }[]>(f, []);
+      const v = all.find((x) => x.id === bid);
+      if (!v) continue;
+      verdicts[lang] = v;
+      p.writeJson(
+        f,
+        all.filter((x) => x.id !== bid),
+      );
+    }
+    // kept until the next swap of this beat: Undo puts the old version, its translations and notes back
+    p.writeJson(historyPath(lid, bid), { ...swap, verdicts });
+    rmSync(p.path(candidatePath(lid, bid)), { force: true });
+    return c.json({ ok: true, langs: Object.keys(swap.dropped).filter((l) => Object.keys(swap.dropped[l]!).length) });
+  });
+
+  app.delete('/api/projects/:id/lessons/:lid/beats/:bid/candidate', (c) => {
+    const p = project(c.req.param('id'));
+    const lid = lessonIdOf(p, c.req.param('lid'));
+    rmSync(p.path(candidatePath(lid, beatParam(c))), { force: true });
+    return c.json({ ok: true });
+  });
+
+  app.post('/api/projects/:id/lessons/:lid/beats/:bid/restore', (c) => {
+    const p = project(c.req.param('id'));
+    const lid = lessonIdOf(p, c.req.param('lid'));
+    const bid = beatParam(c);
+    const swap = p.readJson<(P.BeatSwap & { verdicts?: Record<string, { id: string }> }) | undefined>(
+      historyPath(lid, bid),
+      undefined,
+    );
+    if (!swap?.previous) throw new ApiError(404, `there is no earlier version of "${bid}"`);
+    P.restoreBeat(p, lid, swap);
+    for (const [lang, v] of Object.entries(swap.verdicts ?? {})) {
+      const f = `qa/${lid}/${lang}-judge.json`;
+      p.writeJson(f, [...p.readJson<{ id: string }[]>(f, []).filter((x) => x.id !== bid), v]);
+    }
+    rmSync(p.path(historyPath(lid, bid)), { force: true });
+    return c.json({ ok: true });
   });
 
   app.put('/api/projects/:id/lessons/:lid', async (c) => {
@@ -952,7 +1098,19 @@ export function createApp(opts: AppOptions) {
     const parsed = safeParseLesson(p.loadLessonRaw(lid));
     if (!parsed.success)
       throw new ApiError(422, 'the lesson does not match the lesson format; fix it in the editor first');
-    const lesson = parsed.data as Lesson;
+    let lesson = parsed.data as Lesson;
+    // ?candidate=<beat>: the lesson with the new version of that beat in it (the editor's Compare, "After"); that
+    // beat's translations, recording and timing were for the old version: it shows untranslated, timed by its text
+    let swapped: { id: string; stale: (k: string) => boolean } | undefined;
+    const candidate = c.req.query('candidate');
+    if (candidate && /^[a-z][a-z0-9_-]{0,31}$/.test(candidate)) {
+      const cand = p.readJson<{ beat?: Lesson['beats'][number] } | undefined>(candidatePath(lid, candidate), undefined);
+      const old = lesson.beats.find((b) => b.id === candidate);
+      if (cand?.beat && old) {
+        lesson = { ...lesson, beats: lesson.beats.map((b) => (b.id === candidate ? cand.beat! : b)) };
+        swapped = { id: candidate, stale: P.staleKeys(old, cand.beat) };
+      }
+    }
     const langs: string[] = [];
     const strings: Record<string, Strings> = {};
     const timings: Record<string, Timings> = {};
@@ -965,6 +1123,7 @@ export function createApp(opts: AppOptions) {
         continue;
       }
       if (lang !== lesson.lang && !s) continue;
+      if (s && swapped) s = Object.fromEntries(Object.entries(s).filter(([k]) => !swapped.stale(k)));
       langs.push(lang);
       if (s) strings[lang] = s;
       const localized = localize(lesson, s);
@@ -974,10 +1133,14 @@ export function createApp(opts: AppOptions) {
       } catch {
         t = undefined;
       }
+      if (t && swapped) {
+        const { [swapped.id]: _old, ...rest } = t;
+        t = rest;
+      }
       timings[lang] = completeTimings(localized, lang, t);
       const beatIds = new Set(localized.beats.map((b) => b.id));
       for (const [b, f] of Object.entries(p.audioFiles(lid, lang))) {
-        if (!beatIds.has(b)) continue;
+        if (!beatIds.has(b) || b === swapped?.id) continue;
         const v = Math.round(statSync(join(p.audioDir(lid, lang), f)).mtimeMs);
         (audio[lang] ??= {})[b] = url(
           `/api/projects/${encodeURIComponent(id)}/files/lessons/${lid}/audio/${encodeURIComponent(lang)}/${encodeURIComponent(f)}?v=${v}`,

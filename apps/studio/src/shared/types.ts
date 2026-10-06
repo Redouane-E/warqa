@@ -373,6 +373,21 @@ export interface LessonDetail {
   chapter?: number;
   /** What is on the stage during each beat (by beat id), for the cue and question editors. */
   parts?: Record<string, StagePart[]>;
+  /** New versions of beats waiting to be compared (Regenerate), by beat id. */
+  candidates?: Record<
+    string,
+    {
+      at: number;
+      instruction?: string;
+      beat?: Record<string, unknown>;
+      /** The beat was saved with changes after this version was written (keeping it replaces them). */
+      changed?: boolean;
+    }
+  >;
+  /** The judge's last verdict per beat (red pen): its score out of 5, the problem and the fix it suggests. */
+  judge?: Record<string, { score: number; problem?: string; fix?: string }>;
+  /** What writing one beat again costs, in USD (shown beside Regenerate). */
+  rewriteUsd?: number;
   unit?: { index: number; title: string | Record<string, string> };
 }
 

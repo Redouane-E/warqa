@@ -1,5 +1,6 @@
 // The lesson editor's inspector (redesign 4d2): forms generated from the lesson format edit a part on the stage,
-// a cue and a question; Edit as JSON is the escape hatch; the change saves. The example book, nothing spends.
+// a cue and a question; Edit as JSON is the escape hatch; the change saves. Its marks (4d3): the timeline, the
+// narration and the cues choose one mark, threads show what it moves. The example book, nothing spends.
 import { expect, test } from '@playwright/test';
 import { openStudio } from './helpers';
 
@@ -43,6 +44,49 @@ test('the inspector edits a part, a cue and a question from their definitions', 
   await expect(sheet.getByRole('textbox', { name: 'This beat as JSON' })).toHaveValue(/"questions"/);
   await sheet.getByRole('button', { name: 'Back to the form' }).click();
   await expect(sheet.getByRole('heading', { name: 'Questions' })).toBeVisible();
+});
+
+test('a mark chosen on the timeline, in the narration or by its cue is the same mark; threads show what it moves', async ({
+  page,
+}) => {
+  await openStudio(page, { fake: true });
+  await page.getByRole('button', { name: 'Open the example book' }).click();
+  await expect(page).toHaveURL(/project\/integers\/lesson\/ch05/);
+  await page.goto('project/integers/lesson/ch05?beat=3');
+  await expect(page.locator('.stage-host .wq-player')).toBeVisible();
+  const timeline = page.getByRole('group', { name: "Marks on the beat's timeline" });
+  const sheet = page.locator('.beat-sheet');
+
+  // the timeline: the mark is chosen everywhere, and the stage shows what it moves (boxed, with its thread)
+  await timeline.getByRole('button', { name: 'keep', exact: true }).click();
+  await expect(timeline.getByRole('button', { name: 'keep', exact: true })).toHaveAttribute('aria-pressed', 'true');
+  await expect(page.locator('.narr-chip.is-sel')).toContainText('[[keep]]');
+  await expect(sheet.locator('.cue-group.is-sel')).toContainText('keep');
+  await expect(page.locator('.threads .is-sel .th-line').first()).toBeAttached();
+  await expect(page.locator('.th-target')).toHaveCount(2);
+
+  // the caret in another mark of the narration chooses that one
+  const box = page.getByRole('textbox', { name: 'Narration' });
+  await box.evaluate((el: HTMLTextAreaElement) => {
+    const at = el.value.indexOf('[[chg1]]') + 2;
+    el.focus();
+    el.setSelectionRange(at, at);
+  });
+  await box.press('ArrowRight');
+  await expect(page.locator('.narr-chip.is-sel')).toContainText('[[chg1]]');
+  await expect(timeline.getByRole('button', { name: 'chg1', exact: true })).toHaveAttribute('aria-pressed', 'true');
+
+  // a new mark goes before the word the caret is in
+  await page.getByRole('button', { name: 'Add a mark' }).click();
+  await page.getByRole('textbox', { name: 'Mark name' }).fill('swap');
+  await page.locator('.narr-add').getByRole('button', { name: 'Add', exact: true }).click();
+  await expect(box).toHaveValue(/\[\[swap\]\]\[\[chg1\]\]Change/);
+  await expect(page.locator('.save-state')).toContainText('Unsaved changes');
+
+  // the threads can be hidden, and stay hidden
+  await page.getByRole('checkbox', { name: 'Show what each mark moves' }).uncheck();
+  await expect(page.locator('.threads')).toHaveCount(0);
+  expect(await page.evaluate(() => localStorage.getItem('warqa-studio:threads'))).toBe('0');
 });
 
 test.describe('on a phone', () => {

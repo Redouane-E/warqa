@@ -5,6 +5,7 @@ import {
   forwardRef,
   type MutableRefObject,
   type ReactNode,
+  type RefObject,
   useEffect,
   useImperativeHandle,
   useLayoutEffect,
@@ -51,13 +52,43 @@ export const Stage = forwardRef<
     playerRef: MutableRefObject<WarqaPlayer | null>;
     /** The player went to another beat (played on, or in the lifted preview). */
     onBeat: (i: number) => void;
-    /** The player's timings for each language (synthetic where there is no audio): the clock and marks use them. */
-    onTimings?: (t: Timings) => void;
-    /** Drawn over the stage (the editor's marks and threads). */
+    /**
+     * The player's timings for each language (synthetic where there is no audio) and its narration files by language
+     * and beat: the clock, the marks' timeline and Listen use them.
+     */
+    onData?: (d: { timings: Timings; audio: Record<string, Record<string, string>> }) => void;
+    /** A beat's new version to show instead of the saved one (Compare, "After"). */
+    candidate?: string | undefined;
+    /** The stage and what is under it (the marks' timeline): the threads are drawn over both. */
+    zoneRef?: RefObject<HTMLDivElement | null>;
+    /** Under the stage (the marks' timeline). */
+    below?: ReactNode;
+    /** Over the stage and what is under it (the threads). */
+    overlay?: ReactNode;
+    /** Over the stage alone (the judge's note, a beat being written). */
     children?: ReactNode;
   }
 >(function Stage(
-  { id, lid, bookId, lang, beat, reloadKey, stale, label, strip, langName, playerRef, onBeat, onTimings, children },
+  {
+    id,
+    lid,
+    bookId,
+    lang,
+    beat,
+    reloadKey,
+    stale,
+    label,
+    strip,
+    langName,
+    playerRef,
+    onBeat,
+    onData,
+    candidate,
+    zoneRef,
+    below,
+    overlay,
+    children,
+  },
   ref,
 ) {
   const { t } = useI18n();
@@ -76,8 +107,8 @@ export const Stage = forwardRef<
   langRef.current = lang;
   const onBeatRef = useRef(onBeat);
   onBeatRef.current = onBeat;
-  const onTimingsRef = useRef(onTimings);
-  onTimingsRef.current = onTimings;
+  const onDataRef = useRef(onData);
+  onDataRef.current = onData;
   const tRef = useRef(t);
   tRef.current = t;
   // the player reports its first beat while it starts: only beats it reaches afterwards are news
@@ -152,11 +183,12 @@ export const Stage = forwardRef<
     (async () => {
       try {
         const W = await loadPlayer();
-        const data = (await api.playerData(id, lid, langRef.current)) as {
+        const data = (await api.playerData(id, lid, langRef.current, candidate)) as {
           lesson: { beats: { id: string }[] };
           packs?: string[];
           panel?: { kit: string; code: string };
           timings?: Timings;
+          audio?: Record<string, Record<string, string>>;
         };
         // the book's own components (packs) must be registered before the player draws them
         if (data.packs?.length) await loadPacks(W, data.packs);
@@ -177,7 +209,7 @@ export const Stage = forwardRef<
           return;
         }
         playerRef.current = mounted;
-        if (data.timings) onTimingsRef.current?.(data.timings);
+        onDataRef.current?.({ timings: data.timings ?? {}, audio: data.audio ?? {} });
         mounted.showAt(Math.min(beatRef.current, data.lesson.beats.length - 1));
         live.current = true;
         setReady(true);
@@ -190,7 +222,7 @@ export const Stage = forwardRef<
       mounted?.destroy();
       playerRef.current = null;
     };
-  }, [id, lid, reloadKey, rating]);
+  }, [id, lid, reloadKey, rating, candidate]);
 
   // another beat chosen in the editor: the stage draws it, at its end (everything it shows)
   useEffect(() => {
@@ -226,9 +258,13 @@ export const Stage = forwardRef<
           </Button>
         </div>
       )}
-      <div className="stage-frame" ref={frame}>
-        <div className="stage-host" ref={host} />
-        {!lifted && children}
+      <div className="stage-zone" ref={zoneRef}>
+        <div className="stage-frame" ref={frame}>
+          <div className="stage-host" ref={host} />
+          {!lifted && children}
+        </div>
+        {!lifted && below}
+        {!lifted && overlay}
       </div>
       {!lifted && stale && <p className="preview-stale">{t('editor.previewStale')}</p>}
       {error && <Notice tone="error">{t('editor.previewFailed', { error })}</Notice>}

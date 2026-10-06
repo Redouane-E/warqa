@@ -1,6 +1,6 @@
 // The self-learner's one go through the studio API: the summary's estimate (free text read, the PDF's
 // language), then the `learn` job (read → plan approved automatically → chapter 1), with a scripted model.
-import { copyFileSync, mkdtempSync, readFileSync, rmSync, statSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -348,6 +348,86 @@ describe('learning on your own', () => {
     expect(jobs.events(late.id).filter((e) => e.stage === 'write' && e.status === 'done')).toHaveLength(1);
     expect(statSync(lessonFile).mtimeMs).toBeGreaterThan(before);
     expect((await detail()).drafts).toBeUndefined();
+  });
+
+  it('writes a beat again as a candidate to compare, then keeps it, then takes it back', async () => {
+    const lessonUrl = '/api/projects/mine/lessons/ch01';
+    const lessonFile = join(root, 'mine.warqa', 'lessons', 'ch01', 'lesson.json');
+    const before = readFileSync(lessonFile, 'utf8');
+    const mtime = statSync(lessonFile).mtimeMs;
+    const job = jobs.enqueue('mine', 'rewrite', { lesson: 'ch01', beat: 'states', instruction: 'Shorter.', candidate: true });
+    await jobs.idle('mine');
+    expect(jobs.get(job.id)).toMatchObject({ status: 'done', result: { beat: 'states', candidate: true } });
+    // the lesson was never written meanwhile (a save made while it ran stays); the new version waits, with its
+    // cost shown beside the next Regenerate
+    expect(statSync(lessonFile).mtimeMs).toBe(mtime);
+    expect(readFileSync(lessonFile, 'utf8')).toBe(before);
+    const d = (await (await app.request(lessonUrl)).json()) as {
+      candidates?: Record<string, { instruction?: string }>;
+      rewriteUsd?: number;
+    };
+    expect(d.candidates?.states?.instruction).toBe('Shorter.');
+    expect(d.rewriteUsd).toBeGreaterThan(0);
+    // the judge's note on a beat comes with the lesson (red pen on the stage)
+    mkdirSync(join(root, 'mine.warqa', 'qa', 'ch01'), { recursive: true });
+    writeFileSync(
+      join(root, 'mine.warqa', 'qa', 'ch01', 'en-judge.json'),
+      JSON.stringify([{ id: 'states', score: 2, problem: 'The labels overlap.', fix: 'Put the labels apart.' }]),
+    );
+    const judged = (await (await app.request(lessonUrl)).json()) as { judge?: Record<string, unknown> };
+    expect(judged.judge?.states).toEqual({ score: 2, problem: 'The labels overlap.', fix: 'Put the labels apart.' });
+    // "After" on the stage: the player gets the lesson with the new version in it
+    const candFile = join(root, 'mine.warqa', 'lessons', 'ch01', 'candidates', 'states.json');
+    const cand = JSON.parse(readFileSync(candFile, 'utf8'));
+    // (its marks kept: its cues wait on them)
+    cand.beat.narration = `A new version. ${cand.beat.narration}`;
+    writeFileSync(candFile, JSON.stringify(cand));
+    const after = (await (await app.request(`${lessonUrl}/player?candidate=states`)).json()) as {
+      lesson: { beats: { id: string; narration: string }[] };
+      timings: Record<string, Record<string, { marks: Record<string, number> }>>;
+    };
+    expect(after.lesson.beats.find((b) => b.id === 'states')?.narration).toBe(cand.beat.narration);
+    expect(after.timings.en?.states).toBeDefined();
+    // the beat saved with changes since: Compare says so
+    const saved = JSON.parse(before);
+    saved.beats.find((b: { id: string }) => b.id === 'states').title = 'States, renamed';
+    const put = await app.request(`${lessonUrl}?force=1`, {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify(saved),
+    });
+    expect(put.status).toBe(200);
+    const changed = (await (await app.request(lessonUrl)).json()) as { candidates?: Record<string, { changed?: boolean }> };
+    expect(changed.candidates?.states?.changed).toBe(true);
+    // a version that breaks the lesson is refused, and the lesson stays
+    const broken = { ...cand, beat: { ...cand.beat, cues: [{ at: 'start', do: 'show', target: 'nowhere' }] } };
+    writeFileSync(candFile, JSON.stringify(broken));
+    const refused = await app.request(`${lessonUrl}/beats/states/accept`, { method: 'POST' });
+    expect(refused.status).toBe(409);
+    expect(JSON.parse(readFileSync(lessonFile, 'utf8')).beats).toEqual(saved.beats);
+    writeFileSync(candFile, JSON.stringify(cand));
+    // keep it: the candidate goes, the old version is kept for Undo
+    const kept = await app.request(`${lessonUrl}/beats/states/accept`, { method: 'POST' });
+    expect(kept.status).toBe(200);
+    expect(((await (await app.request(lessonUrl)).json()) as { candidates?: unknown }).candidates).toBeUndefined();
+    expect(existsSync(join(root, 'mine.warqa', 'lessons', 'ch01', 'history', 'states.json'))).toBe(true);
+    expect(JSON.parse(readFileSync(lessonFile, 'utf8')).beats.find((b: { id: string }) => b.id === 'states').narration).toBe(
+      cand.beat.narration,
+    );
+    // the judge's note was about the old version: it goes with it
+    expect(((await (await app.request(lessonUrl)).json()) as { judge?: unknown }).judge).toBeUndefined();
+    // Undo: the old version back, and its note
+    const back = await app.request(`${lessonUrl}/beats/states/restore`, { method: 'POST' });
+    expect(back.status).toBe(200);
+    expect(JSON.parse(readFileSync(lessonFile, 'utf8')).beats).toEqual(saved.beats);
+    expect(((await (await app.request(lessonUrl)).json()) as { judge?: Record<string, unknown> }).judge?.states).toBeDefined();
+    expect((await app.request(`${lessonUrl}/beats/states/restore`, { method: 'POST' })).status).toBe(404);
+    // a candidate dropped ("Keep the old version")
+    const again = jobs.enqueue('mine', 'rewrite', { lesson: 'ch01', beat: 'states', candidate: true });
+    await jobs.idle('mine');
+    expect(jobs.get(again.id)?.status).toBe('done');
+    expect((await app.request(`${lessonUrl}/beats/states/candidate`, { method: 'DELETE' })).status).toBe(200);
+    expect(((await (await app.request(lessonUrl)).json()) as { candidates?: unknown }).candidates).toBeUndefined();
   });
 
   it('makes the lesson without a voice where the voice cannot run (Edge voices in the web app)', async () => {

@@ -1762,32 +1762,385 @@ input[type="radio"] {
   font-size: 16px;
   font-weight: 600;
 }
-.narration-text {
-  inline-size: 100%;
-  padding: 14px 16px;
-  border: 1px solid var(--wq-input-border);
-  border-radius: var(--wq-radius-control);
-  background: var(--wq-sheet);
-  color: var(--wq-text);
-  font: inherit;
-  font-size: 17px;
-  line-height: 1.9;
-  resize: vertical;
-}
-.narration-text:is(:lang(ar), :lang(ary)) {
-  font-size: 19px;
-  line-height: 2.1;
-}
 .narration-box .hint {
   margin: 0;
 }
-.marked {
-  padding: 8px 14px;
-  margin: 0;
-  background: var(--wq-ground);
+
+/* the narration (4d3): a plain text box over a copy of its text where each mark and its word are drawn; the copy
+   has the same font, size, spacing and wrapping, and only backgrounds and colours, so the letters stay in line */
+.narr {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.narr-wrap {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  border: 1px solid var(--wq-input-border);
   border-radius: var(--wq-radius-control);
-  font-size: 15px;
+  background: var(--wq-sheet);
+}
+.narr-wrap:focus-within {
+  outline: 2px solid var(--wq-focus);
+  outline-offset: 1px;
+}
+.narr-back,
+.narr-input {
+  grid-area: 1 / 1;
+  margin: 0;
+  padding: 14px 16px;
+  border: 0;
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.9;
+  letter-spacing: normal;
+  word-spacing: normal;
+  white-space: pre-wrap;
+  overflow-wrap: break-word;
+  tab-size: 4;
+}
+.narr-wrap:is(:lang(ar), :lang(ary)) :is(.narr-back, .narr-input) {
+  font-size: 19px;
   line-height: 2.1;
+}
+.narr-back {
+  color: var(--wq-text);
+  pointer-events: none;
+}
+.narr-input {
+  inline-size: 100%;
+  min-block-size: 0;
+  background: transparent;
+  /* the copy underneath shows the letters; the box keeps the caret and the selection */
+  color: transparent;
+  caret-color: var(--wq-text);
+  resize: none;
+  overflow: hidden;
+  outline: none;
+}
+.narr-input::selection {
+  background: color-mix(in srgb, var(--wq-focus) 30%, transparent);
+}
+.narr-label {
+  color: var(--wq-fluo-text);
+  background: var(--wq-fluo-tint);
+  border-radius: 4px;
+  box-shadow: 0 0 0 2px var(--wq-fluo-tint);
+}
+.narr-word {
+  text-decoration: underline 2px var(--wq-fluo-text);
+  text-underline-offset: 0.35em;
+}
+.narr-chip.is-sel .narr-label {
+  color: var(--wq-on-fluo);
+  background: var(--wq-fluo);
+  box-shadow: 0 0 0 2px var(--wq-fluo);
+}
+.narr-chip.is-sel .narr-word {
+  background: var(--wq-fluo-tint);
+}
+.narr-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+.narr-add {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 8px;
+}
+.narr-add label {
+  font-size: 13px;
+  font-weight: 600;
+}
+.narr-add input {
+  inline-size: 12ch;
+}
+
+/* the marks on the beat's timeline, under the stage (in the order of the language shown) */
+.stage-zone {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.mark-timeline {
+  position: relative;
+  block-size: 70px;
+  margin-inline: 14px;
+}
+.tl-axis {
+  position: absolute;
+  inset-inline: 0;
+  inset-block-start: 52px;
+  border-block-start: 1px solid var(--wq-line);
+}
+.tl-sec {
+  position: absolute;
+  inset-block-start: 56px;
+  translate: -50% 0;
+  font-size: 11px;
+  line-height: 1;
+  color: var(--wq-text-3);
+  white-space: nowrap;
+}
+.tl-play {
+  position: absolute;
+  inset-block: 0 14px;
+  inline-size: 2px;
+  translate: -1px 0;
+  background: var(--wq-ink);
+  border-radius: 1px;
+}
+.tl-mark {
+  position: absolute;
+  inset-block-start: 26px;
+  translate: -50% 0;
+  min-block-size: 22px;
+  padding: 2px 7px;
+  border: 1px solid var(--wq-fluo-text);
+  border-radius: 5px;
+  background: var(--wq-fluo-tint);
+  color: var(--wq-fluo-text);
+  font-family: var(--font-mono);
+  font-size: 11.5px;
+  line-height: 1;
+  white-space: nowrap;
+  cursor: pointer;
+}
+/* a mark close to the one before it takes the row above */
+.tl-mark.is-up {
+  inset-block-start: 2px;
+}
+.tl-mark.is-idle {
+  border-style: dashed;
+  background: var(--wq-sheet);
+}
+.tl-mark.is-sel {
+  z-index: 1;
+  border-color: var(--wq-ink);
+  background: var(--wq-fluo);
+  color: var(--wq-on-fluo);
+}
+.tl-mark:focus-visible {
+  outline: 2px solid var(--wq-focus);
+  outline-offset: 2px;
+}
+.mark-timeline:dir(rtl) :is(.tl-sec, .tl-mark) {
+  translate: 50% 0;
+}
+.mark-timeline:dir(rtl) .tl-play {
+  translate: 1px 0;
+}
+
+/* threads from each mark to what its cues move: the chosen mark's solid, the others dashed */
+.threads {
+  position: absolute;
+  inset: 0;
+  /* over the judge's note (its names stay readable), under a beat being written */
+  z-index: 3;
+  pointer-events: none;
+}
+.threads svg {
+  position: absolute;
+  inset: 0;
+  overflow: visible;
+}
+.th-halo {
+  fill: none;
+  stroke: var(--th-paper, var(--wq-sheet));
+  stroke-width: 5;
+  opacity: 0.8;
+}
+.th-line {
+  fill: none;
+  stroke: var(--th-ink, var(--wq-ink));
+  stroke-width: 1.5;
+  stroke-dasharray: 4 4;
+  opacity: 0.45;
+}
+.th-target.is-end .th-label {
+  left: auto;
+  right: -2px;
+}
+.threads.has-sel .th-line {
+  opacity: 0.25;
+}
+.threads .is-sel .th-line {
+  stroke-width: 2;
+  stroke-dasharray: none;
+  opacity: 1;
+}
+.th-target {
+  position: absolute;
+  border: 2px solid var(--th-ink, var(--wq-ink));
+  border-radius: 6px;
+}
+/* the name above the box, from its left edge, or from its right edge on the right half (it stays on the stage) */
+.th-label {
+  position: absolute;
+  inset-block-end: 100%;
+  left: -2px;
+  margin-block-end: 4px;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: var(--th-ink, var(--wq-ink));
+  color: var(--th-paper, var(--wq-on-ink));
+  font-family: var(--font-mono);
+  font-size: 11px;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+/* the judge's note on the stage, in red pen: choosing it fills Regenerate's instruction */
+.judge-note {
+  position: absolute;
+  inset-block-start: 10px;
+  inset-inline-end: 10px;
+  z-index: 2;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-inline-size: min(48%, 340px);
+  padding: 8px 10px;
+  border: 1px solid var(--wq-pen);
+  border-radius: var(--wq-radius-control);
+  background: var(--wq-sheet);
+  color: var(--wq-pen);
+  font: inherit;
+  font-size: 13px;
+  line-height: 1.45;
+  text-align: start;
+  box-shadow: var(--wq-shadow);
+  cursor: pointer;
+}
+.judge-note:hover {
+  background: var(--wq-pen-tint);
+}
+.judge-note:focus-visible {
+  outline: 2px solid var(--wq-focus);
+  outline-offset: 2px;
+}
+.judge-score {
+  flex: none;
+  font-family: var(--wq-font-hand);
+  font-size: 18px;
+  line-height: 1;
+}
+.judge-text {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+  overflow: hidden;
+}
+.judge-note.is-compact:not(:hover, :focus-visible) .judge-text {
+  display: none;
+}
+
+/* a beat being written again: lines being written on a veiled stage */
+.stage-writing {
+  position: absolute;
+  inset: 1px;
+  z-index: 5;
+  display: grid;
+  place-content: center;
+  justify-items: center;
+  gap: 16px;
+  border-radius: var(--wq-radius-sheet);
+  background: color-mix(in srgb, var(--wq-sheet) 85%, transparent);
+}
+.writing-lines {
+  display: grid;
+  gap: 10px;
+  inline-size: min(280px, 60vw);
+}
+.writing-lines i {
+  display: block;
+  block-size: 8px;
+  border-radius: 4px;
+  background: var(--wq-line);
+  transform-origin: left center;
+  animation: wq-writing 1.8s var(--wq-ease-settle) infinite;
+}
+.writing-lines:dir(rtl) i {
+  transform-origin: right center;
+}
+.writing-lines i:nth-child(2) {
+  inline-size: 86%;
+  animation-delay: 0.2s;
+}
+.writing-lines i:nth-child(3) {
+  inline-size: 94%;
+  animation-delay: 0.4s;
+}
+.writing-lines i:nth-child(4) {
+  inline-size: 60%;
+  animation-delay: 0.6s;
+}
+.writing-text {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 14px;
+  font-weight: 600;
+}
+@keyframes wq-writing {
+  0% {
+    transform: scaleX(0);
+  }
+  60%,
+  100% {
+    transform: scaleX(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .writing-lines i {
+    animation: none;
+  }
+}
+
+.beat-bar-end {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 16px;
+}
+
+/* a new version of the beat, to compare with the saved one */
+.insp-sec.compare {
+  padding: 14px 16px;
+  margin-block-end: 8px;
+  border: 1px solid var(--wq-fluo-text);
+  border-radius: var(--wq-radius-control);
+  background: color-mix(in srgb, var(--wq-fluo-tint) 45%, var(--wq-sheet));
+}
+.compare .seg {
+  justify-self: start;
+  inline-size: fit-content;
+}
+.compare-text {
+  display: grid;
+  gap: 8px;
+}
+.compare-text > div {
+  display: grid;
+  gap: 2px;
+  color: var(--wq-text-3);
+}
+.compare-text > .is-on {
+  color: var(--wq-text);
+}
+.compare-text p {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.6;
+}
+.compare-k {
+  font-size: 12px;
+  font-weight: 600;
 }
 .mark-chip {
   display: inline-block;
@@ -3453,6 +3806,12 @@ select {
   margin: 0;
   padding: 0 16px 16px;
   background: var(--wq-ground);
+}
+.stage-box.is-lifted .stage-zone {
+  flex: 1;
+  min-block-size: 0;
+  display: flex;
+  flex-direction: column;
 }
 .stage-box.is-lifted .stage-frame {
   flex: 1;

@@ -1,6 +1,7 @@
 // The beat inspector (in the side sheet), generated from the lesson format: the beat's title and teaching move,
 // the parts on its stage (forms from their components' definitions), what each mark does (the cue editor), its
 // questions, its problems, regenerating it, and its whole JSON as an escape hatch.
+import { dirOf } from '@warqa/i18n';
 import { useEffect, useRef, useState } from 'react';
 import type { EditorCatalog, Issue, StagePart } from '../../../shared/types';
 import { Button, Field, Icon, IssueList, Notice } from '../../components/ui';
@@ -89,12 +90,16 @@ export interface RegenState {
   error: string;
   /** Unsaved edits: the job rewrites the saved lesson, so they are saved first. */
   disabled: boolean;
+  /** What it costs, said beside the button ("about $0.004"). */
+  cost?: string;
+  /** What should change (the page keeps it: the judge's note can fill it). */
+  instruction: string;
+  setInstruction: (s: string) => void;
   start: (instruction: string) => Promise<void>;
 }
 
 export function Regenerate({ regen }: { regen: RegenState }) {
   const { t } = useI18n();
-  const [instruction, setInstruction] = useState('');
   return (
     <section className="insp-sec regen" aria-labelledby="regen-title">
       <h3 id="regen-title" className="insp-title">
@@ -105,10 +110,10 @@ export function Regenerate({ regen }: { regen: RegenState }) {
           <textarea
             id={fid}
             rows={2}
-            value={instruction}
+            value={regen.instruction}
             placeholder={t('editor.regenPlaceholder')}
             dir="auto"
-            onChange={(e) => setInstruction(e.target.value)}
+            onChange={(e) => regen.setInstruction(e.target.value)}
           />
         )}
       </Field>
@@ -117,13 +122,85 @@ export function Regenerate({ regen }: { regen: RegenState }) {
           icon="regenerate"
           busy={regen.busy}
           disabled={regen.disabled}
-          onClick={() => void regen.start(instruction)}
+          onClick={() => void regen.start(regen.instruction)}
         >
           {t('editor.regenBtn')}
         </Button>
+        {regen.cost && <span className="mono muted small">{regen.cost}</span>}
       </div>
       <p className="hint">{regen.disabled ? t('editor.regenSaveFirst') : t('editor.regenHint')}</p>
       {regen.error && <Notice tone="error">{regen.error}</Notice>}
+    </section>
+  );
+}
+
+/** A new version of the beat is waiting: see it on the stage (Before / After), then keep one, or try again. */
+export interface CompareState {
+  /** Its narration, and what was asked. */
+  narration: string;
+  instruction?: string;
+  view: 'before' | 'after';
+  setView: (v: 'before' | 'after') => void;
+  keepNew: () => void;
+  keepOld: () => void;
+  again: () => void;
+  /** Unsaved edits wait for a save first (keeping a version rewrites the saved lesson). */
+  disabled: boolean;
+  /** The beat was saved with changes after the new version was written. */
+  changed?: boolean;
+  /** Keeping it failed (it no longer fits the beats after it, …). */
+  error?: string;
+}
+
+function Compare({ c, current, lang }: { c: CompareState; current: string; lang: string }) {
+  const { t } = useI18n();
+  return (
+    <section className="insp-sec compare" aria-labelledby="compare-title">
+      <h3 id="compare-title" className="insp-title">
+        {t('editor.candidate')}
+      </h3>
+      {c.instruction && (
+        <p className="hint">
+          <bdi dir="auto">{c.instruction}</bdi>
+        </p>
+      )}
+      {/* biome-ignore lint/a11y/useSemanticElements: a segmented control, not a form group */}
+      <div className="seg compare-seg" role="group" aria-label={t('editor.compareView')}>
+        {(['before', 'after'] as const).map((v) => (
+          <button key={v} type="button" aria-pressed={c.view === v} onClick={() => c.setView(v)}>
+            {t(v === 'before' ? 'improve.before' : 'improve.after')}
+          </button>
+        ))}
+      </div>
+      <div className="compare-text">
+        {(
+          [
+            ['before', current],
+            ['after', c.narration],
+          ] as const
+        ).map(([v, text]) => (
+          <div key={v} className={c.view === v ? 'is-on' : ''}>
+            <span className="compare-k">{t(v === 'before' ? 'improve.before' : 'improve.after')}</span>
+            <p lang={lang} dir={dirOf(lang)}>
+              {text.replace(/\[\[[A-Za-z][\w-]{0,31}\]\]/g, '')}
+            </p>
+          </div>
+        ))}
+      </div>
+      {c.changed && <Notice tone="warn">{t('editor.candidateChanged')}</Notice>}
+      {c.error && <Notice tone="error">{c.error}</Notice>}
+      <div className="actions">
+        <Button variant="primary" disabled={c.disabled} onClick={c.keepNew}>
+          {t('editor.keepNew')}
+        </Button>
+        <Button disabled={c.disabled} onClick={c.keepOld}>
+          {t('editor.keepOld')}
+        </Button>
+        <Button variant="quiet" icon="regenerate" disabled={c.disabled} onClick={c.again}>
+          {t('common.retry')}
+        </Button>
+      </div>
+      {c.disabled && <p className="hint">{t('editor.regenSaveFirst')}</p>}
     </section>
   );
 }
@@ -148,6 +225,9 @@ export function Inspector({
   moveKeys,
   renameKeys,
   regen,
+  compare,
+  selMark,
+  onSelectMark,
   onDuplicate,
   onDelete,
   canDelete,
@@ -176,6 +256,11 @@ export function Inspector({
   /** A question's translations follow its new id. */
   renameKeys: (kind: 'q', from: string, to: string) => void;
   regen: RegenState;
+  /** A new version of this beat waiting to be compared. */
+  compare?: CompareState;
+  /** The mark chosen (narration, timeline, a cue): its cues stand out. */
+  selMark: string | null;
+  onSelectMark: (m: string | null) => void;
   onDuplicate: () => void;
   onDelete: () => void;
   canDelete: boolean;
@@ -212,6 +297,7 @@ export function Inspector({
     );
   return (
     <div className="inspector">
+      {compare && <Compare c={compare} current={beat.narration} lang={lessonLang} />}
       <section className="insp-sec insp-ident">
         <Field label={t('editor.title')}>
           {(fid) => (
@@ -264,6 +350,8 @@ export function Inspector({
         langs={langs}
         update={update}
         moveKeys={moveKeys}
+        selMark={selMark}
+        onSelectMark={onSelectMark}
       />
 
       <QuestionsSection

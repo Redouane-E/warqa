@@ -17,6 +17,8 @@ export interface WarqaPlayer {
   resting: boolean;
   /** The stage alone, or the whole player with its bar (the editor's Lift). */
   setBare(on: boolean): void;
+  /** Where a node or a part ("eq#tok:0") is on the screen now (client pixels), or null. */
+  targetRect(target: string): { left: number; top: number; width: number; height: number } | null;
   /** Seconds into the current beat, and whether it plays (the editor's clock reads them). */
   time: number;
   playing: boolean;

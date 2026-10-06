@@ -309,4 +309,17 @@ export function estimateChapters(project: Project): {
   };
 }
 
+/** What writing one beat again costs (the writer model, with its usual repairs), shown beside Regenerate. */
+export function estimateBeat(project: Project): number | undefined {
+  const doc = loadDocument(project);
+  const plan = loadPlan(project);
+  const chapters = Math.max(1, plan?.chapters.filter((c) => c.include).length ?? 1);
+  const chars = doc ? doc.blocks.reduce((a, b) => a + b.text.length, 0) / chapters : 20000;
+  try {
+    return costOf(resolveRole('writer', project.config), (9000 + Math.min(chars, 16000) / 3.5) * 1.4, 1600 * 1.4);
+  } catch {
+    return undefined;
+  }
+}
+
 export const lessonDir = (project: Project, id: string) => join(project.root, 'lessons', id);

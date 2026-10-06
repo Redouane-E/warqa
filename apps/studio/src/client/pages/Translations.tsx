@@ -10,7 +10,7 @@ import { useI18n } from '../i18n';
 type Value = string | { text: string; speak?: string };
 const textOf = (v: Value | undefined) => (v === undefined ? '' : typeof v === 'string' ? v : v.text);
 const sortedMarks = (s: string) =>
-  [...s.matchAll(/\[\[(\w+)\]\]/g)]
+  [...s.matchAll(/\[\[([A-Za-z][\w-]{0,31})\]\]/g)]
     .map((m) => m[1])
     .sort()
     .join(',');

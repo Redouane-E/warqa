@@ -31,7 +31,8 @@ export interface BeatTime {
 /** Per language, per beat id. */
 export type Timings = Record<string, Record<string, BeatTime>>;
 
-const MARK = /\[\[(\w+)\]\]/g;
+// a mark, named as the lesson format names them
+const MARK = /\[\[([A-Za-z][\w-]{0,31})\]\]/g;
 export const marksOf = (s: string): string[] => [...s.matchAll(MARK)].map((m) => m[1]!);
 /** The narration's words, marks left out ("30 words"). */
 export const wordsOf = (s: string): number => s.replace(MARK, ' ').trim().split(/\s+/).filter(Boolean).length;

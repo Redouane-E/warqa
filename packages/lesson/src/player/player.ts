@@ -985,6 +985,22 @@ export class Player {
     return at;
   }
 
+  /**
+   * Where a node or one of its parts ("eq#tok:0") is on the screen now, in client pixels: the studio's editor draws
+   * a thread from a mark to it. Null when it is not on the stage (or fades out in this beat).
+   */
+  targetRect(target: string): { left: number; top: number; width: number; height: number } | null {
+    const i = target.indexOf('#');
+    const node = i < 0 ? target : target.slice(0, i);
+    const sub = i < 0 ? '' : target.slice(i + 1);
+    const box =
+      (sub ? this.renderer.partBox(node, sub) : null) ?? this.renderer.layoutBoxes().find((b) => b.id === node)?.box;
+    if (!box) return null;
+    const r = this.frame.getBoundingClientRect();
+    const k = r.width / 1600;
+    return { left: r.left + box.x * k, top: r.top + box.y * k, width: box.w * k, height: box.h * k };
+  }
+
   /** The stage alone (no strip, captions or bar), or the whole player: the editor lifts its stage into one. */
   setBare(on: boolean): void {
     this.opts.bare = on;

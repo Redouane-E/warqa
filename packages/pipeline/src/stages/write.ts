@@ -11,6 +11,7 @@ import {
   type Lesson,
   parseLesson,
   type SceneState,
+  type Strings,
   schemas,
   validateLesson,
 } from '@warqa/lesson';
@@ -228,6 +229,8 @@ export interface WriteOptions {
   audience?: string;
   /** Rewrite beats even if lesson.json exists. */
   force?: boolean;
+  /** Save the lesson when written (default). Regenerate builds its own lesson from the beats and saves nothing. */
+  save?: boolean;
   onBeat?: (e: { id: string; index: number; total: number; repairs: number; usd: number }) => void;
 }
 
@@ -400,7 +403,7 @@ Write beat "${sb.id}" now. Make the picture carry the argument: schedule a visua
   }
 
   const lesson = parseLesson({ ...base, beats: done });
-  project.saveLesson(chapter.id, lesson);
+  if (opts.save !== false) project.saveLesson(chapter.id, lesson);
   return lesson;
 }
 
@@ -422,6 +425,11 @@ export interface RewriteOptions {
   llm: Llm;
   /** What the author wants changed ("shorter", "use a balance scale", …). */
   instruction?: string;
+  /**
+   * Keep the lesson as it is and return the new version (the studio compares them before the author keeps one,
+   * with `applyBeat`).
+   */
+  candidate?: boolean;
 }
 
 /** Regenerate one beat of an existing lesson (keeping the others), optionally following an instruction. */
@@ -496,7 +504,8 @@ export async function rewriteBeat(
     sb.visual = request(problems ? `\nYOUR LAST VERSION BROKE LATER BEATS — fix this: ${problems}` : '');
     // write the single beat with the chapter writer, resuming from the beats before it
     project.writeJson(`lessons/${lessonId}/draft.json`, { beats: before });
-    const partial = await writeChapter(project, doc, plan, chapter, mini(), { llm: opts.llm });
+    // the lesson on disk is never touched while this runs: the author may save other beats meanwhile
+    const partial = await writeChapter(project, doc, plan, chapter, mini(), { llm: opts.llm, save: false });
     const candidate = parseLesson({ ...lesson, beats: [...partial.beats, ...after] });
     const v = validateLesson(candidate);
     if (v.ok) next = candidate;
@@ -507,24 +516,60 @@ export async function rewriteBeat(
         .map((i) => `${i.beat}: ${i.message}`)
         .join('; ');
   }
-  if (!next) {
-    // report rather than save a broken lesson
-    project.saveLesson(lessonId, lesson);
-    throw new Error(`the new "${beatId}" breaks later beats: ${problems}`);
-  }
-  // translations of this beat are stale now: drop them so `translate` redoes just these strings
-  const newBeat = next.beats[idx]!;
-  const nodeIds = new Set([...ownIds, ...newBeat.scene.add.map((n) => n.id)]);
-  const qIds = new Set([...(old.questions ?? []), ...(newBeat.questions ?? [])].map((q) => q.id));
-  const stale = (k: string) =>
-    k.startsWith(`beat.${beatId}.`) ||
-    [...nodeIds].some((id) => k.startsWith(`node.${id}.`)) ||
-    [...qIds].some((id) => k.startsWith(`q.${id}.`));
+  // report rather than save a broken lesson
+  if (!next) throw new Error(`the new "${beatId}" breaks later beats: ${problems}`);
+  // into the lesson as it is now (unless compared first)
+  if (!opts.candidate) applyBeat(project, lessonId, next.beats[idx]!);
+  return next;
+}
+
+/** A beat swapped in, and what it replaced: the old beat and the translations dropped with it (for Undo). */
+export interface BeatSwap {
+  previous: Beat;
+  dropped: Record<string, Strings>;
+}
+
+/** The translation keys that a new version of a beat makes stale: its own, its parts' and its questions'. */
+export function staleKeys(old: Beat, next: Beat): (key: string) => boolean {
+  const nodeIds = [...new Set([...old.scene.add, ...next.scene.add].map((n) => n.id))];
+  const qIds = [...new Set([...(old.questions ?? []), ...(next.questions ?? [])].map((q) => q.id))];
+  return (k) =>
+    k.startsWith(`beat.${next.id}.`) ||
+    nodeIds.some((id) => k.startsWith(`node.${id}.`)) ||
+    qIds.some((id) => k.startsWith(`q.${id}.`));
+}
+
+/**
+ * Put a new version of a beat (same id) into its lesson. Its translations are stale now: they are dropped, so
+ * `translate` redoes just these strings; what was dropped comes back with `restoreBeat`.
+ */
+export function applyBeat(project: Project, lessonId: string, beat: Beat): BeatSwap {
+  const lesson = project.loadLesson(lessonId);
+  const idx = lesson.beats.findIndex((b) => b.id === beat.id);
+  if (idx < 0) throw new Error(`no beat "${beat.id}" in ${lessonId}`);
+  const old = lesson.beats[idx]!;
+  const stale = staleKeys(old, beat);
+  const dropped: Record<string, Strings> = {};
   for (const lang of project.book.langs.filter((l) => l !== lesson.lang)) {
     const st = project.loadStrings(lessonId, lang);
     if (!st) continue;
+    dropped[lang] = Object.fromEntries(Object.entries(st).filter(([k]) => stale(k)));
     project.saveStrings(lessonId, lang, Object.fromEntries(Object.entries(st).filter(([k]) => !stale(k))));
   }
-  project.saveLesson(lessonId, next);
-  return next;
+  lesson.beats[idx] = beat;
+  project.saveLesson(lessonId, lesson);
+  return { previous: old, dropped };
+}
+
+/** Undo `applyBeat`: the previous beat back, and the translations dropped with the swap. */
+export function restoreBeat(project: Project, lessonId: string, swap: BeatSwap): void {
+  const lesson = project.loadLesson(lessonId);
+  const idx = lesson.beats.findIndex((b) => b.id === swap.previous.id);
+  if (idx < 0) throw new Error(`no beat "${swap.previous.id}" in ${lessonId}`);
+  lesson.beats[idx] = swap.previous;
+  project.saveLesson(lessonId, lesson);
+  for (const [lang, back] of Object.entries(swap.dropped)) {
+    const st = project.loadStrings(lessonId, lang) ?? {};
+    project.saveStrings(lessonId, lang, { ...st, ...back });
+  }
 }

@@ -176,10 +176,31 @@ export const api = {
   reviewCsvUrl: (id: string, lang: string) =>
     withBase(`/api/projects/${encodeURIComponent(id)}/review/${encodeURIComponent(lang)}.csv`),
   geo: (id: string) => req<{ layers: GeoLayerInfo[] }>('GET', `/api/projects/${encodeURIComponent(id)}/geo`),
-  playerData: (id: string, lid: string, lang?: string) =>
-    req<Record<string, unknown>>(
+  /** The lesson as the player reads it; `candidate`: with the new version of that beat in it (Compare). */
+  playerData: (id: string, lid: string, lang?: string, candidate?: string) => {
+    const q = new URLSearchParams();
+    if (lang) q.set('lang', lang);
+    if (candidate) q.set('candidate', candidate);
+    return req<Record<string, unknown>>(
       'GET',
-      `/api/projects/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lid)}/player${lang ? `?lang=${encodeURIComponent(lang)}` : ''}`,
+      `/api/projects/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lid)}/player${q.size ? `?${q}` : ''}`,
+    );
+  },
+  /** Keep the new version of a beat (Regenerate), drop it, or take the kept one back. */
+  acceptBeat: (id: string, lid: string, bid: string) =>
+    req<{ ok: boolean; langs: string[] }>(
+      'POST',
+      `/api/projects/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lid)}/beats/${encodeURIComponent(bid)}/accept`,
+    ),
+  dropCandidate: (id: string, lid: string, bid: string) =>
+    req<{ ok: boolean }>(
+      'DELETE',
+      `/api/projects/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lid)}/beats/${encodeURIComponent(bid)}/candidate`,
+    ),
+  restoreBeat: (id: string, lid: string, bid: string) =>
+    req<{ ok: boolean }>(
+      'POST',
+      `/api/projects/${encodeURIComponent(id)}/lessons/${encodeURIComponent(lid)}/beats/${encodeURIComponent(bid)}/restore`,
     ),
 };
 

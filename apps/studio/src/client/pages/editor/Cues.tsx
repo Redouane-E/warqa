@@ -262,7 +262,12 @@ export function CuesSection({
   langs,
   update,
   moveKeys,
+  selMark,
+  onSelectMark,
 }: {
+  /** The mark chosen (narration, timeline): its cues stand out; a cue opened chooses its mark. */
+  selMark: string | null;
+  onSelectMark: (m: string | null) => void;
   beat: Beat;
   /** What is on the stage during this beat (cues move it). */
   nodes: StagePart[];
@@ -321,7 +326,16 @@ export function CuesSection({
     const off = typeof c.at === 'object' ? (c.at.offset ?? 0) : 0;
     return (
       <li key={k} className={`cue-row${open ? ' is-open' : ''}`}>
-        <button type="button" className="cue-line" aria-expanded={open} onClick={() => setEditing(open ? null : k)}>
+        <button
+          type="button"
+          className="cue-line"
+          aria-expanded={open}
+          onClick={() => {
+            setEditing(open ? null : k);
+            const m = markOfCue(c);
+            if (m && !open) onSelectMark(m);
+          }}
+        >
           <span className="cue-what">{actionName(c.do)}</span>
           <code className="cue-target" dir="ltr">
             {targetText(c.target)}
@@ -367,7 +381,7 @@ export function CuesSection({
         {marks.map((m) => {
           const mine = cues.map((c, k) => [c, k] as const).filter(([c]) => markOfCue(c) === m);
           return (
-            <li key={m} className="cue-group">
+            <li key={m} className={`cue-group${m === selMark ? ' is-sel' : ''}`}>
               <span className="mark-chip" dir="ltr">
                 {m}
               </span>

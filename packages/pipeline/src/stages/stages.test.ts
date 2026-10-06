@@ -20,7 +20,7 @@ import {
   staleTranslations,
 } from './build.js';
 import { adjustLevel, documentLang, estimateLearn, learnFromPdf, readTextLayer, startLearning } from './learn.js';
-import { liteToBeat, unfinishedDraft } from './write.js';
+import { applyBeat, liteToBeat, restoreBeat, unfinishedDraft } from './write.js';
 
 const doc: SourceDocument = {
   schema: 'warqa.document/1',
@@ -247,6 +247,18 @@ describe('pipeline stages (fake model)', () => {
     expect(arAfter['beat.rule.narration']).toBeUndefined();
     expect(arAfter['beat.intro.narration']).toBeDefined();
     expect(validateLesson(project.loadLesson('ch01')).ok).toBe(true);
+
+    // a new version kept from the editor's Compare: the beat's translations go; Undo brings back both
+    const lesson = project.loadLesson('ch01');
+    const arBefore = project.loadStrings('ch01', 'ar')!;
+    const intro = lesson.beats.find((b) => b.id === 'intro')!;
+    const swap = applyBeat(project, 'ch01', { ...intro, narration: 'A new start.' });
+    expect(project.loadLesson('ch01').beats.find((b) => b.id === 'intro')?.narration).toBe('A new start.');
+    expect(project.loadStrings('ch01', 'ar')!['beat.intro.narration']).toBeUndefined();
+    expect(swap.dropped.ar?.['beat.intro.narration']).toBe(arBefore['beat.intro.narration']);
+    restoreBeat(project, 'ch01', swap);
+    expect(project.loadLesson('ch01')).toEqual(lesson);
+    expect(project.loadStrings('ch01', 'ar')).toEqual(arBefore);
   });
 
   it('goes on from the last written beat after Stop, and translates a lesson written again', async () => {

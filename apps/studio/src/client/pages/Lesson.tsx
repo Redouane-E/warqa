@@ -16,8 +16,10 @@ import { usePublishBook } from '../place';
 import type { WarqaPlayer } from '../player';
 import { Link, navigate, useLocation } from '../router';
 import { BeatList } from './editor/BeatList';
+import { useActionName } from './editor/Cues';
 import { useCatalog } from './editor/catalog';
 import { Inspector } from './editor/Inspector';
+import { JudgeNote, Listen, MarkTimeline, NarrationEditor, Threads, Writing } from './editor/Marks';
 import { Stage, type StageHandle } from './editor/Stage';
 import {
   type Beat,
@@ -112,11 +114,18 @@ function NarrationBox({
   beat,
   lang,
   time,
+  audio,
+  selMark,
+  onSelectMark,
   onChange,
 }: {
   beat: Beat;
   lang: string;
   time?: BeatTime;
+  /** Its recorded narration, when there is one (Listen). */
+  audio?: string;
+  selMark: string | null;
+  onSelectMark: (m: string | null) => void;
   onChange: (s: string) => void;
 }) {
   const { t, num } = useI18n();
@@ -128,7 +137,6 @@ function NarrationBox({
   ]
     .filter(Boolean)
     .join(' · ');
-  const parts = beat.narration.split(/(\[\[\w+\]\])/g);
   return (
     <section className="narration-box" aria-labelledby="narration-title">
       <div className="narration-head">
@@ -136,36 +144,17 @@ function NarrationBox({
           {t('editor.narration')}
         </h2>
         <span className="mono muted small">{meta}</span>
+        <Listen src={audio} />
       </div>
-      <textarea
-        className="narration-text"
-        lang={lang}
-        dir={dirOf(lang)}
-        rows={4}
+      <NarrationEditor
         value={beat.narration}
-        aria-labelledby="narration-title"
-        aria-describedby="narration-hint"
-        onChange={(e) => onChange(e.target.value)}
+        lang={lang}
+        onChange={onChange}
+        selMark={selMark}
+        onSelectMark={onSelectMark}
+        labelledBy="narration-title"
+        describedBy="narration-hint"
       />
-      <p className="hint" id="narration-hint">
-        {t('editor.markHint')}
-      </p>
-      {marks.length > 0 && (
-        <p className="marked" lang={lang} dir={dirOf(lang)} aria-hidden="true">
-          {parts.map((s, i) => {
-            const m = /^\[\[(\w+)\]\]$/.exec(s);
-            return m ? (
-              // biome-ignore lint/suspicious/noArrayIndexKey: text runs have no id
-              <span key={i} className="mark-chip" dir="ltr">
-                {m[1]}
-              </span>
-            ) : (
-              // biome-ignore lint/suspicious/noArrayIndexKey: text runs have no id
-              <span key={i}>{s}</span>
-            );
-          })}
-        </p>
-      )}
     </section>
   );
 }
@@ -213,6 +202,23 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const [reloadKey, setReloadKey] = useState(0);
   const [previewLang, setPreviewLang] = useState<string>('');
   const [timings, setTimings] = useState<Timings>({});
+  const [audio, setAudio] = useState<Record<string, Record<string, string>>>({});
+  // the mark chosen in the narration, on the timeline or by a cue: its threads and cues stand out
+  const [selMark, setSelMark] = useState<string | null>(null);
+  // "Show what each mark moves" (remembered)
+  const [threads, setThreads] = useState(() => {
+    try {
+      return localStorage.getItem('warqa-studio:threads') !== '0';
+    } catch {
+      return true;
+    }
+  });
+  // a beat's new version waiting: the stage shows the saved one, or the new one for this beat ("After")
+  const [afterBeat, setAfterBeat] = useState<string | null>(null);
+  // what should change, per beat (the judge's note can fill it)
+  const [instructions, setInstructions] = useState<Record<string, string>>({});
+  const zoneRef = useRef<HTMLDivElement>(null);
+  const actionName = useActionName();
   // the inspector: open by itself where it pushes the place (wide screens); Enter on a beat opens it anywhere
   const [inspecting, setInspecting] = useState<boolean | null>(null);
   const [focusSheet, setFocusSheet] = useState(false);
@@ -358,6 +364,27 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
         });
         if (job.status === 'error') setRegenErrors((cur) => ({ ...cur, [bid]: job.error ?? '' }));
         if (job.status !== 'done') return;
+        // a new version to compare: the lesson is as it was; the book says the version is waiting
+        if ((job.result as { candidate?: boolean } | undefined)?.candidate) {
+          void api.lesson(id, lid).then((d) => {
+            setDetail(d);
+            const k = (d.lesson.beats as Beat[]).findIndex((b) => b.id === bid);
+            toast({
+              text: t('editor.rewritten', { n: k + 1 }),
+              tone: 'good',
+              action: {
+                label: t('editor.compare'),
+                run: () => {
+                  if (k >= 0) setSel(k);
+                  setAfterBeat(bid);
+                  setFocusSheet(true);
+                  setInspecting(true);
+                },
+              },
+            });
+          });
+          return;
+        }
         void (async () => {
           if (!dirtyRef.current) await load();
           else {
@@ -372,8 +399,14 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
           setReloadKey((k) => k + 1);
         })();
       }),
-    [jobs, id, lid, load],
+    [jobs, id, lid, load, toast, t, setSel],
   );
+
+  // another beat: no mark chosen yet
+  // biome-ignore lint/correctness/useExhaustiveDependencies: when the beat shown changes
+  useEffect(() => {
+    setSelMark(null);
+  }, [sel]);
 
   const save = useCallback(
     async (force = false) => {
@@ -546,12 +579,85 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const startRegen = async (instruction: string) => {
     setRegenErrors((cur) => ({ ...cur, [beat.id]: '' }));
     try {
-      const r = await api.startJob(id, 'rewrite', { lesson: lid, beat: beat.id, instruction });
+      // the new version waits beside the lesson: Compare, then keep one
+      const r = await api.startJob(id, 'rewrite', { lesson: lid, beat: beat.id, instruction, candidate: true });
       setRewriting((cur) => ({ ...cur, [beat.id]: r.jobId }));
       // the work runs in the tray, which follows you; the beat comes back when it ends
       jobs.track(id, r.job);
     } catch (e) {
       setRegenErrors((cur) => ({ ...cur, [beat.id]: errorText(e, t) }));
+    }
+  };
+
+  const cand = detail.candidates?.[beat.id];
+  const view = cand && afterBeat === beat.id ? 'after' : 'before';
+  const setView = (v: 'before' | 'after') => setAfterBeat(v === 'after' ? beat.id : null);
+  // the judge's note where it found something wrong (red pen); a beat it liked carries none
+  const verdict = detail.judge?.[beat.id];
+  const judged = verdict && (verdict.problem || verdict.fix || verdict.score < 4) ? verdict : undefined;
+  const beatMarks = marksOf(beat.narration);
+  const withCues = new Set(
+    (beat.cues ?? []).flatMap((c) => (typeof c.at === 'object' ? [c.at.mark] : [c.at as string])),
+  );
+  const listOf = (items: string[]) => {
+    try {
+      return new Intl.ListFormat(i18n.locale, { type: 'conjunction' }).format(items);
+    } catch {
+      return items.join(', ');
+    }
+  };
+  const keepNew = async () => {
+    const n = i + 1;
+    const bid = beat.id;
+    setRegenErrors((cur) => ({ ...cur, [bid]: '' }));
+    try {
+      const r = await api.acceptBeat(id, lid, bid);
+      await load();
+      setReloadKey((k) => k + 1);
+      setAfterBeat(null);
+      toast({
+        text: r.langs.length
+          ? `${t('editor.replaced', { n })} ${t('editor.retranslate', { langs: listOf(r.langs.map((l) => langName(l))) })}`
+          : t('editor.replaced', { n }),
+        tone: 'good',
+        action: {
+          label: t('common.undo'),
+          run: () =>
+            void (async () => {
+              // the edits made since would go with the reload: ask first, as Undo of a save does
+              if (
+                dirtyRef.current &&
+                !(await confirm({
+                  title: t('editor.undoKeepTitle'),
+                  confirm: t('editor.undoKeep'),
+                  cancel: t('leave.stay'),
+                  danger: true,
+                }))
+              )
+                return;
+              try {
+                await api.restoreBeat(id, lid, bid);
+                await load();
+                setReloadKey((k) => k + 1);
+                toast({ text: t('editor.restored') });
+              } catch (e) {
+                toast({ text: errorText(e, t), tone: 'error' });
+              }
+            })(),
+        },
+      });
+    } catch (e) {
+      setRegenErrors((cur) => ({ ...cur, [bid]: errorText(e, t) }));
+    }
+  };
+  const keepOld = async () => {
+    const bid = beat.id;
+    try {
+      await api.dropCandidate(id, lid, bid);
+      setDetail(await api.lesson(id, lid));
+      setAfterBeat(null);
+    } catch (e) {
+      setRegenErrors((cur) => ({ ...cur, [bid]: errorText(e, t) }));
     }
   };
 
@@ -709,15 +815,32 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
                 {...(timeOf(beat) ? { time: timeOf(beat) } : {})}
                 playerRef={playerRef}
               />
-              <Button
-                ref={detailsBtn}
-                variant="quiet"
-                icon="edit"
-                aria-expanded={sheetOpen}
-                onClick={() => (sheetOpen ? setInspecting(false) : openSheet())}
-              >
-                {t('editor.details', { n: i + 1 })}
-              </Button>
+              <span className="beat-bar-end">
+                <label className="check">
+                  <input
+                    type="checkbox"
+                    checked={threads}
+                    onChange={(e) => {
+                      setThreads(e.target.checked);
+                      try {
+                        localStorage.setItem('warqa-studio:threads', e.target.checked ? '1' : '0');
+                      } catch {
+                        /* storage unavailable */
+                      }
+                    }}
+                  />
+                  <span>{t('editor.showThreads')}</span>
+                </label>
+                <Button
+                  ref={detailsBtn}
+                  variant="quiet"
+                  icon="edit"
+                  aria-expanded={sheetOpen}
+                  onClick={() => (sheetOpen ? setInspecting(false) : openSheet())}
+                >
+                  {t('editor.details', { n: i + 1 })}
+                </Button>
+              </span>
             </div>
             <Stage
               ref={stage}
@@ -735,12 +858,66 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
               onBeat={(k) => {
                 if (k !== i) setSel(k);
               }}
-              onTimings={setTimings}
-            />
+              onData={(d) => {
+                setTimings(d.timings);
+                setAudio(d.audio);
+              }}
+              candidate={view === 'after' && cand ? beat.id : undefined}
+              zoneRef={zoneRef}
+              below={
+                view === 'after' && cand ? null : (
+                  <MarkTimeline
+                    {...(timeOf(beat) ? { time: timeOf(beat) } : {})}
+                    marks={beatMarks}
+                    withCues={withCues}
+                    selMark={selMark}
+                    onSelect={(m, at) => {
+                      setSelMark(m);
+                      // the stage just after that mark's cues have played
+                      playerRef.current?.showAt(i, at + 0.7);
+                    }}
+                    playerRef={playerRef}
+                    beat={i}
+                    lang={shown}
+                  />
+                )
+              }
+              overlay={
+                threads && !(view === 'after' && cand) ? (
+                  <Threads
+                    zoneRef={zoneRef}
+                    playerRef={playerRef}
+                    beat={beat}
+                    index={i}
+                    selMark={selMark}
+                    actionName={actionName}
+                  />
+                ) : null
+              }
+            >
+              {judged && !(view === 'after' && cand) && (
+                <JudgeNote
+                  {...judged}
+                  compact={!!selMark && threads}
+                  onUse={(note) => {
+                    setInstructions((cur) => ({ ...cur, [beat.id]: note }));
+                    setFocusSheet(true);
+                    setInspecting(true);
+                    requestAnimationFrame(() =>
+                      document.querySelector<HTMLElement>('.beat-sheet .regen textarea')?.focus(),
+                    );
+                  }}
+                />
+              )}
+              {rewriting[beat.id] && <Writing n={i + 1} />}
+            </Stage>
             <NarrationBox
               beat={beat}
               lang={lessonLang}
               {...(timeOf(beat, lessonLang) ? { time: timeOf(beat, lessonLang) } : {})}
+              {...(audio[lessonLang]?.[beat.id] ? { audio: audio[lessonLang]![beat.id]! } : {})}
+              selMark={selMark}
+              onSelectMark={setSelMark}
               onChange={(s) => updateBeat((b) => void (b.narration = s))}
             />
             {!!general.length && (
@@ -799,8 +976,31 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
                 busy: !!rewriting[beat.id],
                 error: regenErrors[beat.id] ?? '',
                 disabled: dirty,
+                ...(detail.rewriteUsd !== undefined
+                  ? { cost: t('learn.est.cost', { cost: i18n.usd(detail.rewriteUsd) }) }
+                  : {}),
+                instruction: instructions[beat.id] ?? '',
+                setInstruction: (v) => setInstructions((cur) => ({ ...cur, [beat.id]: v })),
                 start: startRegen,
               }}
+              {...(cand
+                ? {
+                    compare: {
+                      narration: String((cand.beat as { narration?: string } | undefined)?.narration ?? ''),
+                      ...(cand.instruction ? { instruction: cand.instruction } : {}),
+                      view,
+                      setView,
+                      keepNew: () => void keepNew(),
+                      keepOld: () => void keepOld(),
+                      ...(cand.changed ? { changed: true } : {}),
+                      ...(regenErrors[beat.id] ? { error: regenErrors[beat.id] } : {}),
+                      again: () => void startRegen(cand.instruction ?? instructions[beat.id] ?? ''),
+                      disabled: dirty || !!rewriting[beat.id],
+                    },
+                  }
+                : {})}
+              selMark={selMark}
+              onSelectMark={setSelMark}
               onDuplicate={() => addBeat(beat)}
               onDelete={deleteBeat}
               canDelete={beats.length > 1}

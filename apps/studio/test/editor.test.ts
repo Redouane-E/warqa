@@ -14,6 +14,7 @@ import {
   variantKey,
   variantOf,
 } from '../src/client/pages/editor/schema.js';
+import { segmentsOf } from '../src/client/pages/editor/Marks.js';
 import {
   type Beat,
   beatProblem,
@@ -140,5 +141,34 @@ describe('editing a lesson', () => {
     expect(beatProblem({ id: 'a', title: 'A' })).toBe('narration');
     expect(beatProblem({ id: 'a', title: 'A', narration: 'x', cues: {} })).toBe('cues');
     expect(beatProblem([])).toBe('object');
+  });
+});
+
+describe('the narration and its marks', () => {
+  it('splits the narration into text and marks with the word each waits for, and their places', () => {
+    const text = 'Add [[keep]]keep the first, [[flip]]flip.';
+    const segs = segmentsOf(text);
+    expect(segs).toEqual([
+      { text: 'Add ' },
+      { mark: 'keep', label: '[[keep]]', word: 'keep', start: 4, end: 16 },
+      { text: ' the first, ' },
+      { mark: 'flip', label: '[[flip]]', word: 'flip.', start: 28, end: 41 },
+    ]);
+    // drawn over the text box, the runs give back the text letter for letter
+    expect(segs.map((s) => ('mark' in s ? s.label + s.word : s.text)).join('')).toBe(text);
+    // Arabic, and a mark with no word after it
+    const ar = 'نحتفظ [[keep]]بالعدد الأول [[end]]';
+    expect(segmentsOf(ar).map((s) => ('mark' in s ? s.label + s.word : s.text)).join('')).toBe(ar);
+    expect(segmentsOf(ar).at(-1)).toMatchObject({ mark: 'end', word: '' });
+    // marks are named as the lesson format names them: a hyphen is fine, a leading digit is not a mark
+    expect(segmentsOf('[[two-step]]Then [[1st]]x').map((s) => ('mark' in s ? `${s.mark}:${s.word}` : s.text))).toEqual([
+      'two-step:Then',
+      ' [[1st]]x',
+    ]);
+    // two marks on one word: the first has no word of its own
+    expect(segmentsOf('[[a]][[b]]Word.').map((s) => ('mark' in s ? `${s.mark}:${s.word}` : s.text))).toEqual([
+      'a:',
+      'b:Word.',
+    ]);
   });
 });
