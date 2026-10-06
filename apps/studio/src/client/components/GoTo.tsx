@@ -6,11 +6,12 @@ import { type ReactNode, useEffect, useId, useMemo, useRef, useState } from 'rea
 import type { JobType, LanguageInfo } from '../../shared/types';
 import { useStatus } from '../App';
 import { api, errorText, type ProjectListItem } from '../api';
+import { stripBase } from '../base';
 import { useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
 import { bookTitle } from '../pages/Home';
 import { STEPS, usePlace } from '../place';
-import { go } from '../router';
+import { go, navigate } from '../router';
 import { useJobs } from './JobBoard';
 import { useToast } from './overlays';
 import { trapTab, useEscape } from './tools';
@@ -92,6 +93,13 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
     const to = (path: string) => () => {
       onClose();
       void go(path);
+    };
+    // the book's settings open over the book: from the book itself nothing is left (no question about the plan)
+    const over = (path: string) => () => {
+      onClose();
+      const at = stripBase(location.pathname);
+      if (book && at === `/project/${encodeURIComponent(book.id)}`) navigate(path, { replace: true, keepScroll: true });
+      else void go(path);
     };
     const can = (type: JobType) => !status?.capabilities?.jobsUnavailable.includes(type);
     const out: Item[] = [];
@@ -182,10 +190,18 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
       out.push({
         id: 'b-settings',
         group: 'settings',
-        label: t('common.settings'),
-        hint: book.title,
+        label: t('book.settings'),
+        hint: t('goto.bookSettingsSub'),
         icon: 'settings',
-        run: to(`${base}/settings`),
+        run: over(`${base}/settings?step=${book.step}`),
+      });
+      out.push({
+        id: 'b-limit',
+        group: 'settings',
+        label: t('ob.budget.title'),
+        hint: book.limit !== undefined ? t('goto.limitSub', { limit: usd(book.limit) }) : t('goto.limitNone'),
+        icon: 'settings',
+        run: over(`${base}/settings?step=${book.step}#budget`),
       });
       out.push({
         id: 'b-review',
@@ -240,7 +256,31 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
         });
     out.push({ id: 'g-books', group: 'books', label: t('nav.books'), icon: 'book', run: to('/') });
     out.push({ id: 'g-learn', group: 'books', label: t('learn.home.title'), icon: 'book', run: to('/learn') });
-    out.push({ id: 'g-ai', group: 'settings', label: t('nav.ai'), icon: 'key', run: to('/ai') });
+    out.push({ id: 'g-ai', group: 'settings', label: t('nav.ai'), hint: t('goto.aiSub'), icon: 'key', run: to('/ai') });
+    out.push({
+      id: 'g-keys',
+      group: 'settings',
+      label: t('settings.keys'),
+      hint: t('nav.ai'),
+      icon: 'key',
+      run: to('/ai#keys'),
+    });
+    out.push({
+      id: 'g-set',
+      group: 'settings',
+      label: t('settings.preset'),
+      hint: t('nav.ai'),
+      icon: 'key',
+      run: to('/ai#set'),
+    });
+    out.push({
+      id: 'g-voices',
+      group: 'settings',
+      label: t('ai.voices'),
+      hint: t('nav.ai'),
+      icon: 'voice',
+      run: to('/ai#voices'),
+    });
     return out;
   }, [book, place.lesson, books, cost, lang, t, num, jobs, toast, onClose, status, langs, glossary, langName, usd]);
 

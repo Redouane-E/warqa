@@ -35,8 +35,6 @@ export const en = {
   'home.importing': 'Importing…',
   'home.importFailed': 'This backup could not be imported: {error}',
 
-  'project.backup': 'Download backup',
-  'project.backupHint': 'The whole book project as a .zip: import it here later, or open it in the desktop version.',
   'project.delete': 'Delete',
   'project.deleteHint': 'Delete this book from this browser',
   'project.deleteConfirm': 'Delete this book from this browser? Download a backup first if you want to keep it.',
@@ -89,9 +87,6 @@ export const fr: Record<WebKey, string> = {
   'home.importing': 'Importation…',
   'home.importFailed': 'Cette sauvegarde n’a pas pu être importée : {error}',
 
-  'project.backup': 'Télécharger une sauvegarde',
-  'project.backupHint':
-    'Tout le projet du livre en .zip : à réimporter ici plus tard, ou à ouvrir dans la version ordinateur.',
   'project.delete': 'Supprimer',
   'project.deleteHint': 'Supprimer ce livre de ce navigateur',
   'project.deleteConfirm':
@@ -143,8 +138,6 @@ export const ar: Record<WebKey, string> = {
   'home.importing': 'جارٍ الاستيراد…',
   'home.importFailed': 'تعذّر استيراد هذه النسخة الاحتياطية: {error}',
 
-  'project.backup': 'تنزيل نسخة احتياطية',
-  'project.backupHint': 'مشروع الكتاب كاملًا في ملف ‎.zip: استورده هنا لاحقًا، أو افتحه في نسخة الحاسوب.',
   'project.delete': 'حذف',
   'project.deleteHint': 'حذف هذا الكتاب من هذا المتصفح',
   'project.deleteConfirm': 'هل تحذف هذا الكتاب من هذا المتصفح؟ نزّل نسخة احتياطية أولًا إن أردت الاحتفاظ به.',

@@ -9,7 +9,7 @@ import { createApp } from '../../../studio/src/server/app';
 import { applyKeys } from '../../../studio/src/server/keys';
 import { zipPath, zipReady } from '../../../studio/src/server/zip';
 import type { FromWorker, InitOptions, ToWorker } from '../bridge/protocol';
-import { fakeModel } from './fake';
+import { fakeModel, fakeTts } from './fake';
 import { setupPdf } from './pdf';
 import { webRoutes } from './routes';
 import { browserRunners, desktopOnlyJobs, desktopOnlyVoices } from './runners';
@@ -167,7 +167,7 @@ async function start(opts: InitOptions) {
       ffmpeg: false,
     },
     defaultTts: 'none',
-    ...(opts.fake ? { llm: { fake: fakeModel } } : {}),
+    ...(opts.fake ? { llm: { fake: fakeModel }, tts: fakeTts } : {}),
   });
   const web: Hono = webRoutes({ root: ROOT, base: urlBase, fake: opts.fake, jobs });
   stopJobs = () => {

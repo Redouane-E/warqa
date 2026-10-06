@@ -33,3 +33,4 @@ export * from './tts/mp3.js';
 export * from './tts/narrate.js';
 export * from './tts/providers.js';
 export * from './tts/types.js';
+export * from './tts/voices.js';

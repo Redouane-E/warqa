@@ -77,6 +77,11 @@ export function KeyStep({
       if (r.ok) {
         if (provider.id !== 'fake' && (key.trim() || provider.local))
           await api.saveKeys({ [provider.env]: key.trim() || 'http://localhost:11434/api' });
+        // the first key also chooses the model set new books start with (AI and voices can change it)
+        if (provider.preset) {
+          const d = await api.defaults().catch(() => null);
+          if (d && !d.preset) await api.saveDefaults({ preset: provider.preset }).catch(() => {});
+        }
         setReady(true);
       }
     } catch (e) {
@@ -86,7 +91,8 @@ export function KeyStep({
   };
 
   const recommended = PROVIDERS.filter((p) => p.recommended);
-  const others = PROVIDERS.filter((p) => !p.recommended);
+  // a server of your own needs its address and maybe a key: AI and voices has the form for it
+  const others = PROVIDERS.filter((p) => !p.recommended && p.id !== 'compat');
   const message = (r: KeyCheck) =>
     r.ok
       ? t(r.warning === 'rate' ? 'ob.check.rate' : 'ob.check.ok')

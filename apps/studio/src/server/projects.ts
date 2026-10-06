@@ -15,6 +15,7 @@ import type {
   StepState,
 } from '../shared/types.js';
 import { checkSummary } from './checks.js';
+import type { AiDefaults } from './defaults.js';
 import { panelKeyPath, panelZipPath, zipPath, zipReady } from './zip.js';
 
 export const ID = /^[a-z0-9][a-z0-9_-]{0,63}$/;
@@ -34,8 +35,10 @@ export class Registry {
 
   constructor(
     root: string,
-    /** Speech engine of new projects. */
+    /** Speech engine of new projects (when the defaults name none, or one this host cannot run). */
     private defaultTts = 'edge',
+    /** What new books start with (AI and voices), and what this host can run of it. */
+    private newBook: { defaults?: () => AiDefaults; ttsUnavailable?: string[]; worker?: boolean } = {},
   ) {
     this.root = resolve(root);
   }
@@ -115,7 +118,21 @@ export class Registry {
       defaultLang,
       ...(input.audience ? { audience: input.audience } : {}),
     });
-    p.config.tts.provider = this.defaultTts;
+    // the defaults for new books: the model set and models, the voices (when this host can run their engine), the
+    // local helper (when this host may reach one)
+    const d = this.newBook.defaults?.();
+    if (d?.preset) p.config.preset = d.preset;
+    if (d && Object.keys(d.models).length) p.config.models = { ...d.models };
+    // (no engine chosen: the host's, with the voices and rate chosen for it)
+    const chosen = d?.tts.provider;
+    const engine = chosen && !this.newBook.ttsUnavailable?.includes(chosen) ? chosen : this.defaultTts;
+    p.config.tts.provider = engine as typeof p.config.tts.provider;
+    if (d && (!chosen || chosen === engine)) {
+      p.config.tts.voices = { ...d.tts.voices };
+      if (d.tts.rate) p.config.tts.rate = d.tts.rate;
+    }
+    if (d?.tts.tashkeel) p.config.tts.tashkeel = true;
+    if (d?.worker && this.newBook.worker !== false) p.config.worker = d.worker;
     if (input.audience) p.config.audience = input.audience;
     p.saveBook();
     if (input.pdf) {

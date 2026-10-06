@@ -26,7 +26,7 @@ review the translations (approve or correct them, or round-trip them through a s
 **See a finished book first** opens the example book, no key needed. Books can also be offered in Moroccan
 Darija (الدارجة المغربية).
 
-**Map regions** (Settings → Maps) work in the browser too: geoBoundaries' API allows web pages, and its
+**Map regions** (Book settings → Maps) work in the browser too: geoBoundaries' API allows web pages, and its
 downloads are fetched from `media.githubusercontent.com` (the `github.com/…/raw/…` links it returns redirect
 without CORS headers, so the web app rewrites them).
 
@@ -36,7 +36,7 @@ without CORS headers, so the web app rewrites them).
   Warqa server.
 - When you make lessons, the text of your PDF (and images of scanned pages) is sent with your key to the
   provider you chose, and to no one else. Keys are sent only to their own provider.
-- **Your data → Delete all my books and keys** wipes everything; **Keys → Forget all my keys** removes the keys.
+- **Your data → Delete all my books and keys** wipes everything; **AI and voices → Forget all my keys** removes the keys.
 - Clearing the browser's site data deletes your books: use **Download backup** on a book (a zip of the whole
   project). **Import a backup** on the home screen brings it back, here or in another browser; the same zip is a
   normal project folder for the desktop version. A backup leaves out what is made again (the exported site,

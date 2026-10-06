@@ -122,6 +122,16 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **AI and voices, and Book settings (redesign 4g).** The keys page is now **AI and voices** (`/ai`; the old
+  `/settings` address leads there): keys as rows with a free check before saving, Remove with Undo, Ollama found on
+  this computer, a server of your own and the speech services; the model sets with what a chapter costs; who does
+  what, with each model's price and a way to choose another; and the voices, with a voice per language and a sample to
+  hear (free with Edge; kept, so playing it again costs nothing). The model set and voices chosen there are the
+  defaults new books start with (`defaults.json` in the Warqa folder), or, opened from a book, that book's own. A
+  book's settings are a side sheet from the foot of its steps (title, languages, audience, digits, spending limit,
+  maps), and Download backup sits there too. New: `GET/PUT /api/defaults`, `POST /api/voices/sample`, `GET
+  /api/keys/local`, `POST /api/keys/restore`; `estimateSetChapter` and the voice catalog (`VOICES`, `SAMPLE_TEXT`) in
+  the pipeline.
 - **Check and Share (redesign 4f).** Check shows a chapter as a contact sheet: the end of every beat with the judge's
   score in red pen and a red frame where an automatic check found something (overlaps, text that had to shrink, parts
   off the stage, an empty start), saved so they are there next time. A beat opens below with its finding circled, the

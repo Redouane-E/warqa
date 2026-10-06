@@ -16,6 +16,7 @@ export type ProviderId =
   | 'groq'
   | 'xai'
   | 'ollama'
+  | 'compat'
   | 'fake';
 
 export interface GuideProvider {
@@ -31,8 +32,10 @@ export interface GuideProvider {
   recommended?: boolean;
   /** A local server instead of a key (the "key" field is its address). */
   local?: boolean;
-  /** Free check of a key: list the models (or the key's own info). */
-  check?: (key: string) => { url: string; headers: Record<string, string> };
+  /** Free check of a key: list the models (or the key's own info). `secret`: a local server's own key. */
+  check?: (key: string, secret?: string) => { url: string; headers: Record<string, string> };
+  /** A local server that may ask for a key of its own (in this variable). */
+  secretEnv?: string;
 }
 
 const bearer = (key: string) => ({ authorization: `Bearer ${key}` });
@@ -124,6 +127,18 @@ export const PROVIDERS: GuideProvider[] = [
     local: true,
     check: (base) => ({ url: `${(base || 'http://localhost:11434/api').replace(/\/+$/, '')}/tags`, headers: {} }),
   },
+  {
+    // any OpenAI-compatible server (LM Studio, llama.cpp, vLLM…): its address, and a key if it asks for one
+    id: 'compat',
+    name: 'OpenAI-compatible',
+    env: 'WARQA_COMPAT_BASE_URL',
+    secretEnv: 'WARQA_COMPAT_API_KEY',
+    local: true,
+    check: (base, secret) => ({
+      url: `${base.replace(/\/+$/, '')}/models`,
+      headers: secret ? bearer(secret) : {},
+    }),
+  },
 ];
 
 /** Test-only scripted model (no network), shown only in test mode. */
@@ -133,5 +148,5 @@ export const providerById = (id: string, fake = false): GuideProvider | undefine
   id === 'fake' ? (fake ? FAKE_PROVIDER : undefined) : PROVIDERS.find((p) => p.id === id);
 
 export type KeyCheck =
-  | { ok: true; warning?: 'rate' }
+  | { ok: true; warning?: 'rate' /** a local server's models */; models?: string[] }
   | { ok: false; reason: 'key' | 'credits' | 'network' | 'http'; status?: number; message?: string };

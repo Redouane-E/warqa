@@ -13,12 +13,18 @@ test('books and keys survive a reload; keys can be forgotten', async ({ page }) 
   await page.getByRole('button', { name: 'Save lesson' }).click();
   await expect(page.locator('.save-state')).toContainText('Saved');
 
-  // a (dummy) key, kept in this browser only
-  await page.goto('settings');
-  await expect(page.getByText('Your keys are kept only in this browser')).toBeVisible();
-  await page.getByLabel('New value for MISTRAL_API_KEY').fill('test-dummy-key-0000wxyz');
-  await page.getByRole('button', { name: 'Save keys' }).click();
-  await expect(page.locator('.key-row', { hasText: 'MISTRAL_API_KEY' })).toContainText('••••wxyz');
+  // a (dummy) key, kept in this browser only (added through the API: checking it would ask Mistral)
+  await page.goto('ai');
+  await expect(page.getByText('Keys stay on this device')).toBeVisible();
+  await page.evaluate(() =>
+    fetch('/warqa/api/keys', {
+      method: 'PUT',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ MISTRAL_API_KEY: 'test-dummy-key-0000wxyz' }),
+    }),
+  );
+  await page.reload();
+  await expect(page.locator('#key-mistral')).toContainText('•••• wxyz');
 
   // the key reaches the model client in the worker (the Mistral provider counts as configured)
   const mistral = () =>
@@ -29,7 +35,7 @@ test('books and keys survive a reload; keys can be forgotten', async ({ page }) 
   expect(await mistral()).toBe(true);
 
   await page.reload();
-  await expect(page.locator('.key-row', { hasText: 'MISTRAL_API_KEY' })).toContainText('••••wxyz');
+  await expect(page.locator('#key-mistral')).toContainText('•••• wxyz');
   expect(await mistral()).toBe(true);
   await page.goto('./');
   await expect(page.locator('.book-card')).toHaveCount(1);
@@ -38,12 +44,13 @@ test('books and keys survive a reload; keys can be forgotten', async ({ page }) 
   await expect(page.getByRole('textbox', { name: 'Title' }).first()).toHaveValue('Subtracting, saved in the browser');
 
   // forget all keys
-  await page.goto('settings');
+  await page.goto('ai');
   await page.getByRole('button', { name: 'Forget all my keys' }).click();
-  await confirmDialog(page, 'Remove every key');
-  await expect(page.locator('.key-row', { hasText: 'MISTRAL_API_KEY' })).toContainText('not set');
+  await confirmDialog(page, 'Forget all keys');
+  await expect(page.locator('#key-mistral')).toContainText('No key yet');
   await page.reload();
-  await expect(page.locator('.key-row', { hasText: 'MISTRAL_API_KEY' })).toContainText('not set');
+  // with no key, Mistral is one of the other services again
+  await expect(page.locator('#key-mistral')).toHaveCount(0);
   expect(await mistral()).toBe(false);
 });
 

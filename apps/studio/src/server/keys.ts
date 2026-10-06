@@ -64,16 +64,50 @@ export function applyKeys(): void {
   for (const [k, v] of Object.entries(loadKeys())) setEnv(k, v);
 }
 
-/** Merge a patch ({NAME: value | null}) into the key file and the environment. */
-export function saveKeys(patch: Record<string, unknown>): void {
+/**
+ * Keys removed in the last few minutes, kept in this process only (never on disk, never sent to the browser), so
+ * "Undo" can put them back.
+ */
+const removed = new Map<string, { value: string; at: number }>();
+const UNDO_MS = 5 * 60 * 1000;
+
+/** Forget removed keys whose Undo has passed. */
+function prune(now = Date.now()) {
+  for (const [k, r] of removed) if (now - r.at >= UNDO_MS) removed.delete(k);
+}
+
+/** Put back keys removed a moment ago (for an Undo); returns the names restored. */
+export function restoreKeys(names: string[]): string[] {
+  const now = Date.now();
+  prune(now);
+  const back: Record<string, string> = {};
+  for (const n of names) {
+    const r = removed.get(n);
+    if (r && now - r.at < UNDO_MS) back[n] = r.value;
+  }
+  if (Object.keys(back).length) saveKeys(back);
+  for (const n of Object.keys(back)) removed.delete(n);
+  return Object.keys(back);
+}
+
+/**
+ * Merge a patch ({NAME: value | null}) into the key file and the environment. `undo`: keys removed now can be put
+ * back for a few minutes (one Remove with Undo); otherwise (Forget all) they are gone at once.
+ */
+export function saveKeys(patch: Record<string, unknown>, opts: { undo?: boolean } = {}): void {
+  prune();
   const keys = loadKeys();
   for (const [k, v] of Object.entries(patch)) {
     if (!NAME.test(k)) throw new Error(`"${k}" is not a valid variable name (UPPER_CASE letters, digits and _)`);
     if (v === null || v === '') {
+      if (keys[k] && opts.undo) removed.set(k, { value: keys[k]!, at: Date.now() });
+      else removed.delete(k);
       delete keys[k];
       setEnv(k, undefined);
     } else if (typeof v === 'string') {
       const value = v.trim();
+      // a key set again: an older Undo must not bring back the value it replaced
+      removed.delete(k);
       if (value.length > 4096 || /[\r\n]/.test(value)) throw new Error(`the value of ${k} is not a key`);
       keys[k] = value;
       setEnv(k, value);

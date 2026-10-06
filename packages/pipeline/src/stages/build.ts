@@ -236,7 +236,7 @@ export function estimateBuild(
   const langs = opts.langs ?? project.book.langs.length;
   const rows: [string, string, number, number][] = [
     ['plan', resolveRole('planner', project.config), 20000, 4000],
-    ...chapterRows(project, chapters, chars, langs),
+    ...chapterRows((r) => resolveRole(r, project.config), chapters, chars, langs),
   ];
   let total = 0;
   const lines = rows.map(([stage, model, i, o]) => {
@@ -248,15 +248,17 @@ export function estimateBuild(
   return { p50: total, p90: total * 2.2, lines };
 }
 
-/** The model calls of making `chapters` chapters of about `chars` characters each: storyboard, beats, translation. */
+/**
+ * The model calls of making `chapters` chapters of about `chars` characters each: storyboard, beats, translation.
+ * `role` names the model of each role (a book's, or a model set's for its price).
+ */
 function chapterRows(
-  project: Project,
+  role: (r: Parameters<typeof resolveRole>[0]) => string,
   chapters: number,
   chars: number,
   langs: number,
 ): [string, string, number, number][] {
   const tok = (c: number) => c / 3.5;
-  const role = (r: Parameters<typeof resolveRole>[0]) => resolveRole(r, project.config);
   const beats = 14;
   const writerIn = 9000 + tok(Math.min(chars, 16000));
   const rows: [string, string, number, number][] = [
@@ -268,6 +270,24 @@ function chapterRows(
     rows.push(['translate', role('translator'), 9000 * (langs - 1) * chapters, 7000 * (langs - 1) * chapters]);
   return rows;
 }
+
+/**
+ * What making one chapter costs with a model set (or a set with some roles changed): about 15 beats in three
+ * languages by default, with the same formula as a book's estimate. For AI and voices' prices.
+ */
+export function estimateSetChapter(
+  cfg: { preset?: string | undefined; models?: Record<string, string> },
+  opts: { chars?: number; langs?: number } = {},
+): number {
+  return chapterRows((r) => resolveRole(r, cfg), 1, opts.chars ?? 10000, opts.langs ?? 3).reduce(
+    (a, [, m, i, o]) => a + costOf(m, i, o),
+    0,
+  );
+}
+
+/** How a model set is paid for: by use, on a free tier with daily limits, free on this computer, or prepaid. */
+export const setPricing = (id: string): 'paid' | 'free-tier' | 'free' | 'prepaid' =>
+  id === 'google' ? 'free-tier' : id === 'local' ? 'free' : id === 'openrouter' ? 'prepaid' : 'paid';
 
 /**
  * What drafting the plan costs, and what making each chapter of the plan costs (storyboard, beats, translation;
@@ -291,7 +311,7 @@ export function estimateChapters(project: Project): {
   for (const c of plan?.chapters ?? []) {
     let chars = 0;
     for (let n = c.pages[0]; n <= c.pages[1]; n++) chars += read.has(n) ? (perPage.get(n) ?? 0) : average;
-    chapters[c.id] = chapterRows(project, 1, Math.max(chars, 2000), langs).reduce(
+    chapters[c.id] = chapterRows((r) => resolveRole(r, project.config), 1, Math.max(chars, 2000), langs).reduce(
       (a, [, m, i, o]) => a + costOf(m, i, o),
       0,
     );

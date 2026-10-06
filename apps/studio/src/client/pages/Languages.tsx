@@ -226,7 +226,7 @@ function LanguageCard({
           <p className="lang-voice-row">
             <Icon name="voice" size={20} />
             <span className="lang-voice-name">{t('voice.noVoice')}</span>
-            <Link to={`/project/${encodeURIComponent(p.id)}/settings#speech`}>{t('learn.setup.change')}</Link>
+            <Link to={`/ai?book=${encodeURIComponent(p.id)}#voices`}>{t('learn.setup.change')}</Link>
           </p>
         </div>
       ) : (

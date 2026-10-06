@@ -2,6 +2,7 @@
 
 import type { KeyCheck } from '../shared/providers';
 import type {
+  AiDefaults,
   BookPlan,
   CheckDetail,
   EditorCatalog,
@@ -25,6 +26,7 @@ import type {
   StagePart,
   StatusInfo,
   StringEntry,
+  VoiceSample,
 } from '../shared/types';
 import { withBase } from './base';
 
@@ -89,7 +91,9 @@ export interface SaveLessonResult {
 export const api = {
   status: () => req<StatusInfo>('GET', '/api/status'),
   keys: () => req<{ keys: KeyInfo[]; file: string }>('GET', '/api/keys'),
-  saveKeys: (patch: Record<string, string | null>) => req<{ keys: KeyInfo[]; file: string }>('PUT', '/api/keys', patch),
+  /** `undo`: the keys removed can be put back for a few minutes (`restoreKeys`). */
+  saveKeys: (patch: Record<string, string | null>, opts: { undo?: boolean } = {}) =>
+    req<{ keys: KeyInfo[]; file: string }>('PUT', opts.undo ? '/api/keys?undo=1' : '/api/keys', patch),
   projects: () => req<{ projects: ProjectListItem[]; root: string }>('GET', '/api/projects'),
   createProject: (form: FormData) => req<ProjectDetail>('POST', '/api/projects', form),
   project: (id: string) => req<ProjectDetail>('GET', `/api/projects/${encodeURIComponent(id)}`),
@@ -101,7 +105,20 @@ export const api = {
       'GET',
       `/api/projects/${encodeURIComponent(id)}/estimate?learn=1${chapter ? `&chapter=${encodeURIComponent(chapter)}` : ''}`,
     ),
-  checkKey: (provider: string, key: string) => req<KeyCheck>('POST', '/api/keys/check', { provider, key }),
+  checkKey: (provider: string, key: string, secret?: string) =>
+    req<KeyCheck>('POST', '/api/keys/check', { provider, key, ...(secret ? { secret } : {}) }),
+  /** Undo: put back keys removed a moment ago (the server kept them aside). */
+  restoreKeys: (names: string[]) =>
+    req<{ restored: string[]; keys: KeyInfo[]; file: string }>('POST', '/api/keys/restore', { names }),
+  /** Is a model server answering on this computer (free)? */
+  localModels: (provider: 'ollama' | 'compat' = 'ollama') =>
+    req<{ ok: boolean; base: string; models: string[] }>('GET', `/api/keys/local?provider=${provider}`),
+  /** What new books start with (AI and voices). */
+  defaults: () => req<AiDefaults>('GET', '/api/defaults'),
+  saveDefaults: (patch: Record<string, unknown>) => req<AiDefaults>('PUT', '/api/defaults', patch),
+  /** A voice reading its language's fixed sentence (kept: a second play is free). */
+  voiceSample: (s: { engine: string; voice: string; lang: string; rate?: string; book?: string }) =>
+    req<VoiceSample>('POST', '/api/voices/sample', s),
   /** `from`: the level the chapter was made at (a changed answer moves from there, never two steps). */
   learnFeedback: (id: string, feedback: 'too-easy' | 'right' | 'too-hard', from?: LearnLevel) =>
     req<{ level: LearnLevel }>('POST', `/api/projects/${encodeURIComponent(id)}/learn/feedback`, {

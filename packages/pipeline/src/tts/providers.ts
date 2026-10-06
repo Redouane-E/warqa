@@ -323,13 +323,15 @@ export function workerTts(base: string): TtsProvider {
         { text, voice: opts.voice, lang: opts.lang, rate: opts.rate },
         {},
       );
-      const j = (await res.json()) as { audio_base64: string; ext: 'mp3' | 'wav'; words?: [number, string][] };
+      const j = (await res.json()) as { audio_base64: string; ext: string; words?: [number, string][] };
       const audio = b64(j.audio_base64);
+      // the helper names the format, never the file: anything else than mp3 is read as WAV
+      const ext = j.ext === 'mp3' ? 'mp3' : 'wav';
       return {
         audio,
-        ext: j.ext,
+        ext,
         ...(j.words ? { words: j.words.map(([t, w]) => ({ t, text: w })) } : {}),
-        dur: j.ext === 'wav' ? wavDuration(audio) : mp3Duration(audio),
+        dur: ext === 'wav' ? wavDuration(audio) : mp3Duration(audio),
       };
     },
   };

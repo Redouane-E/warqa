@@ -2,14 +2,30 @@
 // this before a key is saved. Runs on the studio server, and in the web app's worker (the same server).
 import { type KeyCheck, providerById } from '../shared/providers';
 
-async function probe(url: string, headers: Record<string, string>): Promise<KeyCheck> {
+/** The model names a local server lists (Ollama `{models: [{name}]}`, OpenAI-compatible `{data: [{id}]}`). */
+async function modelNames(res: Response): Promise<string[]> {
+  try {
+    const j = (await res.json()) as { models?: { name?: string }[]; data?: { id?: string }[] };
+    return [...(j.models ?? []).map((m) => m.name), ...(j.data ?? []).map((m) => m.id)]
+      .filter((n): n is string => typeof n === 'string')
+      .slice(0, 50);
+  } catch {
+    return [];
+  }
+}
+
+async function probe(
+  url: string,
+  headers: Record<string, string>,
+  opts: { list?: boolean; timeout?: number } = {},
+): Promise<KeyCheck> {
   let res: Response;
   try {
-    res = await fetch(url, { headers, signal: AbortSignal.timeout(20000) });
+    res = await fetch(url, { headers, signal: AbortSignal.timeout(opts.timeout ?? 20000) });
   } catch (e) {
     return { ok: false, reason: 'network', message: (e as Error).message };
   }
-  if (res.ok) return { ok: true };
+  if (res.ok) return opts.list ? { ok: true, models: await modelNames(res) } : { ok: true };
   const text = (await res.text().catch(() => '')).slice(0, 300);
   if (res.status === 429) return { ok: true, warning: 'rate' };
   // Gemini and xAI answer a wrong key with 400 ("API key not valid", "Incorrect API key")
@@ -19,8 +35,8 @@ async function probe(url: string, headers: Record<string, string>): Promise<KeyC
   return { ok: false, reason: 'http', status: res.status, message: text };
 }
 
-/** `fake`: the test model is a provider here (the web app's test mode); it needs no key. */
-export async function checkKey(provider: string, key: string, fake = false): Promise<KeyCheck | null> {
+/** `fake`: the test model is a provider here (the web app's test mode); it needs no key. `secret`: a local server's key. */
+export async function checkKey(provider: string, key: string, fake = false, secret = ''): Promise<KeyCheck | null> {
   const p = providerById(provider, fake);
   if (!p) return null;
   if (p.id === 'fake') return { ok: true };
@@ -37,6 +53,19 @@ export async function checkKey(provider: string, key: string, fake = false): Pro
     if (!/^https?:$/.test(u.protocol) || /[?#@]/.test(value))
       return { ok: false, reason: 'network', message: 'use an address like http://localhost:11434/api' };
   }
-  const req = p.check!(value);
-  return probe(req.url, req.headers);
+  if (p.id === 'compat' && !value) return { ok: false, reason: 'network', message: 'the server address is missing' };
+  const req = p.check!(value, secret.trim() || undefined);
+  return probe(req.url, req.headers, { list: !!p.local });
+}
+
+/** Is a local server answering (free: it lists its models)? Ollama at its address, or the default one. */
+export async function localModels(provider: string): Promise<{ ok: boolean; base: string; models: string[] }> {
+  const p = providerById(provider);
+  if (!p?.local || !p.check) return { ok: false, base: '', models: [] };
+  const base = process.env[p.env]?.trim() || (p.id === 'ollama' ? 'http://localhost:11434/api' : '');
+  if (!base) return { ok: false, base, models: [] };
+  const secret = p.secretEnv ? process.env[p.secretEnv]?.trim() : undefined;
+  const req = p.check(base, secret || undefined);
+  const r = await probe(req.url, req.headers, { list: true, timeout: 3000 });
+  return { ok: r.ok, base, models: r.ok ? (r.models ?? []) : [] };
 }

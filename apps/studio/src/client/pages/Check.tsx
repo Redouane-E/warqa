@@ -492,7 +492,7 @@ export function CheckStep({
         {d?.stale && <Notice>{t('check.stale')}</Notice>}
         {d && !d.judge && d.checked && (
           <Notice>
-            {t('check.noJudge')} <Link to="/ai">{t('nav.ai')}</Link>
+            {t('check.noJudge')} <Link to={`/ai?book=${encodeURIComponent(p.id)}#roles`}>{t('nav.ai')}</Link>
           </Notice>
         )}
         {error && <Notice tone="error">{error}</Notice>}

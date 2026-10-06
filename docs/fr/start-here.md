@@ -64,15 +64,16 @@ Pour commencer, choisissez-en une :
   achetez un peu de crédit et créez une clé. L’ensemble **OpenRouter (one key)** utilise un modèle
   d’écriture haut de gamme, plus cher que les deux options précédentes.
 
-Ensuite, dans Warqa, ouvrez **Clés**, collez la clé et cliquez sur **Enregistrer les clés**.
+Ensuite, dans Warqa, ouvrez **IA et voix**, cliquez sur **Ajouter une clé** à côté du service, collez la clé
+et cliquez sur **Vérifier et enregistrer**.
 
 > **À propos du coût.** En dehors des offres gratuites, les services d’IA facturent chaque utilisation.
 > Avec les options bon marché, un chapitre coûte en général quelques centimes ; les meilleurs modèles
 > coûtent plus cher. Avant de commencer, Warqa affiche une estimation (**Pour tout créer**) et ce que vous
 > avez déjà dépensé (**Dépensé**). Par prudence :
 >
-> - fixez un **plafond de dépense** dans les réglages de votre livre : **Réglages → Budget et outils →
->   Plafond de dépense (USD)**, par exemple 1 ou 2. Warqa s’arrête avant de le dépasser ;
+> - fixez une **limite de dépense** dans les **Réglages du livre** (sous les six étapes du livre) **→ Limite
+>   de dépense**, par exemple 1 ou 2. Warqa s’arrête avant de la dépasser ;
 > - préférez un **crédit prépayé** sur le site du service, et fixez-y aussi une limite ;
 > - refaire une étape est gratuit : Warqa garde en mémoire les réponses déjà payées.
 
@@ -112,8 +113,8 @@ enseignant** montre toutes les étapes si vous voulez modifier quelque chose. Si
 plan vous-même, cliquez sur **Je préfère revoir le plan d’abord** au lieu d’**Apprends-moi** : vous suivez
 alors le parcours de l’enseignant.
 
-Un nouveau cours a un plafond de dépense de 1 $. Modifiez-le dans les réglages du livre : **Réglages → Budget
-et outils → Plafond de dépense (USD)**. En ligne de commande : `warqa learn my.pdf --lang ar --level beginner`
+Un nouveau cours a une limite de dépense de 1 $. Modifiez-la dans les **Réglages du livre → Limite de
+dépense**. En ligne de commande : `warqa learn my.pdf --lang ar --level beginner`
 (niveaux : `beginner`, `some`, `advanced`).
 
 ## Votre premier livre, pas à pas
@@ -121,14 +122,16 @@ et outils → Plafond de dépense (USD)**. En ligne de commande : `warqa learn m
 Commencez petit : un chapitre de 10 à 20 pages.
 
 1. **Ouvrez Warqa** et choisissez la **Langue de l’interface** en haut de la page.
-2. Ouvrez **Clés**, collez votre clé, cliquez sur **Enregistrer les clés**.
+2. Ouvrez **IA et voix** (en haut de la page). Dans **Clés**, cliquez sur **Ajouter une clé** à côté de votre
+   service, collez la clé et cliquez sur **Vérifier et enregistrer** (la vérification est gratuite). Votre
+   première clé choisit aussi l’**Ensemble de modèles** des nouveaux livres ; vous pouvez le changer là.
 3. Dans **Vos livres**, cliquez sur **Nouveau livre**. Déposez le PDF là où il est écrit **Déposez le PDF
    ici**, donnez un titre, cochez les **Langues des leçons**, choisissez la langue dans laquelle **Les leçons
    sont d’abord écrites**, et répondez à **Pour qui sont les leçons ?** (par exemple « collège, 1re année »).
    Cliquez sur **Créer le livre**.
-4. Ouvrez les **Réglages** du livre. Dans **Modèles d’IA**, choisissez un **Ensemble de modèles** adapté à
-   votre clé (ou laissez le choix automatique). Dans **Budget et outils**, fixez un **Plafond de dépense
-   (USD)**. Cliquez sur **Enregistrer les réglages**.
+4. Ouvrez les **Réglages du livre** sous les six étapes du livre, fixez une **Limite de dépense** et cliquez
+   sur **Enregistrer les réglages**. (Les modèles et les voix de ce livre se changent dans **IA et voix** :
+   **Modifier**, à l’étape de création, l’ouvre pour ce livre.)
 5. **Lire le PDF.** Pour commencer petit, remplissez **Seulement ces pages** (par exemple `1-20`), puis
    cliquez sur **Lire le PDF**.
 6. **Plan.** Cliquez sur **Proposer le plan**. Lisez les chapitres, décochez ceux dont vous ne voulez pas,
@@ -153,8 +156,8 @@ Commencez petit : un chapitre de 10 à 20 pages.
 | Windows : « Windows a protégé votre ordinateur » | Cliquez sur *Informations complémentaires* → *Exécuter quand même*. |
 | Le navigateur ne s’ouvre pas | Attendez la fin du premier démarrage, puis ouvrez vous-même <http://127.0.0.1:5170/>. |
 | « Port 5170 is in use » | Warqa est déjà lancé : ouvrez <http://127.0.0.1:5170/>. |
-| « Pas encore de modèle : ajoutez une clé » ou « needs …_API_KEY » | Ajoutez une clé dans **Clés** et choisissez un **Ensemble de modèles** qui utilise cette clé. |
-| « budget reached » | Vous avez atteint votre plafond. Ne l’augmentez dans les **Réglages** que si vous êtes d’accord. |
+| « Pas encore de modèle : ajoutez une clé » ou « needs …_API_KEY » | Ajoutez une clé dans **IA et voix → Clés** et choisissez un **Ensemble de modèles** qui utilise cette clé. |
+| « budget reached » | Vous avez atteint votre limite. Ne l’augmentez dans les **Réglages du livre** que si vous êtes d’accord. |
 | Une erreur avec 401 ou 403 | La clé est fausse ou a été supprimée. Créez-en une nouvelle et collez-la à nouveau. |
 | Une erreur avec 429, « quota » ou « rate limit » | Trop de demandes à la fois (les offres gratuites sont limitées). Patientez un peu et relancez : le travail terminé est conservé. |
 | Le texte arabe est abîmé, ou les pages sont des scans | Cliquez sur **Relire** en cochant **Pages scannées ou cassées**, avec un ensemble de modèles qui lit les images (Gemini). |

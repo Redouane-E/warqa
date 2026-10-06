@@ -1,6 +1,6 @@
 // The top bar (the same six things everywhere: the mark, Go to, the book's spend, AI and voices, the interface
 // language, Sheet or Board) and the stack strips that show the places under the one you are on.
-import { useSyncExternalStore } from 'react';
+import { useEffect, useSyncExternalStore } from 'react';
 import { useExtras } from '../extras';
 import { setLang, UI_LANGS, type UiLang, useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
@@ -53,6 +53,14 @@ const subscribeTheme = (f: () => void) => {
 
 const isMac = typeof navigator !== 'undefined' && /Mac|iPhone|iPad/.test(navigator.platform);
 
+/**
+ * The place AI and voices was opened from (it "stacks on whatever you were doing"): its strip leads back there, and
+ * a book you came from gets a line to change its own model set.
+ */
+export const cameFrom: {
+  current: { book?: { id: string; title: string; step: (typeof STEPS)[number] }; learn?: boolean } | null;
+} = { current: null };
+
 export function TopBar({ onGoTo }: { onGoTo: () => void }) {
   const { t, lang, usd } = useI18n();
   const { path } = useLocation();
@@ -63,6 +71,15 @@ export function TopBar({ onGoTo }: { onGoTo: () => void }) {
   const book = place.book;
   const ai = path === '/ai' || path === '/settings';
   const learner = mode() === 'learn';
+  // remember where you are, for AI and voices' strip
+  const [bookId, bookName, bookStep] = [book?.id, book?.title, book?.step];
+  useEffect(() => {
+    if (path === '/ai' || path === '/settings') return;
+    cameFrom.current = {
+      ...(bookId && bookName && bookStep ? { book: { id: bookId, title: bookName, step: bookStep } } : {}),
+      ...(path.startsWith('/learn') ? { learn: true } : {}),
+    };
+  }, [path, bookId, bookName, bookStep]);
   return (
     <header className="topbar">
       <a className="skip" href="#main">
@@ -158,10 +175,29 @@ export function useStrips(): Strip[] {
   // a learner's course and chapter lie on What I'm learning
   if (path !== '/learn/new' && (match('/learn/:id', path) || match('/learn/:id/:lid', path)))
     return [{ to: '/learn', title: t('learn.home.title') }];
+  // AI and voices lies on the place it was opened from: a book at its step, What I'm learning, or Your books
+  if (path === '/ai') {
+    const from = cameFrom.current;
+    if (from?.book)
+      return [
+        {
+          to: `/project/${encodeURIComponent(from.book.id)}?step=${from.book.step}`,
+          title: from.book.title,
+          meta: t('strips.step', {
+            k: num(STEPS.indexOf(from.book.step) + 1),
+            n: num(STEPS.length),
+            name: t(`step.${from.book.step}` as MsgKey),
+          }),
+        },
+      ];
+    if (from?.learn) return [{ to: '/learn', title: t('learn.home.title') }];
+    return [{ to: '/', title: t('nav.books') }];
+  }
   const m = match('/project/:id', path) ?? match('/project/:id/:sub', path) ?? match('/project/:id/lesson/:lid', path);
   if (!m) return [];
   const strips: Strip[] = [{ to: '/', title: t('nav.books') }];
-  if (match('/project/:id', path)) return strips;
+  // the book's settings are a sheet over the book itself
+  if (match('/project/:id', path) || match('/project/:id/settings', path)) return strips;
   const id = m.id!;
   const book = place.book?.id === id ? place.book : undefined;
   const step = book?.step;

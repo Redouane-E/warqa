@@ -59,13 +59,14 @@ Choose one to start:
   create a key. The set **OpenRouter (one key)** uses a high-quality writer, which costs more than the two
   options above.
 
-Then, in Warqa, open **Keys**, paste the key and click **Save keys**.
+Then, in Warqa, open **AI and voices**, click **Add a key** beside the service, paste the key and click
+**Check and save**.
 
 > **About cost.** Apart from free tiers, AI services charge for each use. With the cheap options, a chapter
 > usually costs a few cents; the best models cost more. Before you start, Warqa shows an estimate
 > (*To build everything*), and it shows what you have spent (*Spent so far*). To be safe:
-> - set a **spending limit** in your book's **Settings → Budget and tools → Spending limit (USD)**, for
->   example 1 or 2. Warqa stops before going over it;
+> - set a **spending limit** in your book's **Book settings** (under the book's six steps) **→ Spending
+>   limit**, for example 1 or 2. Warqa stops before going over it;
 > - prefer **prepaid credit** on the service's website, and set a limit there too;
 > - doing a step again is free: Warqa remembers the answers it already paid for.
 
@@ -101,8 +102,8 @@ Your courses are listed on **What I'm learning**. A course is an ordinary book: 
 every step if you want to change something. If you would rather check the plan yourself, click **I'd rather
 review the plan first** instead of **Teach me**, and you follow the teacher's path.
 
-A new course has a spending limit of $1. Change it in the book's **Settings → Budget and tools → Spending
-limit (USD)**. On the command line: `warqa learn my.pdf --lang ar --level beginner` (levels: `beginner`,
+A new course has a spending limit of $1. Change it in the book's **Book settings → Spending limit**. On the
+command line: `warqa learn my.pdf --lang ar --level beginner` (levels: `beginner`,
 `some`, `advanced`).
 
 ## Your first book, step by step
@@ -110,12 +111,15 @@ limit (USD)**. On the command line: `warqa learn my.pdf --lang ar --level beginn
 Start small: one chapter of 10 to 20 pages.
 
 1. **Open Warqa** and choose the **Interface language** at the top of the page.
-2. Open **Keys**, paste your key, click **Save keys**.
+2. Open **AI and voices** (top of the page). Under **Keys**, click **Add a key** beside your service, paste
+   the key and click **Check and save** (checking is free). Your first key also chooses the **Model set**
+   new books use; you can change it there.
 3. In **Your books**, click **New book**. Drop the PDF where it says **Drop the PDF here**, give a title,
    tick the **Languages of the lessons**, choose the language **Lessons are written first in**, and say
    **Who are the lessons for?** (for example "first year of middle school"). Click **Create book**.
-4. Open the book's **Settings**. Under **AI models**, choose a **Model set** that matches your key (or leave it on automatic). Under
-   **Budget and tools**, set a **Spending limit (USD)**. Click **Save settings**.
+4. Open **Book settings** under the book's six steps, set a **Spending limit** and click **Save settings**.
+   (The models and voices of this book are changed in **AI and voices**: **Change** on the Make step opens it
+   for this book.)
 5. **Read the PDF.** To start small, fill in **Only these pages** (for example `1-20`), then click
    **Read the PDF**.
 6. **Plan.** Click **Draft the plan**. Read the chapters, untick the ones you do not want, then click
@@ -141,8 +145,8 @@ Start small: one chapter of 10 to 20 pages.
 | Windows: "Windows protected your PC" | Click *More info* → *Run anyway*. |
 | The browser does not open | Wait for the first start to finish, then open <http://127.0.0.1:5170/> yourself. |
 | "Port 5170 is in use" | Warqa is already running: open <http://127.0.0.1:5170/>. |
-| "No model yet: add a key" or "needs …_API_KEY" | Add a key in **Keys**, and choose a **Model set** that uses that key. |
-| "budget reached" | You hit your spending limit. Raise it in **Settings** only if you agree. |
+| "No model yet: add a key" or "needs …_API_KEY" | Add a key in **AI and voices → Keys**, and choose a **Model set** that uses that key. |
+| "budget reached" | You hit your spending limit. Raise it in **Book settings** only if you agree. |
 | An error with 401 or 403 | The key is wrong or was deleted. Create a new one and paste it again. |
 | An error with 429, "quota" or "rate limit" | Too many requests (free tiers have limits). Wait a little and click again: finished work is kept. |
 | Arabic text looks broken, or the pages are photos | Click **Read again** with **Scanned or broken pages** ticked, and use a model set that reads images (Gemini). |

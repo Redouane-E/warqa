@@ -1,4 +1,6 @@
 // The studio's HTTP API (Hono). createApp() is used by the server entry and by the tests.
+
+import { createHash } from 'node:crypto';
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { createRequire } from 'node:module';
 import { basename, dirname, join, resolve } from 'node:path';
@@ -46,10 +48,20 @@ import type {
 } from '../shared/types.js';
 import { JOB_TYPES } from '../shared/types.js';
 import { checkDetail } from './checks.js';
+import {
+  AiPatch,
+  type AiPatch as AiPatchT,
+  type AiSettings,
+  applyAiPatch,
+  BadSetting,
+  loadDefaults,
+  saveDefaults,
+  VOICE_ID,
+} from './defaults.js';
 import { safeJoin, sendFile } from './files.js';
 import { ingestAvailable, Jobs, type Runner } from './jobs.js';
-import { checkKey } from './keycheck';
-import { keysFile, maskedKeys, saveKeys } from './keys.js';
+import { checkKey, localModels } from './keycheck';
+import { keysFile, maskedKeys, restoreKeys, saveKeys, warqaHome } from './keys.js';
 import { lessonLangs, projectDetail, projectSummary, Registry } from './projects.js';
 import { panelDir, panelKeyPath, panelZipPath, zipPath, zipReady } from './zip.js';
 
@@ -70,6 +82,8 @@ export interface AppOptions {
   llm?: Partial<P.LlmOptions>;
   /** Speech engine of new projects (default "edge"). */
   defaultTts?: string;
+  /** Replace the speech engines (tests, the web app's test mode): no network, no cost. */
+  tts?: (id: string) => P.TtsProvider;
 }
 
 const DESKTOP: Capabilities = {
@@ -151,10 +165,14 @@ function stringIssueMap(issues: LessonIssue[]): Record<string, string[]> {
 }
 
 export function createApp(opts: AppOptions) {
-  const registry = new Registry(opts.root, opts.defaultTts);
+  const caps: Capabilities = { ...DESKTOP, ...opts.capabilities };
+  const registry = new Registry(opts.root, opts.defaultTts, {
+    defaults: loadDefaults,
+    ttsUnavailable: caps.ttsUnavailable,
+    worker: caps.worker,
+  });
   const jobs = new Jobs(registry, opts.runners, opts.llm);
   const host = opts.host ?? '127.0.0.1';
-  const caps: Capabilities = { ...DESKTOP, ...opts.capabilities };
   // the desktop: can Playwright's browser and ffmpeg run here (checks, the judge, videos)? Asked once.
   if (caps.platform === 'desktop') {
     if (caps.playwright === undefined) {
@@ -239,6 +257,8 @@ export function createApp(opts: AppOptions) {
         needs: p.needs,
         available: avail.has(p.id),
         missing: p.needs.filter((g) => !g.some((k) => keys[k]?.trim())).map((g) => g[0]!),
+        chapterUsd: +P.estimateSetChapter({ preset: p.id }).toFixed(4),
+        pricing: P.setPricing(p.id),
       })),
       roles: P.ROLES.map((r) => ({ id: r, info: P.ROLE_INFO[r] })),
       models: P.listModels().map((m) => ({
@@ -262,7 +282,7 @@ export function createApp(opts: AppOptions) {
           t = undefined;
         }
         const voices: Record<string, string> = {};
-        for (const l of ['ar', 'fr', 'en']) {
+        for (const l of ['ar', 'ary', 'fr', 'en']) {
           const v = t?.defaultVoice(l);
           if (v) voices[l] = v;
         }
@@ -273,15 +293,26 @@ export function createApp(opts: AppOptions) {
           google: ['GOOGLE_TTS_API_KEY'],
           gemini: ['GEMINI_API_KEY'],
         };
+        const need = keyNames[id] ?? [];
         return {
           id,
           ...(t?.note ? { note: t.note } : {}),
           ...(t?.costPerMChars !== undefined ? { costPerMChars: t.costPerMChars } : {}),
           wordTimes: !!t?.wordTimes,
           voices,
-          keys: keyNames[id] ?? [],
+          keys: need,
+          free: !t?.costPerMChars,
+          ...(id === 'azure' ? { freeTier: true } : {}),
+          // Gemini's voices take either Google key
+          keyReady:
+            id === 'gemini'
+              ? !!(keys.GEMINI_API_KEY?.trim() || keys.GOOGLE_GENERATIVE_AI_API_KEY?.trim())
+              : need.every((k) => keys[k]?.trim()),
+          catalog: P.VOICES[id] ?? [],
+          sampleUsd: +P.sampleCost(id, 'en').toFixed(5),
         };
       }),
+      sampleText: P.SAMPLE_TEXT,
       ingest: ingestAvailable(),
       qa: !caps.jobsUnavailable.includes('qa') && caps.playwright !== false,
       capabilities: caps,
@@ -295,18 +326,142 @@ export function createApp(opts: AppOptions) {
     if (!body || typeof body !== 'object' || Array.isArray(body))
       throw new ApiError(400, 'send an object like {"ANTHROPIC_API_KEY": "…"}');
     try {
-      saveKeys(body as Record<string, unknown>);
+      // ?undo=1: a Remove that offers Undo (the removed key is kept aside a few minutes, never sent back)
+      saveKeys(body as Record<string, unknown>, { undo: c.req.query('undo') === '1' });
     } catch (e) {
       throw new ApiError(400, (e as Error).message);
     }
     return c.json({ keys: maskedKeys(), file: keysFile() });
   });
+  /** Undo of a key just removed: the server put it aside (it never goes to the browser). */
+  app.post('/api/keys/restore', async (c) => {
+    const body = (await jsonBody(c)) as { names?: unknown } | null;
+    const names = Array.isArray(body?.names) ? body.names.filter((n): n is string => typeof n === 'string') : [];
+    const restored = restoreKeys(names);
+    return c.json({ restored, keys: maskedKeys(), file: keysFile() });
+  });
   /** The start guide checks a key without spending anything before saving it (this call stores nothing). */
   app.post('/api/keys/check', async (c) => {
-    const body = (await jsonBody(c)) as { provider?: string; key?: string } | null;
-    const r = await checkKey(String(body?.provider ?? ''), String(body?.key ?? ''), !!opts.llm?.fake);
+    const body = (await jsonBody(c)) as { provider?: string; key?: string; secret?: string } | null;
+    const r = await checkKey(
+      String(body?.provider ?? ''),
+      String(body?.key ?? ''),
+      !!opts.llm?.fake,
+      String(body?.secret ?? ''),
+    );
     if (!r) throw new ApiError(400, `unknown provider "${body?.provider}"`);
     return c.json(r);
+  });
+  /** Is a model server running on this computer (Ollama)? Free: it lists its models. */
+  app.get('/api/keys/local', async (c) => {
+    const provider = c.req.query('provider') ?? 'ollama';
+    if (provider !== 'ollama' && provider !== 'compat') throw new ApiError(400, `"${provider}" is not a local server`);
+    return c.json(await localModels(provider));
+  });
+
+  /* ---------- defaults for new books (AI and voices) ---------- */
+
+  app.get('/api/defaults', (c) => c.json(loadDefaults()));
+  app.put('/api/defaults', async (c) => {
+    let patch: AiPatchT;
+    try {
+      patch = AiPatch.parse(await jsonBody(c));
+    } catch (e) {
+      if (e instanceof z.ZodError) throw new ApiError(400, e.issues.map((i) => i.message).join('; '));
+      throw e;
+    }
+    try {
+      return c.json(saveDefaults(patch));
+    } catch (e) {
+      if (e instanceof BadSetting) throw new ApiError(400, e.message);
+      throw e;
+    }
+  });
+
+  /* ---------- voice samples (AI and voices) ---------- */
+
+  const engine = (id: string, worker?: string): P.TtsProvider =>
+    opts.tts ? opts.tts(id) : P.ttsProvider(id, worker ? { worker } : {});
+  const samplesDir = () => join(warqaHome(), 'samples');
+  const SAMPLE_FILE = /^[0-9a-f]{40}\.(mp3|wav)$/;
+
+  /**
+   * One fixed sentence in a language read by a voice (no text of the caller's: not a speech proxy). Kept, so playing
+   * it again is free; the folder keeps about 5 MB, oldest first. A paid engine's sample costs a fraction of a cent
+   * (the page says "paid" before the click); it is in no book's ledger.
+   */
+  app.post('/api/voices/sample', async (c) => {
+    const body = ((await jsonBody(c)) ?? {}) as {
+      engine?: unknown;
+      voice?: unknown;
+      lang?: unknown;
+      rate?: unknown;
+      book?: unknown;
+    };
+    const id = String(body.engine ?? '');
+    const lang = String(body.lang ?? '');
+    const rate = body.rate === undefined || body.rate === null ? '' : String(body.rate);
+    if (!(P.TTS_IDS as readonly string[]).includes(id) || id === 'none')
+      throw new ApiError(400, `no speech engine "${id}"`);
+    if (!LANG.test(lang)) throw new ApiError(400, 'unknown language');
+    const text = P.sampleText(lang);
+    if (!text) throw new ApiError(400, `no sample sentence in "${lang}" yet`);
+    if (rate && !/^[+-]?\d{1,2}%$/.test(rate)) throw new ApiError(400, 'a rate looks like "-4%"');
+    if (caps.ttsUnavailable.includes(id))
+      throw new ApiError(409, `the "${id}" voices need the desktop version of Warqa`, { code: 'desktop' });
+    // the local helper of the book being set (AI and voices for a book), else the one for new books
+    const bookId = typeof body.book === 'string' ? body.book : '';
+    const worker =
+      id === 'worker' ? (bookId ? project(bookId).config.worker : undefined) || loadDefaults().worker : undefined;
+    let t: P.TtsProvider;
+    try {
+      t = engine(id, worker);
+    } catch (e) {
+      throw new ApiError(422, (e as Error).message, { code: 'setup' });
+    }
+    const voice = String(body.voice ?? '') || t.defaultVoice(lang) || '';
+    if (!VOICE_ID.test(voice)) throw new ApiError(400, `"${voice}" is not a voice name`);
+    const dir = samplesDir();
+    const hash = createHash('sha1')
+      .update(JSON.stringify([id, voice, lang, rate, text]))
+      .digest('hex');
+    for (const ext of ['mp3', 'wav'])
+      if (existsSync(join(dir, `${hash}.${ext}`)))
+        return c.json({ url: url(`/api/voices/samples/${hash}.${ext}`), cached: true, usd: 0 });
+    let r: Awaited<ReturnType<P.TtsProvider['synth']>>;
+    try {
+      r = await t.synth(text, { voice, lang, ...(rate ? { rate } : {}) });
+    } catch (e) {
+      const msg = (e as Error).message;
+      // an engine whose key is missing says so ("needs GEMINI_API_KEY")
+      if (/needs [A-Z_]+|API[_ ]KEY/.test(msg)) throw new ApiError(422, msg, { code: 'key' });
+      throw new ApiError(500, `the voice could not read the sample: ${msg}`);
+    }
+    if (r.ext !== 'mp3' && r.ext !== 'wav') throw new ApiError(500, 'the voice answered in an unknown format');
+    mkdirSync(dir, { recursive: true });
+    writeFileSync(join(dir, `${hash}.${r.ext}`), r.audio);
+    // about 5 MB of samples at most: the oldest go first
+    const files = readdirSync(dir)
+      .filter((f) => SAMPLE_FILE.test(f))
+      .map((f) => ({ f, ...statSync(join(dir, f)) }))
+      .sort((a, b) => b.mtimeMs - a.mtimeMs);
+    let total = 0;
+    for (const x of files) {
+      total += x.size;
+      if (total > 5 * 1024 * 1024) rmSync(join(dir, x.f), { force: true });
+    }
+    return c.json({
+      url: url(`/api/voices/samples/${hash}.${r.ext}`),
+      cached: false,
+      usd: +((text.length * (t.costPerMChars ?? 0)) / 1e6).toFixed(5),
+    });
+  });
+  app.get('/api/voices/samples/:file', (c) => {
+    const file = c.req.param('file');
+    if (!SAMPLE_FILE.test(file)) throw new ApiError(404, 'no such sample');
+    const f = join(samplesDir(), file);
+    if (!existsSync(f)) throw new ApiError(404, 'no such sample');
+    return sendFile(c.req.raw, f, { cache: 'no-store' });
   });
 
   /* ---------- projects ---------- */
@@ -371,27 +526,12 @@ export function createApp(opts: AppOptions) {
     return c.json(projectDetail(id, project(id), jobs.list(id)));
   });
 
-  const Settings = z.object({
+  const Settings = AiPatch.extend({
     langs: z.array(z.string().regex(LANG)).min(1).max(20).optional(),
     defaultLang: z.string().regex(LANG).optional(),
     audience: z.string().max(300).optional(),
     tone: z.string().max(300).optional(),
-    preset: z.string().max(40).nullable().optional(),
-    models: z.record(z.string(), z.string().max(200)).optional(),
-    tts: z
-      .object({
-        provider: z.enum(P.TTS_IDS).optional(),
-        voices: z.record(z.string(), z.string().max(120)).optional(),
-        rate: z
-          .string()
-          .regex(/^[+-]?\d{1,2}%$/)
-          .nullable()
-          .optional(),
-        tashkeel: z.boolean().optional(),
-      })
-      .optional(),
     budget: z.object({ usd: z.number().positive().max(100000).nullable().optional() }).optional(),
-    worker: z.string().max(300).nullable().optional(),
     digits: z.enum(['latn', 'arab']).optional(),
     title: z.record(z.string(), z.string().max(300)).optional(),
     subtitle: z.record(z.string(), z.string().max(500)).optional(),
@@ -415,41 +555,13 @@ export function createApp(opts: AppOptions) {
       book.audience = s.audience || undefined;
     }
     if (s.tone !== undefined) cfg.tone = s.tone || undefined;
-    if (s.preset !== undefined) {
-      if (s.preset && !P.PRESETS.some((x) => x.id === s.preset))
-        throw new ApiError(400, `unknown preset "${s.preset}"`);
-      cfg.preset = s.preset || undefined;
-    }
-    if (s.models) {
-      const models: Record<string, string> = {};
-      for (const [role, m] of Object.entries(s.models)) {
-        if (!(P.ROLES as string[]).includes(role)) throw new ApiError(400, `unknown role "${role}"`);
-        const v = m.trim();
-        if (!v) continue;
-        if (!/^[a-z][a-z0-9-]*:.+$/.test(v))
-          throw new ApiError(400, `model ids look like "provider:model", got "${v}"`);
-        models[role] = v;
-      }
-      cfg.models = models;
-    }
-    if (s.tts) {
-      if (s.tts.provider) cfg.tts.provider = s.tts.provider;
-      if (s.tts.voices)
-        cfg.tts.voices = Object.fromEntries(
-          Object.entries(s.tts.voices)
-            .filter(([k, v]) => LANG.test(k) && v.trim())
-            .map(([k, v]) => [k, v.trim()]),
-        );
-      if (s.tts.rate !== undefined) cfg.tts.rate = s.tts.rate || undefined;
-      if (s.tts.tashkeel !== undefined) cfg.tts.tashkeel = s.tts.tashkeel;
+    try {
+      applyAiPatch(cfg as AiSettings, s);
+    } catch (e) {
+      if (e instanceof BadSetting) throw new ApiError(400, e.message);
+      throw e;
     }
     if (s.budget) cfg.budget.usd = s.budget.usd ?? undefined;
-    if (s.worker !== undefined) {
-      const w = (s.worker ?? '').trim();
-      if (w && !/^https?:\/\/[^\s]+$/.test(w))
-        throw new ApiError(400, 'the worker address must start with http:// or https://');
-      cfg.worker = w || undefined;
-    }
     if (s.digits) book.digits = s.digits;
     const mergeText = (cur: typeof book.title | undefined, patch: Record<string, string>) => {
       const base: Record<string, string> =
@@ -1271,16 +1383,9 @@ export function createApp(opts: AppOptions) {
 
   /** "ar-MA-MounaNeural" → "Mouna"; other engines' voice ids stay as they are. */
   const voiceName = (id: string) => /^[a-z]{2,3}-[A-Z]{2}-(.+?)(?:Multilingual)?Neural$/.exec(id)?.[1] ?? id;
-  /** What a voice reads when the book has no recording of its own yet (the Models board's sentences). */
-  const SAMPLE_TEXT: Record<string, string> = {
-    ar: 'طرح عدد يعني إضافة مقابله.',
-    ary: 'الطرح هو نزيدو المقابل ديال العدد.',
-    fr: 'Soustraire, c’est ajouter l’opposé.',
-    en: 'Subtracting is adding the opposite.',
-  };
   const engineOf = (p: P.Project) => {
     try {
-      return P.ttsProvider(p.config.tts.provider, p.config.worker ? { worker: p.config.worker } : {});
+      return engine(p.config.tts.provider, p.config.worker);
     } catch {
       return undefined;
     }
@@ -1390,8 +1495,7 @@ export function createApp(opts: AppOptions) {
           free,
           available,
           sample:
-            engineId !== 'none' &&
-            (!!sampleClip(p, lessons, lang) || (available && free && !!SAMPLE_TEXT[lang.split('-')[0]!])),
+            engineId !== 'none' && (!!sampleClip(p, lessons, lang) || (available && free && !!P.sampleText(lang))),
         },
         ...(translateUsd !== undefined || narrateUsd !== undefined
           ? {
@@ -1418,7 +1522,7 @@ export function createApp(opts: AppOptions) {
     const clip = sampleClip(p, reviewLessons(p), lang);
     if (clip) return sendFile(c.req.raw, clip, { cache: 'no-store' });
     const engine = engineOf(p);
-    const text = SAMPLE_TEXT[lang.split('-')[0]!];
+    const text = P.sampleText(lang);
     if (!engine || engine.costPerMChars || !text) throw new ApiError(404, 'no sample of this voice yet');
     if (caps.ttsUnavailable.includes(p.config.tts.provider))
       throw new ApiError(409, `the "${p.config.tts.provider}" voice needs the desktop version of Warqa`, {

@@ -9,7 +9,7 @@ import { Button, Icon, Notice } from '../../../studio/src/client/components/ui';
 import { useI18n } from '../../../studio/src/client/i18n';
 import { setOnboarded } from '../../../studio/src/client/prefs';
 import { navigate } from '../../../studio/src/client/router';
-import { type Bridge, download } from '../bridge/client';
+import type { Bridge } from '../bridge/client';
 import { useW } from './i18n';
 import { webApi } from './webApi';
 
@@ -219,19 +219,10 @@ export function ProjectActions({ id }: { id: string }) {
   const w = useW();
   const { t } = useI18n();
   const confirm = useConfirm();
-  const [busy, setBusy] = useState<'' | 'backup' | 'delete'>('');
+  // the backup is at the foot of the book's rail (both versions); deleting a book is the browser's own
+  const [busy, setBusy] = useState<'' | 'delete'>('');
   const [error, setError] = useState('');
 
-  const backup = async () => {
-    setBusy('backup');
-    setError('');
-    try {
-      await download(webApi.archiveUrl(id), `${id}.warqa.zip`);
-    } catch (e) {
-      setError(errorText(e, t));
-    }
-    setBusy('');
-  };
   const remove = async () => {
     if (!(await confirm({ title: w('project.deleteConfirm'), confirm: w('project.deleteYes'), danger: true }))) return;
     setBusy('delete');
@@ -247,15 +238,6 @@ export function ProjectActions({ id }: { id: string }) {
 
   return (
     <>
-      <Button
-        icon="download"
-        busy={busy === 'backup'}
-        disabled={!!busy}
-        title={w('project.backupHint')}
-        onClick={() => void backup()}
-      >
-        {w('project.backup')}
-      </Button>
       <Button
         variant="quiet"
         icon="close"

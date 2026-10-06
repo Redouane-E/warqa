@@ -14,7 +14,8 @@ import type {
   StepState,
 } from '../../shared/types';
 import { useStatus } from '../App';
-import { api, errorText } from '../api';
+import { api, errorText, saveFile } from '../api';
+import { BookSettings } from '../components/BookSettings';
 import { buildProgress, type ChapterRun, useJobStream, useJobs, writingBeat } from '../components/JobBoard';
 import { useConfirm, useToast, useUnsavedGuard } from '../components/overlays';
 import { Button, Field, Icon, LangTag, Loading, Notice } from '../components/ui';
@@ -22,7 +23,7 @@ import { useExtras } from '../extras';
 import { useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
 import { bookPlaceOf, STEPS, useSetPlace } from '../place';
-import { confirmLeave, Link, navigate, useLocation } from '../router';
+import { confirmLeave, Link, match, navigate, useLocation } from '../router';
 import { CheckStep } from './Check';
 import { bookTitle } from './Home';
 import { LanguagesStep } from './Languages';
@@ -320,7 +321,11 @@ function ReadStep({ p, status, run, live, estimate }: StepProps) {
         <h2 id="read-again" className="block-title">
           {doc ? t('read.again') : t('read.run')}
         </h2>
-        {p.roles.vision?.error && ocr !== 'never' && <Notice tone="warn">{t('read.noVision')}</Notice>}
+        {p.roles.vision?.error && ocr !== 'never' && (
+          <Notice tone="warn">
+            {t('read.noVision')} <Link to="/ai#keys">{t('nav.ai')}</Link>
+          </Notice>
+        )}
         <div className="read-again-row">
           <Field label={t('read.pages')} hint={t('read.pagesHint')}>
             {(id, d) => (
@@ -1033,7 +1038,9 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
     return id === FAKE_PROVIDER.id ? FAKE_PROVIDER.name : (PROVIDERS.find((x) => x.id === id)?.name ?? id);
   };
   const writer = provider(p.roles.writer?.model);
-  const set = status?.presets.find((x) => x.id === p.config.preset)?.label;
+  const preset = status?.presets.find((x) => x.id === p.config.preset);
+  const setKey = `preset.${preset?.id}` as MsgKey;
+  const set = preset ? (t(setKey) === setKey ? preset.label : t(setKey)) : undefined;
 
   // replacing a teacher's work is the only thing here that asks first
   const again = async (r: { id: string; n: number }) => {
@@ -1090,12 +1097,17 @@ function MakeStep({ p, status, run, reload, estimate }: StepProps) {
       <div className="make-head">
         <div className="make-head-start">
           {title}
-          {writer && (
-            <p className="make-models">
-              <bdi>{set ? t('make.models', { set, writer }) : t('make.writer', { writer })}</bdi>{' '}
-              <Link to="/ai">{t('learn.setup.change')}</Link>
-            </p>
-          )}
+          <p className="make-models">
+            {writer ? (
+              <bdi>{set ? t('make.models', { set, writer }) : t('make.writer', { writer })}</bdi>
+            ) : (
+              // no key yet: nothing can write the lessons, and AI and voices is where that changes
+              <span>{t('make.noWriter')}</span>
+            )}{' '}
+            <Link to={`/ai?book=${encodeURIComponent(p.id)}#${writer ? 'set' : 'keys'}`}>
+              {writer ? t('learn.setup.change') : t('nav.ai')}
+            </Link>
+          </p>
           {approved && engine !== 'none' && (
             <label className="check make-narrate">
               <input
@@ -1281,8 +1293,20 @@ const STATE_KEY: Record<StepState, MsgKey> = {
   skipped: 'state.skipped',
 };
 
-function Stepper({ p, current, onSelect }: { p: ProjectDetail; current: StepId; onSelect: (s: StepId) => void }) {
+function Stepper({
+  p,
+  current,
+  onSelect,
+  onSettings,
+}: {
+  p: ProjectDetail;
+  current: StepId;
+  onSelect: (s: StepId) => void;
+  onSettings: () => void;
+}) {
   const { t, num } = useI18n();
+  const toast = useToast();
+  const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLElement>(null);
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when the current step changes
   useEffect(() => {
@@ -1359,6 +1383,32 @@ function Stepper({ p, current, onSelect }: { p: ProjectDetail; current: StepId; 
           );
         })}
       </ol>
+      {/* the book's own settings and a copy of it, under its six steps */}
+      <div className="rail-foot">
+        <button type="button" className="rail-link" onClick={onSettings}>
+          <Icon name="settings" size={18} />
+          <span>{t('book.settings')}</span>
+        </button>
+        <button
+          type="button"
+          className="rail-link"
+          aria-busy={saving || undefined}
+          aria-disabled={saving || undefined}
+          onClick={async () => {
+            if (saving) return;
+            setSaving(true);
+            try {
+              await saveFile(api.archiveUrl(p.id), `${p.id}.warqa.zip`);
+            } catch (e) {
+              toast({ text: errorText(e, t), tone: 'error' });
+            }
+            setSaving(false);
+          }}
+        >
+          <Icon name="download" size={18} />
+          <span>{t('book.backup')}</span>
+        </button>
+      </div>
     </nav>
   );
 }
@@ -1368,7 +1418,10 @@ export function ProjectPage({ id }: { id: string }) {
   const { t, usd, lang, num } = i18n;
   const { status } = useStatus();
   const { projectActions } = useExtras();
-  const { query } = useLocation();
+  const { path, query } = useLocation();
+  // the book's settings: a sheet over the book, with an address of its own (/project/:id/settings)
+  const sheetOpen = !!match('/project/:id/settings', path);
+  const [sheetFocus, setSheetFocus] = useState<'budget' | 'maps' | undefined>(undefined);
   const [p, setP] = useState<ProjectDetail | null>(null);
   const [error, setError] = useState('');
   const [actionError, setActionError] = useState('');
@@ -1442,6 +1495,19 @@ export function ProjectPage({ id }: { id: string }) {
     if (cur?.projectId === id && p && !p.jobs.some((j) => j.id === cur.jobId)) void load();
   }, [jobs.current?.jobId]);
   useSetPlace(p ? { book: bookPlaceOf(p, step ?? p.next, lang) } : null);
+  // old links into the settings page: its models, keys and voices now live in AI and voices
+  // biome-ignore lint/correctness/useExhaustiveDependencies: when the sheet's address is opened
+  useEffect(() => {
+    if (!sheetOpen) return;
+    const h = location.hash.slice(1);
+    const ai: Record<string, string> = {
+      models: `/ai?book=${encodeURIComponent(id)}#set`,
+      speech: `/ai?book=${encodeURIComponent(id)}#voices`,
+      keys: '/ai#keys',
+    };
+    if (ai[h]) navigate(ai[h]!, { replace: true });
+    else setSheetFocus(h === 'budget' || h === 'maps' ? h : undefined);
+  }, [sheetOpen]);
 
   const live = useMemo(
     () => new Set((p?.jobs ?? []).filter((j) => j.status === 'running' || j.status === 'queued').map((j) => j.type)),
@@ -1468,7 +1534,8 @@ export function ProjectPage({ id }: { id: string }) {
   const bare = true;
   const select = async (s: StepId) => {
     // a step with unsaved work (the plan) asks before it is closed
-    if (s !== current && !(await confirmLeave())) return;
+    // (the step you are on, too, while the book's settings are open over it: they close)
+    if ((s !== current || sheetOpen) && !(await confirmLeave())) return;
     setStep(s);
     navigate(`/project/${encodeURIComponent(id)}?step=${s}`, { replace: true });
   };
@@ -1526,16 +1593,19 @@ export function ProjectPage({ id }: { id: string }) {
               </dd>
             </div>
           </dl>
-          <Link className="btn btn-default" to={`/project/${encodeURIComponent(id)}/settings`}>
-            <Icon name="settings" />
-            <span>{t('common.settings')}</span>
-          </Link>
           {projectActions?.(id)}
         </div>
       </header>
       <p className="visually-hidden">{t('project.cached')}</p>
       <div className="project-grid">
-        <Stepper p={p} current={current} onSelect={select} />
+        <Stepper
+          p={p}
+          current={current}
+          onSelect={select}
+          onSettings={() =>
+            navigate(`/project/${encodeURIComponent(id)}/settings?step=${current}`, { replace: true, keepScroll: true })
+          }
+        />
         {/* Read, Plan, Make and Translate & narrate are their own cards, each with its title (redesign 4b–4e) */}
         <section
           className={`step-panel${bare ? ' step-bare' : ' sheet'}`}
@@ -1553,6 +1623,18 @@ export function ProjectPage({ id }: { id: string }) {
           <Panel {...props} />
         </section>
       </div>
+      <BookSettings
+        p={p}
+        open={sheetOpen}
+        {...(sheetFocus ? { focus: sheetFocus } : {})}
+        onClose={() =>
+          navigate(`/project/${encodeURIComponent(id)}?step=${current}`, { replace: true, keepScroll: true })
+        }
+        onSaved={(d) => {
+          setP(d);
+          loadEstimate();
+        }}
+      />
     </div>
   );
 }

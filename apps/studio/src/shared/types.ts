@@ -104,6 +104,10 @@ export interface PresetInfo {
   available: boolean;
   /** Keys still missing (first of each unmet group). */
   missing: string[];
+  /** What one chapter of about 15 beats in three languages costs with it (AI and voices' prices). */
+  chapterUsd?: number;
+  /** How it is paid for. */
+  pricing?: 'paid' | 'free-tier' | 'free' | 'prepaid';
 }
 
 export interface ModelSummary {
@@ -125,9 +129,34 @@ export interface TtsInfo {
   note?: string;
   costPerMChars?: number;
   wordTimes: boolean;
-  /** Default voice per language (ar, fr, en). */
+  /** Default voice per language (ar, ary, fr, en). */
   voices: Record<string, string>;
   keys: string[];
+  /** Costs nothing (Edge, the local helper, no voice). */
+  free?: boolean;
+  /** Free up to a monthly amount (Azure). */
+  freeTier?: boolean;
+  /** Its keys are set. */
+  keyReady?: boolean;
+  /** The voices it offers (engines without a list take their default or a typed name). */
+  catalog?: { id: string; langs: string[] | 'all'; style?: string }[];
+  /** What one sample costs (USD). */
+  sampleUsd?: number;
+}
+
+/** What new books start with (AI and voices, "New books"). */
+export interface AiDefaults {
+  preset?: string;
+  models: Record<string, string>;
+  tts: { provider?: string; voices: Record<string, string>; rate?: string; tashkeel: boolean };
+  worker?: string;
+}
+
+/** A sample of a voice (`POST /api/voices/sample`). */
+export interface VoiceSample {
+  url: string;
+  cached: boolean;
+  usd: number;
 }
 
 /**
@@ -172,6 +201,8 @@ export interface StatusInfo {
   tts: TtsInfo[];
   ingest: boolean;
   qa: boolean;
+  /** The sentence a voice sample reads, per language. */
+  sampleText?: Record<string, string>;
 }
 
 export interface LessonSummary {

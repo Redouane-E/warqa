@@ -1,7 +1,7 @@
 // A scripted "model" for tests and demos without a network: it answers each pipeline call (plan, storyboard,
 // beats, translation, page reading) with small valid content, through the pipeline's FakeModel hook in Llm.
 // Enabled only by ?warqa-fake=1 (or VITE_WARQA_FAKE=1 at build time); never offered otherwise.
-import type { FakeModel } from '@warqa/pipeline';
+import { type FakeModel, type TtsProvider, ttsProvider } from '@warqa/pipeline';
 
 /** The id the fake provider shows in model settings. */
 export const FAKE_MODEL = 'fake:scripted';
@@ -200,3 +200,32 @@ export const fakeModel: FakeModel = ({ name, prompt }) => {
   if (name.startsWith('judge')) return '[]';
   throw new Error(`the test model cannot answer "${name}"`);
 };
+
+/** A short silent WAV (8 kHz, 16-bit mono). */
+function silentWav(seconds = 0.4, rate = 8000): Uint8Array {
+  const n = Math.round(seconds * rate);
+  const v = new DataView(new ArrayBuffer(44 + n * 2));
+  const tag = (at: number, s: string) => {
+    for (let i = 0; i < s.length; i++) v.setUint8(at + i, s.charCodeAt(i));
+  };
+  tag(0, 'RIFF');
+  v.setUint32(4, 36 + n * 2, true);
+  tag(8, 'WAVE');
+  tag(12, 'fmt ');
+  v.setUint32(16, 16, true);
+  v.setUint16(20, 1, true);
+  v.setUint16(22, 1, true);
+  v.setUint32(24, rate, true);
+  v.setUint32(28, rate * 2, true);
+  v.setUint16(32, 2, true);
+  v.setUint16(34, 16, true);
+  tag(36, 'data');
+  v.setUint32(40, n * 2, true);
+  return new Uint8Array(v.buffer);
+}
+
+/** Speech engines for test mode: each keeps its name, voices and price, but reads a sample as silence (no network). */
+export const fakeTts = (id: string): TtsProvider => ({
+  ...ttsProvider(id, { worker: 'http://localhost:8790' }),
+  synth: async () => ({ audio: silentWav(2), ext: 'wav', dur: 2 }),
+});

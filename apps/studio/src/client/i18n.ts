@@ -55,6 +55,10 @@ export interface I18n {
   t: (key: MsgKey, params?: Params) => string;
   num: (n: number, opts?: Intl.NumberFormatOptions) => string;
   usd: (n: number) => string;
+  /** A price: no cents on whole dollars ("$4"), up to three decimals under ten cents ("$0.075"). */
+  price: (n: number) => string;
+  /** A country's name ("MA" → "Morocco"), or the code. */
+  region: (code: string) => string;
   ago: (ms: number) => string;
   langName: (code: string) => string;
   bytes: (n: number) => string;
@@ -68,8 +72,10 @@ export function makeI18n(lang: UiLang): I18n {
   const num = (n: number, opts?: Intl.NumberFormatOptions) =>
     (opts ? new Intl.NumberFormat(locale, opts) : nf).format(n);
   let names: Intl.DisplayNames | undefined;
+  let regions: Intl.DisplayNames | undefined;
   try {
     names = new Intl.DisplayNames([locale], { type: 'language' });
+    regions = new Intl.DisplayNames([locale], { type: 'region' });
   } catch {
     names = undefined;
   }
@@ -100,6 +106,20 @@ export function makeI18n(lang: UiLang): I18n {
         minimumFractionDigits: 2,
         maximumFractionDigits: n > 0 && n < 0.1 ? 3 : 2,
       }),
+    price: (n) =>
+      num(n, {
+        style: 'currency',
+        currency: 'USD',
+        minimumFractionDigits: Number.isInteger(n) ? 0 : 2,
+        maximumFractionDigits: Number.isInteger(n) ? 0 : n > 0 && n < 0.1 ? 3 : 2,
+      }),
+    region: (code) => {
+      try {
+        return regions?.of(code) ?? code;
+      } catch {
+        return code;
+      }
+    },
     ago: (ms) => {
       const s = (ms - Date.now()) / 1000;
       const a = Math.abs(s);

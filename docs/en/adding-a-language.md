@@ -97,7 +97,8 @@ are teaching changes: describe what you checked in the pull request.
 - The Google engine's `defaultVoice` map, if it has voices for the language.
 - Note in [voices.md](voices.md) which engines give word timings for this language.
 
-Users can always choose another voice per language in the studio (*Settings → Speech*) or in
+Users can always choose another voice per language in the studio (*AI and voices → Voices*, for new books
+or for one book) or in
 `warqa.json` (`pipeline.tts.voices`).
 
 ## 5. Reading PDFs

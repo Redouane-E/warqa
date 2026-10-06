@@ -18,12 +18,11 @@ import { inField, toolOpen } from './components/tools';
 import { Icon } from './components/ui';
 import { ExtrasContext, type StudioExtras } from './extras';
 import { getLang, I18nContext, makeI18n, subscribeLang } from './i18n';
+import { AiPage } from './pages/Ai';
 import { HomePage } from './pages/Home';
-import { KeysPage } from './pages/Keys';
 import { LearnCoursePage, LearnHomePage, LearnNewPage, LearnPlayerPage } from './pages/Learn';
 import { LessonPage } from './pages/Lesson';
 import { ProjectPage } from './pages/Project';
-import { SettingsPage } from './pages/Settings';
 import { WelcomePage } from './pages/Welcome';
 import { PlaceProvider } from './place';
 import { go, match, navigate, useLocation } from './router';
@@ -48,7 +47,8 @@ function Routes() {
   let m: Record<string, string> | null;
   if ((m = match('/project/:id/lesson/:lid', path)))
     return <LessonPage key={`${m.id}/${m.lid}`} id={m.id!} lid={m.lid!} />;
-  if ((m = match('/project/:id/settings', path))) return <SettingsPage key={m.id} id={m.id!} />;
+  // the book's settings are a sheet over the book (its address opens it)
+  if ((m = match('/project/:id/settings', path))) return <ProjectPage key={m.id} id={m.id!} />;
   // the book-wide review moved into Translate & narrate (redesign 4e)
   if ((m = match('/project/:id/review', path))) {
     const lang = query.get('lang');
@@ -64,8 +64,9 @@ function Routes() {
   if (path === '/learn/new') return <LearnNewPage />;
   if ((m = match('/learn/:id/:lid', path))) return <LearnPlayerPage key={`${m.id}/${m.lid}`} id={m.id!} lid={m.lid!} />;
   if ((m = match('/learn/:id', path))) return <LearnCoursePage key={m.id} id={m.id!} />;
-  // AI and voices: /ai (the old /settings address still works)
-  if (path === '/ai' || path === '/settings') return <KeysPage />;
+  // AI and voices: /ai (the old /settings address leads there, with its section)
+  if (path === '/settings') return <Redirect to={`/ai${location.hash}`} />;
+  if (path === '/ai') return <AiPage />;
   return <HomePage />;
 }
 

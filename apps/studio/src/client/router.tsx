@@ -20,19 +20,26 @@ export function navigate(to: string, opts: { replace?: boolean; keepScroll?: boo
 
 /* ---------- unsaved work: a screen asks before an in-app link leaves it ---------- */
 
-let leaveGuard: (() => Promise<boolean>) | null = null;
+// screens and sheets with unsaved work, the latest last (a sheet over the Plan both have one: closing the
+// sheet must leave the Plan's)
+const leaveGuards: (() => Promise<boolean>)[] = [];
+/** Ask each, the latest first (each names its own loss); any "Stay" keeps you here. */
+async function askAll(): Promise<boolean> {
+  for (const guard of [...leaveGuards].reverse()) if (!(await guard())) return false;
+  return true;
+}
 const pathOf = (to: string) => to.split(/[?#]/)[0] ?? to;
 
 /** Go to `to`; a screen with unsaved work asks first when this leaves it (moving inside it never asks). */
 export async function go(to: string, opts: { replace?: boolean; keepScroll?: boolean } = {}): Promise<boolean> {
-  if (leaveGuard && pathOf(to) !== stripBase(location.pathname) && !(await leaveGuard())) return false;
+  if (leaveGuards.length && pathOf(to) !== stripBase(location.pathname) && !(await askAll())) return false;
   navigate(to, opts);
   return true;
 }
 
 /** Ask the screen with unsaved work, if any, before closing a part of it without leaving its address. */
 export async function confirmLeave(): Promise<boolean> {
-  return leaveGuard ? leaveGuard() : true;
+  return askAll();
 }
 
 /** While `active`, leaving this screen through the studio (links, strips, Alt+↑, Go to) calls `ask` first. */
@@ -42,12 +49,13 @@ export function useLeaveGuard(active: boolean, ask: () => Promise<boolean>): voi
   useEffect(() => {
     if (!active) return;
     const guard = () => ref.current();
-    leaveGuard = guard;
+    leaveGuards.push(guard);
     // closing or reloading the tab gets the browser's own question
     const unload = (e: BeforeUnloadEvent) => e.preventDefault();
     window.addEventListener('beforeunload', unload);
     return () => {
-      if (leaveGuard === guard) leaveGuard = null;
+      const at = leaveGuards.indexOf(guard);
+      if (at >= 0) leaveGuards.splice(at, 1);
       window.removeEventListener('beforeunload', unload);
     };
   }, [active]);
@@ -62,6 +70,11 @@ export function useLocation(): { path: string; query: URLSearchParams } {
   const href = useSyncExternalStore(subscribe, () => location.pathname + location.search);
   const u = new URL(href, location.origin);
   return { path: stripBase(u.pathname), query: u.searchParams };
+}
+
+/** The address's #section (a link to a part of the same page changes only this). */
+export function useHash(): string {
+  return useSyncExternalStore(subscribe, () => location.hash);
 }
 
 /** Match "/project/:id/lesson/:lid" against a path. */
