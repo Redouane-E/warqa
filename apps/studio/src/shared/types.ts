@@ -332,6 +332,9 @@ export interface LessonDetail {
   /** All languages of the book (some may not be translated yet). */
   bookLangs: string[];
   bookId: string;
+  /** Its number among the chapters to make (as on the Make step), and its unit in the book, for the kicker. */
+  chapter?: number;
+  unit?: { index: number; title: string | Record<string, string> };
 }
 
 export interface EstimateInfo {

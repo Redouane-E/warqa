@@ -10,9 +10,9 @@ test('the example book opens and plays, then exports and opens in a new tab', as
   await page.getByRole('button', { name: 'See a finished book first' }).click();
   await expect(page).toHaveURL(/\/warqa\/project\/integers\/lesson\/ch05$/);
 
-  const preview = page.locator('.preview');
-  await expect(preview.locator('.wq-cover')).toBeVisible();
-  await preview.locator('.wq-go').click();
+  // the stage draws the beat being edited; "Play this beat" plays it
+  await expect(page.locator('.stage-host .wq-player')).toBeVisible();
+  await page.getByRole('button', { name: 'Play this beat' }).click();
   // the narration of the first beat is fetched (through the service worker) and plays
   await expect
     .poll(() =>
@@ -28,9 +28,16 @@ test('the example book opens and plays, then exports and opens in a new tab', as
       ),
     )
     .toBeGreaterThan(0);
-  await expect(preview.locator('.wq-cover')).toBeHidden();
-  await preview.locator('.wq-next').click();
-  await expect(preview.locator('.wq-stepname')).toContainText('2 / 14');
+  await page.getByRole('button', { name: 'Pause' }).click();
+  // Preview lifts the same player to the whole window, with its bar; Close puts it back
+  await page.getByRole('button', { name: 'Preview', exact: true }).click();
+  const lifted = page.locator('.stage-box.is-lifted');
+  await expect(lifted.locator('.wq-stepname')).toContainText('1 / 14');
+  await lifted.locator('.wq-next').click();
+  await expect(lifted.locator('.wq-stepname')).toContainText('2 / 14');
+  await lifted.getByRole('button', { name: 'Close' }).click();
+  // the editor is on the beat the preview reached
+  await expect(page).toHaveURL(/beat=2$/);
 
   // export the whole book in the browser, then open it like a published site
   await page.goto('project/integers?step=export');

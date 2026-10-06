@@ -87,7 +87,7 @@ test('a PDF becomes a planned, built and exported book (test model)', async ({ p
 
   // the lesson opens in the editor and its preview plays
   await ch01.getByRole('link', { name: 'Edit' }).click();
-  await expect(page.locator('.preview .wq-player')).toBeVisible();
+  await expect(page.locator('.stage-host .wq-player')).toBeVisible();
 
   // export and download the book as a zip
   await page.goto('project/textbook-en?step=export');

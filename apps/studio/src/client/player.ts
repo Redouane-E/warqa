@@ -9,6 +9,17 @@ export type LearnerNextState =
 
 export interface WarqaPlayer {
   seek(i: number, play?: boolean): void;
+  play(): void;
+  pause(): void;
+  /** Beat i at t seconds (its rest when omitted), paused, without the start screen (the editor's stage). */
+  showAt(i: number, t?: number): void;
+  /** Shown by showAt and not played since: playing starts the beat over. */
+  resting: boolean;
+  /** The stage alone, or the whole player with its bar (the editor's Lift). */
+  setBare(on: boolean): void;
+  /** Seconds into the current beat, and whether it plays (the editor's clock reads them). */
+  time: number;
+  playing: boolean;
   /** The next chapter being made from the learner's finish card (players without the learner card lack it). */
   learnerNext?(state: LearnerNextState): void;
   setLang(lang: string): void;
@@ -45,6 +56,8 @@ export interface WarqaApi {
         home?: () => void;
       };
       onEvent?: (e: { type: string; index?: number; id?: string; lang?: string }) => void;
+      /** The stage alone, edge to edge: no strip, captions or bar. */
+      bare?: boolean;
     },
   ): Promise<WarqaPlayer>;
 }

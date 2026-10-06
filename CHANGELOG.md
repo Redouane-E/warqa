@@ -122,6 +122,13 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **The lesson editor, redesigned (redesign 4d1).** The beats hang on the notebook's margin, the current one on
+  the highlighter (a diamond for a beat with questions). The stage is the lesson's own player drawing the beat
+  being edited, with "Play this beat" and a clock; **Preview** grows that same player to the whole window with
+  its bar, and closing goes back to the beat it reached. The narration sits under the stage, and the beat's
+  details (title, teaching move, what each mark does, problems, Regenerate, Edit as JSON) open in a side sheet
+  beside it. Beats can be added, duplicated and deleted (with Undo); J and K move between them; a save can be
+  undone from its toast. The preview language menu also lists the languages not translated yet.
 - Cost estimates no longer ask for a translator model when a book has a single language.
 
 ### Fixed

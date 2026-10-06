@@ -2,7 +2,7 @@
 // It never leaves a place. Modal dialogs (native <dialog>) answer Esc themselves with their safe choice.
 import { useEffect, useRef } from 'react';
 
-const stack: { close: () => void }[] = [];
+const stack: { close: () => void; blocks: boolean }[] = [];
 
 if (typeof document !== 'undefined')
   document.addEventListener('keydown', (e) => {
@@ -12,8 +12,11 @@ if (typeof document !== 'undefined')
     stack[stack.length - 1]!.close();
   });
 
-/** A tool (Go to, a menu, a side sheet, Lift) or a modal dialog is open: page-wide keys wait. */
-export const toolOpen = (): boolean => stack.length > 0 || modalOpen();
+/**
+ * A tool (Go to, a menu, a covering side sheet, Lift) or a modal dialog is open: page-wide keys wait. A side sheet
+ * that pushes the place (wide screens) leaves the place usable, so its keys keep working.
+ */
+export const toolOpen = (): boolean => stack.some((t) => t.blocks) || modalOpen();
 
 /** The key went to a text field or a list box, where the arrows and Alt+arrows already mean something. */
 export function inField(e: KeyboardEvent): boolean {
@@ -30,18 +33,19 @@ function modalOpen(): boolean {
 }
 
 /** While `open`, Esc calls `close` (unless a tool opened later is on top). */
-export function useEscape(open: boolean, close: () => void): void {
+export function useEscape(open: boolean, close: () => void, opts: { blocks?: boolean } = {}): void {
   const fn = useRef(close);
   fn.current = close;
+  const blocks = opts.blocks ?? true;
   useEffect(() => {
     if (!open) return;
-    const entry = { close: () => fn.current() };
+    const entry = { close: () => fn.current(), blocks };
     stack.push(entry);
     return () => {
       const i = stack.indexOf(entry);
       if (i >= 0) stack.splice(i, 1);
     };
-  }, [open]);
+  }, [open, blocks]);
 }
 
 /** Keep Tab inside an element (overlays that cover the page); returns a keydown handler. */

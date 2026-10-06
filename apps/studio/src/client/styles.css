@@ -1411,13 +1411,43 @@ input[type="radio"] {
 .lesson-head {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 14px 22px;
-  margin-block-end: 18px;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px 24px;
+  margin-block-end: 24px;
+}
+.lesson-title {
+  display: grid;
+  gap: 6px;
+  flex: 1 1 360px;
+  min-inline-size: 0;
+}
+.lesson-kicker {
+  margin: 0;
+  font-family: var(--font-mono);
+  font-size: 13px;
+  color: var(--wq-text-2);
+}
+/* Geist Mono has no Arabic letters: the kicker keeps the interface font there */
+:root:is(:lang(ar), :lang(ary)) .lesson-kicker {
+  font-family: inherit;
+  font-size: 14px;
 }
 .lesson-head h1 {
-  flex: 1 1 320px;
-  font-size: clamp(25px, 3vw, 36px);
+  margin: 0;
+  font-size: 30px;
+  line-height: 1.15;
+  text-wrap: balance;
+}
+.lesson-head h1:is(:lang(ar), :lang(ary)) {
+  font-size: 32px;
+  line-height: 1.45;
+}
+.lesson-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px 12px;
 }
 .lesson-tabs {
   display: inline-flex;
@@ -1440,25 +1470,82 @@ input[type="radio"] {
   background: var(--ink);
   color: var(--paper);
 }
-.save-box {
-  display: flex;
+.preview-in {
+  display: inline-flex;
   align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  gap: 8px;
 }
-.editor-grid {
+.menu-chevron {
+  rotate: 90deg;
+}
+/* the chevron is mirrored in right-to-left pages: turned the other way, it still points down */
+[dir="rtl"] .menu-chevron {
+  rotate: -90deg;
+}
+.preview-lang .menu-button {
+  border: 1px solid var(--wq-control-border);
+  background: var(--wq-sheet);
+  padding-inline: 14px 10px;
+  font-weight: 500;
+}
+.menu-waiting {
   display: grid;
-  grid-template-columns: 256px minmax(0, 1fr);
-  gap: 26px;
+  text-align: start;
+}
+.menu-item[aria-disabled="true"] {
+  cursor: default;
+  color: var(--wq-text-2);
+}
+.save-state {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 14px;
+  color: var(--wq-text-2);
+}
+.save-state .good {
+  color: var(--wq-good);
+}
+.save-state .dirty {
+  color: var(--wq-fluo-text);
+  font-weight: 500;
+}
+/* nothing to save: the button stays (and keeps the focus) but reads as idle */
+.btn.is-idle {
+  color: var(--wq-text-2);
+  cursor: default;
+}
+.editor-work {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  gap: 24px;
   align-items: start;
 }
+
+/* the beats on the margin: each number on the red line, the current one on the highlighter */
 .beat-list {
   position: sticky;
-  inset-block-start: calc(var(--top) + 14px);
-  max-block-size: calc(100vh - var(--top) - 28px);
+  inset-block-start: calc(var(--top) + 16px);
+  display: grid;
+  align-content: start;
+  gap: 8px;
+  max-block-size: calc(100vh - var(--top) - 32px);
   overflow-y: auto;
   overflow-x: hidden;
-  padding-block: 2px;
+  padding-block: 2px 8px;
+}
+.beat-list-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  padding-inline: calc(var(--dot) + 12px) 4px;
+}
+.beat-list-title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
 }
 .beat-list ol {
   list-style: none;
@@ -1469,16 +1556,27 @@ input[type="radio"] {
 }
 .beat-list li {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 2px;
+  border-radius: var(--wq-radius-control);
+}
+.beat-list li:hover {
+  background: color-mix(in srgb, var(--wq-ink) 5%, transparent);
+}
+.beat-list li.is-sel {
+  background: var(--wq-sheet);
+  box-shadow: var(--wq-shadow);
 }
 .beat-btn {
   flex: 1;
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   gap: 12px;
-  padding: 5px 0;
+  min-block-size: 48px;
+  padding-block: 4px;
+  padding-inline: 0 6px;
   border: 0;
+  border-radius: var(--wq-radius-control);
   background: none;
   color: inherit;
   font: inherit;
@@ -1495,43 +1593,65 @@ input[type="radio"] {
   inline-size: var(--dot);
   block-size: var(--dot);
   border-radius: 50%;
-  border: 1.5px solid var(--rule-strong);
-  background: var(--paper);
+  border: 1.5px solid var(--wq-input-border);
+  background: var(--wq-sheet);
+  font-family: var(--font-mono);
   font-size: 12px;
-  font-weight: 600;
-  color: var(--ink-2);
-  margin-block-start: 3px;
+  color: var(--wq-text-2);
+}
+/* a beat that asks questions is a diamond on the margin */
+.beat-n.is-q {
+  inline-size: calc(var(--dot) * 0.78);
+  block-size: calc(var(--dot) * 0.78);
+  margin-inline: calc(var(--dot) * 0.11);
+  border-radius: 3px;
+  border-color: var(--wq-ink);
+  color: var(--wq-ink);
+  transform: rotate(45deg);
+}
+.beat-n.is-q > span {
+  transform: rotate(-45deg);
+  font-size: 11px;
 }
 .beat-list li.is-sel .beat-n {
-  background: var(--wq-fluo);
-  border-color: var(--wq-fluo);
-  color: var(--wq-on-fluo);
+  border-color: var(--wq-ink);
+  background: var(--wq-ink);
+  color: var(--wq-on-ink);
+  font-weight: 600;
 }
 .beat-text {
   display: grid;
   flex: 1;
-  padding: 3px 10px 4px;
-  border-radius: 9px;
+  gap: 1px;
   min-inline-size: 0;
 }
-.beat-btn:hover .beat-text {
-  background: color-mix(in srgb, var(--ink) 5%, transparent);
-}
-.beat-list li.is-sel .beat-text {
-  background: var(--sheet);
-  box-shadow: var(--shadow);
-}
 .beat-title {
-  font-weight: 500;
+  justify-self: start;
+  font-size: 15px;
   line-height: 1.3;
   overflow-wrap: anywhere;
 }
+.beat-list li.is-sel .beat-title {
+  padding-inline: 0.25em;
+  margin-inline-start: -0.25em;
+  border-radius: var(--wq-radius-fluo);
+  background: var(--wq-fluo);
+  color: var(--wq-on-fluo);
+  font-weight: 600;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
+}
 .beat-move {
   font-size: 12px;
-  color: var(--ink-3);
+  color: var(--wq-text-2);
 }
 .beat-btn .badge {
-  margin-block-start: 5px;
+  flex: none;
+}
+.beat-list .badge-error {
+  background: var(--wq-pen);
+  color: var(--wq-on-ink);
+  font-family: var(--font-mono);
 }
 .beat-order {
   display: flex;
@@ -1545,57 +1665,127 @@ input[type="radio"] {
 }
 .beat-order .icon-btn {
   inline-size: 26px;
-  block-size: 20px;
+  block-size: 22px;
 }
-.beat-select {
-  display: none;
+.add-beat {
+  justify-self: start;
+  margin-inline-start: calc(var(--dot) + 4px);
+  color: var(--wq-ink);
 }
+
+/* the beat being edited: play it, where it is, the stage, the narration */
 .editor-main {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
-  gap: 18px;
+  gap: 16px;
   min-inline-size: 0;
 }
-.preview-bar {
+.beat-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.beat-head {
   display: flex;
   align-items: center;
-  gap: 10px;
-  margin-block-end: 8px;
-  flex-wrap: wrap;
+  gap: 12px;
+  min-inline-size: 0;
 }
-.preview-bar .small-title {
-  margin: 0;
-  margin-inline-end: auto;
+.play-round {
+  flex: none;
+  display: grid;
+  place-items: center;
+  inline-size: 44px;
+  block-size: 44px;
+  border: 0;
+  border-radius: 50%;
+  background: var(--wq-ink);
+  color: var(--wq-on-ink);
+  cursor: pointer;
+}
+.play-round:hover {
+  background: var(--wq-ink-hover);
+}
+.play-round:focus-visible {
+  outline: 2px solid var(--wq-focus);
+  outline-offset: 2px;
+}
+.beat-head-text {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+.beat-head-text strong {
+  font-size: 15px;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.stage-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 6px;
+}
+.stage-frame {
+  position: relative;
+}
+.stage-host {
+  inline-size: 100%;
+  aspect-ratio: 16 / 9;
+  border: 1px solid var(--wq-line);
+  border-radius: var(--wq-radius-sheet);
+  overflow: hidden;
+  background: var(--wq-sheet);
+  box-shadow: var(--wq-shadow);
 }
 .preview-stale {
   font-size: 13px;
-  color: var(--warn);
-  margin: 0 0 6px;
-}
-.preview-host {
-  inline-size: 100%;
-  max-inline-size: calc(64vh * 1.6);
-  aspect-ratio: 16 / 10;
-  border-radius: 12px;
-  overflow: hidden;
-  background: var(--wq-board-ground);
-  box-shadow: var(--shadow);
-}
-.inspector .small-title code {
-  font-weight: 400;
-  font-size: 12.5px;
-}
-.inspector .small-title .beat-n {
+  color: var(--wq-fluo-text);
   margin: 0;
-  background: var(--wq-fluo);
-  border-color: var(--wq-fluo);
-  color: var(--wq-on-fluo);
+}
+.narration-box {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 8px;
+}
+.narration-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 4px 16px;
+}
+.narration-title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 16px;
+  font-weight: 600;
+}
+.narration-text {
+  inline-size: 100%;
+  padding: 14px 16px;
+  border: 1px solid var(--wq-input-border);
+  border-radius: var(--wq-radius-control);
+  background: var(--wq-sheet);
+  color: var(--wq-text);
+  font: inherit;
+  font-size: 17px;
+  line-height: 1.9;
+  resize: vertical;
+}
+.narration-text:is(:lang(ar), :lang(ary)) {
+  font-size: 19px;
+  line-height: 2.1;
+}
+.narration-box .hint {
+  margin: 0;
 }
 .marked {
-  padding: 10px 14px;
-  margin: -6px 0 14px;
-  background: var(--paper);
-  border-radius: 10px;
+  padding: 8px 14px;
+  margin: 0;
+  background: var(--wq-ground);
+  border-radius: var(--wq-radius-control);
   font-size: 15px;
   line-height: 2.1;
 }
@@ -1608,14 +1798,76 @@ input[type="radio"] {
   margin-inline: 2px;
   border-radius: 5px;
   background: var(--wq-fluo-tint);
-  color: var(--wq-text);
+  color: var(--wq-fluo-text);
   vertical-align: 1px;
   unicode-bidi: isolate;
+}
+.lesson-issues {
+  padding-block: 4px;
+}
+
+/* the beat's inspector, in the side sheet */
+.beat-sheet .side-sheet-head h2 {
+  display: grid;
+  gap: 2px;
+  min-inline-size: 0;
+}
+.insp-count {
+  font-size: 13px;
+  font-weight: 400;
+  font-variation-settings: normal;
+  color: var(--wq-text-2);
+}
+.insp-name {
+  overflow-wrap: anywhere;
+}
+.inspector {
+  display: grid;
+}
+.insp-sec {
+  display: grid;
+  gap: 12px;
+  padding-block: 16px;
+  border-block-end: 1px solid var(--wq-seyes);
+  min-inline-size: 0;
+}
+.insp-sec:first-child {
+  padding-block-start: 0;
+}
+.insp-sec:last-child {
+  border-block-end: 0;
+}
+.insp-sec > .field {
+  margin: 0;
+}
+.insp-title {
+  margin: 0;
+  font-family: var(--font-ui);
+  font-size: 15px;
+  font-weight: 600;
+}
+.insp-none {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin: 0;
+  color: var(--wq-good);
+}
+.insp-sec .hint {
+  margin: 0;
+}
+.insp-tools {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.insp-delete {
+  color: var(--wq-pen);
 }
 .cue-map {
   list-style: none;
   padding: 0;
-  margin: 0 0 16px;
+  margin: 0;
   display: grid;
   gap: 8px;
 }
@@ -1637,24 +1889,10 @@ input[type="radio"] {
   font-size: 12.5px;
   overflow-wrap: anywhere;
 }
-.issues-box {
-  padding: 12px 14px;
-  margin-block: 4px 12px;
-  border-radius: 10px;
-  background: var(--paper);
-}
-details.advanced,
-details.regen {
-  border-block-start: 1px solid var(--rule);
-  padding-block: 12px 4px;
-}
 details > summary {
   cursor: pointer;
   font-weight: 600;
   margin-block-end: 8px;
-}
-.lesson-issues {
-  padding-block: 16px;
 }
 
 /* translations */
@@ -1911,14 +2149,14 @@ details > summary {
   .home-grid.with-form .new-book {
     grid-row: 1;
   }
-  .editor-grid {
+  /* narrow: the stage first, the beats under it as a list */
+  .editor-work {
     grid-template-columns: minmax(0, 1fr);
   }
-  .beat-list {
-    display: none;
-  }
-  .beat-select {
-    display: block;
+  .editor-work .beat-list {
+    order: 2;
+    position: static;
+    max-block-size: none;
   }
   .settings-grid {
     grid-template-columns: minmax(0, 1fr);
@@ -2051,11 +2289,8 @@ details > summary {
   .tr-save {
     margin-inline-start: 0;
   }
-  .lesson-head .save-box {
-    inline-size: 100%;
-  }
-  .preview-host {
-    max-inline-size: none;
+  .lesson-head h1 {
+    font-size: 24px;
   }
   .save-bar {
     justify-content: stretch;
@@ -2076,7 +2311,7 @@ details > summary {
 }
 
 /* grid children never grow past their track (long <select> options, code, URLs) */
-.editor-grid > *,
+.editor-work > *,
 .project-grid > *,
 .settings-grid > *,
 .home-grid > * {
@@ -2250,10 +2485,6 @@ select {
   margin: 6px 0 0;
   padding-inline-start: 20px;
   font-size: 13.5px;
-}
-.preview-rating {
-  font-size: 13.5px;
-  margin-inline-start: auto;
 }
 .report-table td.num,
 .report-table th.num {
@@ -2896,36 +3127,35 @@ select {
   }
 }
 
-/* Lift: the preview grows to the full window (Close or Esc returns to the beat reached) */
-.preview.is-lifted {
+/* Lift: the stage grows to the full window with the player's bar (Close or Esc returns to the beat reached) */
+.stage-box.is-lifted {
   position: fixed;
   inset: 0;
   /* over the page, its sheets and the tray; under Go to, dialogs and toasts */
   z-index: 55;
   display: flex;
   flex-direction: column;
+  gap: 0;
   margin: 0;
   padding: 0 16px 16px;
   background: var(--wq-ground);
-  animation: lift-in var(--wq-t-tray) var(--wq-ease-settle);
 }
-.preview.is-lifted .preview-bar {
-  display: none;
-}
-.preview.is-lifted .preview-host {
+.stage-box.is-lifted .stage-frame {
   flex: 1;
-  max-inline-size: none;
+  min-block-size: 0;
+}
+.stage-box.is-lifted .stage-host {
+  block-size: 100%;
   aspect-ratio: auto;
-  border-radius: var(--wq-radius-sheet);
 }
 .lift-strip {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   min-block-size: 56px;
 }
 .lift-strip-text {
+  flex: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -2934,15 +3164,13 @@ select {
 .lift-strip-text strong {
   color: var(--wq-text);
 }
+.lift-rating {
+  font-size: 13.5px;
+}
 @keyframes lift-in {
   from {
     opacity: 0.4;
     transform: scale(0.94);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .preview.is-lifted {
-    animation: veil-in 120ms linear;
   }
 }
 

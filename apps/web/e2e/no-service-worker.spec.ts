@@ -16,9 +16,9 @@ test('without a service worker, the preview still plays its audio and the book s
   await page.keyboard.press('Escape');
   await expect(page.getByRole('menu')).toBeHidden();
   await page.getByRole('button', { name: 'Open the example book' }).click();
-  const preview = page.locator('.preview');
-  await preview.locator('.wq-go').click();
-  await expect(preview.locator('.wq-cover')).toBeHidden();
+  await expect(page.locator('.stage-host .wq-player')).toBeVisible();
+  await page.getByRole('button', { name: 'Play this beat' }).click();
+  await expect(page.getByRole('button', { name: 'Pause' })).toBeVisible();
   // the player was given in-memory copies of the narration, and they play
   const audio = await page.evaluate(async () => {
     const data = (await (await fetch('/warqa/api/projects/integers/lessons/ch05/player?lang=en')).json()) as {

@@ -330,6 +330,9 @@ describe('learning on your own', () => {
     expect(jobs.events(rest.id).some((e) => e.stage === 'chapter' && e.status === 'done')).toBe(true);
     const after = await detail();
     expect(after.drafts).toBeUndefined();
+    // the editor's kicker numbers the lesson among the chapters to make, as the Make step does
+    const lesson = (await (await app.request('/api/projects/mine/lessons/ch01')).json()) as { chapter?: number };
+    expect(lesson.chapter).toBe(1);
     expect(Object.keys(after.ledger.byChapter ?? {})).toContain('ch01');
 
     // Stop pressed while the last beat is written: it is taken once the lesson is saved, so nothing is lost

@@ -12,6 +12,8 @@ export interface MenuItem {
   onSelect?: () => void;
   /** A link instead of an action. */
   href?: string;
+  /** Listed but not choosable yet (a language waiting for its translation). */
+  disabled?: boolean;
 }
 
 export function Menu({
@@ -122,10 +124,12 @@ export function Menu({
                   key={it.key}
                   type="button"
                   role="menuitem"
+                  aria-disabled={it.disabled || undefined}
                   className="menu-item"
                   lang={it.lang}
                   tabIndex={-1}
                   onClick={() => {
+                    if (it.disabled) return;
                     close();
                     it.onSelect?.();
                   }}
@@ -138,10 +142,12 @@ export function Menu({
                   type="button"
                   role="menuitemradio"
                   aria-checked={it.checked}
+                  aria-disabled={it.disabled || undefined}
                   className="menu-item"
                   lang={it.lang}
                   tabIndex={-1}
                   onClick={() => {
+                    if (it.disabled) return;
                     close();
                     it.onSelect?.();
                   }}

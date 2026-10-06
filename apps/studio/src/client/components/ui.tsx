@@ -1,6 +1,6 @@
 // Small building blocks shared by the screens.
 import { ICON_STROKE, ICONS, type IconDef, type IconName, MARK, MIRRORED } from '@warqa/brand';
-import { type ButtonHTMLAttributes, type ReactNode, useId } from 'react';
+import { type ButtonHTMLAttributes, type ReactNode, type Ref, useId } from 'react';
 import type { Issue } from '../../shared/types';
 import { useI18n } from '../i18n';
 
@@ -53,7 +53,13 @@ export function Button({
   children,
   className,
   ...rest
-}: ButtonHTMLAttributes<HTMLButtonElement> & { variant?: Variant; icon?: IconName; busy?: boolean }) {
+}: ButtonHTMLAttributes<HTMLButtonElement> & {
+  variant?: Variant;
+  icon?: IconName;
+  busy?: boolean;
+  /** React 19 passes refs as props: the button itself. */
+  ref?: Ref<HTMLButtonElement>;
+}) {
   return (
     <button
       type="button"

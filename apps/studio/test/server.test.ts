@@ -4,6 +4,7 @@ import { cpSync, existsSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statS
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import * as P from '@warqa/pipeline';
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { createApp } from '../src/server/app.js';
 import { nextStep } from '../src/server/projects.js';
@@ -199,6 +200,20 @@ describe('lessons', () => {
     expect(Object.keys(d.strings).sort()).toEqual(['ar', 'fr']);
     expect(d.entries.length).toBeGreaterThan(50);
     expect(d.langs).toEqual(['ar', 'fr', 'en']);
+    // no plan and no units: the editor's kicker has no chapter or unit number
+    expect((d as { chapter?: number; unit?: unknown }).unit).toBeUndefined();
+    expect((d as { chapter?: number }).chapter).toBeUndefined();
+    // the book's second unit holds it: "Unit 2" (its title for the tooltip)
+    const book = new P.Project(dir);
+    book.book.units = [
+      { title: 'Numbers', chapters: ['ch01'] },
+      { title: 'Integers', chapters: ['ch05'] },
+    ];
+    book.saveBook();
+    const withUnit = (await (await app.request(lessonUrl())).json()) as { unit?: { index: number; title: string } };
+    expect(withUnit.unit).toEqual({ index: 2, title: 'Integers' });
+    book.book.units = [];
+    book.saveBook();
   });
 
   it('saves a valid lesson and blocks one with errors unless forced', async () => {

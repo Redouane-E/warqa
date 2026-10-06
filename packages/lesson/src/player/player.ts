@@ -886,6 +886,7 @@ export class Player {
     this.closeCard();
     this.i = i;
     this.time = 0;
+    this.resting = false;
     this.extra.clear();
     this.cardShown = false;
     const cb = this.beat();
@@ -909,6 +910,7 @@ export class Player {
       this.begin();
       return;
     }
+    this.resting = false;
     this.setPlaying(true);
     const cb = this.beat();
     const src = this.data.audio?.[this.lang]?.[cb.id];
@@ -933,6 +935,64 @@ export class Player {
     this.setPlaying(false);
   }
 
+  /**
+   * Show beat `i` at `t` seconds (its rest by default), paused, without the start screen: the studio's editor draws
+   * the beat it edits. Questions are not opened. Playing from there starts the beat over (`resting`).
+   */
+  showAt(i: number, t?: number): void {
+    if (i < 0 || i >= this.compiled.beats.length) return;
+    this.started = true;
+    this.cover.hidden = true;
+    if (i !== this.i || this.playing) this.seek(i, false);
+    this.stopAudio();
+    this.closeCard();
+    this.cardShown = false;
+    this.extra.clear();
+    this.time = Math.max(0, Math.min(t ?? this.restTime(i), this.beat().end));
+    this.resting = true;
+    this.render();
+  }
+
+  /** Shown by `showAt` and not played since: playing the beat starts it from the beginning. */
+  resting = false;
+
+  /**
+   * Where a beat rests in the editor: the latest moment that shows the most of it (every part shown, drawn and
+   * faded in), so animations have finished but cues near its end that clear the stage for the next beat have not.
+   */
+  restTime(i: number): number {
+    const cb = this.compiled.beats[i];
+    if (!cb) return 0;
+    const leaving = new Set(cb.leaving);
+    let best = -1;
+    let at = 0;
+    for (let t = 0; t <= cb.end + 1e-6; t += 0.1) {
+      const get = sampler(cb, t);
+      let score = 0;
+      for (const id of cb.start.order) {
+        if (leaving.has(id)) continue;
+        const o = Number(get(id, '', 'o') ?? 0) * Number(get(id, '', 'd') ?? 1);
+        if (o <= 0.01) continue;
+        score += o;
+        for (const sub of Object.keys(cb.start.nodes[id]!.subs))
+          score += o * Number(get(id, sub, 'o') ?? 0) * Number(get(id, sub, 'd') ?? 1);
+      }
+      if (score > best + 1e-3) {
+        best = score;
+        at = t;
+      } else if (score >= best - 1e-3) at = t;
+    }
+    return at;
+  }
+
+  /** The stage alone (no strip, captions or bar), or the whole player: the editor lifts its stage into one. */
+  setBare(on: boolean): void {
+    this.opts.bare = on;
+    this.root.classList.toggle('wq-bare', on);
+    this.placeCards(true);
+    this.setPlaying(this.playing);
+  }
+
   togglePlay(): void {
     if (!this.started) {
       this.begin();
@@ -945,7 +1005,8 @@ export class Player {
   private setPlaying(v: boolean) {
     this.playing = v;
     this.root.classList.toggle('wq-playing', v);
-    this.pausedEl.hidden = v || !this.started || this.reviewMode || this.beat().ask;
+    // the stage alone (the studio's editor, video frames) has no bar to resume from: no "Paused" note on it
+    this.pausedEl.hidden = v || !this.started || this.reviewMode || !!this.opts.bare || this.beat().ask;
     if (this.playBtn) this.playBtn.replaceChildren(icon(v ? 'pause' : 'play'));
     if (!v) cancelAnimationFrame(this.raf);
   }

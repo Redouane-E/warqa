@@ -11,7 +11,7 @@ test('books and keys survive a reload; keys can be forgotten', async ({ page }) 
   const title = page.getByRole('textbox', { name: 'Title' }).first();
   await title.fill('Subtracting, saved in the browser');
   await page.getByRole('button', { name: 'Save lesson' }).click();
-  await expect(page.getByText('Saved', { exact: true })).toBeVisible();
+  await expect(page.locator('.save-state')).toContainText('Saved');
 
   // a (dummy) key, kept in this browser only
   await page.goto('settings');

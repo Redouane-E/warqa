@@ -694,6 +694,22 @@ export function createApp(opts: AppOptions) {
     return { issues, stringIssues };
   }
 
+  /** "Chapter 5 · Unit 2": the lesson's number among the chapters to make, and the book unit holding it. */
+  function lessonPlace(p: P.Project, lid: string): Pick<LessonDetail, 'chapter' | 'unit'> {
+    let plan: ReturnType<typeof P.loadPlan>;
+    try {
+      plan = P.loadPlan(p);
+    } catch {
+      plan = undefined;
+    }
+    const n = (plan?.chapters.filter((c) => c.include) ?? []).findIndex((c) => c.id === lid) + 1;
+    const u = p.book.units.findIndex((x) => x.chapters.includes(lid));
+    return {
+      ...(n > 0 ? { chapter: n } : {}),
+      ...(u >= 0 ? { unit: { index: u + 1, title: p.book.units[u]!.title } } : {}),
+    };
+  }
+
   app.get('/api/projects/:id/lessons/:lid', (c) => {
     const p = project(c.req.param('id'));
     const lid = lessonIdOf(p, c.req.param('lid'));
@@ -732,6 +748,7 @@ export function createApp(opts: AppOptions) {
         moves: [...MOVES],
         bookLangs: p.book.langs,
         bookId: p.book.id,
+        ...lessonPlace(p, lid),
       };
       return c.json(detail);
     }
@@ -750,6 +767,7 @@ export function createApp(opts: AppOptions) {
       moves: [...MOVES],
       bookLangs: p.book.langs,
       bookId: p.book.id,
+      ...lessonPlace(p, lid),
     };
     return c.json(detail);
   });
