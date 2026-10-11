@@ -6,7 +6,7 @@ COPY . .
 RUN pnpm install --frozen-lockfile && pnpm build
 
 # Runtime: Playwright's image has Node and the browsers used by QA and video export.
-FROM mcr.microsoft.com/playwright:v1.63.0-noble
+FROM mcr.microsoft.com/playwright:v1.64.0-noble
 RUN apt-get update \
  && apt-get install -y --no-install-recommends ffmpeg python3-pip zip \
  && pip install --break-system-packages --no-cache-dir edge-tts \
