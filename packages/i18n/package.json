@@ -1,6 +1,6 @@
 {
   "name": "@warqa/i18n",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Warqa i18n: UI catalogs (ar/fr/en), number parsing/formatting, Arabic normalization, sentence splitting, bidi helpers.",
   "license": "Apache-2.0",
   "type": "module",

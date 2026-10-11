@@ -15,7 +15,7 @@ def test_health_with_core_deps_only(client, no_engines):
     assert res.status_code == 200
     body = res.json()
     assert body["ok"] is True
-    assert body["version"] == "0.1.0"
+    assert body["version"] == "0.2.0"
     assert body["capabilities"] == {"ocr": [], "align": [], "tashkeel": [], "tts": []}
 
 

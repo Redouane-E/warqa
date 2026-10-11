@@ -58,7 +58,7 @@ worker from the browser.
 
 | Endpoint | Request | Response |
 |---|---|---|
-| `GET /health` | – | `{ "ok": true, "version": "0.1.0", "capabilities": { "ocr": [...], "align": [...], "tashkeel": [...], "tts": [...] }, "engines": {...details, licences, voices} }` |
+| `GET /health` | – | `{ "ok": true, "version": "0.2.0", "capabilities": { "ocr": [...], "align": [...], "tashkeel": [...], "tts": [...] }, "engines": {...details, licences, voices} }` |
 | `POST /ocr` | `{ "image_base64": PNG, "lang": "ar" \| "fr" \| "en" \| ... }` | `{ "text": str, "engine": "tesseract" \| "rapidocr" }` |
 | `POST /align` | `{ "audio_base64": mp3 \| wav, "text": str, "lang": str }` | `{ "words": [[start_seconds, word], ...], "engine": "stable-ts" }` |
 | `POST /tashkeel` | `{ "text": str }` | `{ "text": str, "engine": "catt" \| "none" }` |

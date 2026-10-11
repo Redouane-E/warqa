@@ -1,6 +1,6 @@
 [project]
 name = "warqa-worker"
-version = "0.1.0"
+version = "0.2.0"
 description = "Optional Python sidecar for Warqa: OCR, forced alignment, Arabic diacritization and local speech over HTTP."
 readme = "README.md"
 license = "Apache-2.0"

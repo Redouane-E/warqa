@@ -1,6 +1,6 @@
 {
   "name": "@warqa/brand",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Warqa's design system: colour, type, space and motion tokens (TypeScript and CSS), the bundled fonts, the mark and the icons.",
   "license": "Apache-2.0",
   "type": "module",

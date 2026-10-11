@@ -1,6 +1,6 @@
 {
   "name": "@warqa/lesson",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Warqa lesson format (Zod schema, compiler, validators) and the framework-free player.",
   "license": "Apache-2.0",
   "type": "module",

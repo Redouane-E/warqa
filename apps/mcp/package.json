@@ -1,6 +1,6 @@
 {
   "name": "@warqa/mcp",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Warqa as an MCP server: let coding agents (Claude Code, Cursor, …) make and check Warqa lessons.",
   "license": "Apache-2.0",
   "type": "module",

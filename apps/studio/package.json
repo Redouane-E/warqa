@@ -1,6 +1,6 @@
 {
   "name": "@warqa/studio",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Warqa studio: a local web app to turn PDFs into animated, narrated lessons — plan, build, edit, translate, narrate and export.",
   "license": "Apache-2.0",
   "type": "module",

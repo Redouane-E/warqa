@@ -1,6 +1,6 @@
 {
   "name": "@warqa/pipeline",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Warqa pipeline: PDF ingest, models (any provider), lesson generation, validation and repair, narration, QA and export.",
   "license": "Apache-2.0",
   "type": "module",

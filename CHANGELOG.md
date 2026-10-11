@@ -9,6 +9,8 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-10-11
+
 ### Added
 
 - **Learning on your own** (backend): `warqa learn <pdf> --lang <code> --level beginner|some|advanced` and a
@@ -311,5 +313,6 @@ English, with any AI model.
   CI (build, lint, typecheck, unit, end-to-end and worker tests), release and GitHub Pages workflows,
   one-click launchers for Windows, macOS and Linux, and start-here guides for teachers and parents.
 
-[Unreleased]: https://github.com/Redouane-E/warqa/compare/v0.1.0...HEAD
+[Unreleased]: https://github.com/Redouane-E/warqa/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/Redouane-E/warqa/compare/v0.1.0...v0.2.0
 [0.1.0]: https://github.com/Redouane-E/warqa/releases/tag/v0.1.0

@@ -4,4 +4,4 @@ The TypeScript core never imports this package; it calls it over HTTP when `pipe
 Every engine is optional and imported lazily, so the server starts with only FastAPI installed.
 """
 
-__version__ = "0.1.0"
+__version__ = "0.2.0"

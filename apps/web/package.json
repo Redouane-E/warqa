@@ -1,7 +1,7 @@
 {
   "name": "@warqa/web",
   "private": true,
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "Warqa in the browser: the studio and its pipeline running entirely in a web page (no server, no install). Keys and books stay in the browser.",
   "license": "Apache-2.0",
   "type": "module",
