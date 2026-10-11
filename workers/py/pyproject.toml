@@ -71,7 +71,10 @@ packages = ["warqa_worker"]
 
 [tool.uv]
 # catt-tashkeel declares onnxruntime-gpu; replace it with the CPU onnxruntime listed in the extra.
-override-dependencies = ["onnxruntime-gpu; sys_platform == 'never'"]
+# habibi-tts 0.1.1 caps torch below 2.9, and torch before 2.13 has memory-corruption advisories
+# (jit.script, lstm_cell, unpack_sequence). Its torchaudio.load goes through torchcodec from torchaudio
+# 2.9 on, which f5-tts already requires; Habibi and alignment were checked on torch 2.14. Lift the cap.
+override-dependencies = ["onnxruntime-gpu; sys_platform == 'never'", "torch>=2.13"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

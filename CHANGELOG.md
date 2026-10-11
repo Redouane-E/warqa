@@ -9,6 +9,23 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
 
 ## [Unreleased]
 
+### Security
+
+- Worker: torch is locked at 2.14 (was 2.8), past three memory-corruption advisories. Habibi-TTS caps torch
+  below 2.9; `pyproject.toml` and the worker's Dockerfile lift that cap (`torch>=2.13`).
+
+### Fixed
+
+- Worker image built with Habibi voices: F5-TTS failed to load as the image's plain user (numba could not
+  write its cache into site-packages). The build also left `/cache/xdg` owned by root. Every cache now goes to
+  `/cache`, owned by the worker's user. A volume made by an older image keeps its root-owned `xdg` folder:
+  remove that folder, or start with a new volume.
+
+### Changed
+
+- TypeScript 7 (the native compiler) builds and type-checks the packages; the emitted JavaScript is unchanged.
+  `@types/node` stays on Node 22, the oldest Node Warqa supports.
+
 ## [0.2.0] - 2026-10-11
 
 ### Added

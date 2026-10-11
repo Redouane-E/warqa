@@ -43,18 +43,24 @@ COPY pyproject.toml README.md ./
 COPY warqa_worker ./warqa_worker
 
 # catt-tashkeel declares onnxruntime-gpu, which clashes with onnxruntime: drop it (CPU runtime is used).
-# torch (align/habibi) comes from the CPU wheel index, not the multi-GB CUDA build.
+# torch (align/habibi) comes from the CPU wheel index, not the multi-GB CUDA build. habibi-tts caps it
+# below 2.9, which has security advisories: lift the cap as pyproject.toml does.
 RUN set -eux; \
     extras="ocr,tashkeel"; \
     if [ "$WITH_ALIGN" = "1" ]; then extras="$extras,align"; fi; \
     if [ "$WITH_TTS" = "1" ]; then extras="$extras,tts"; fi; \
     if [ "$WITH_HABIBI" = "1" ]; then extras="$extras,habibi"; fi; \
-    echo 'onnxruntime-gpu; sys_platform == "never"' > /tmp/overrides.txt; \
+    printf '%s\n' 'onnxruntime-gpu; sys_platform == "never"' 'torch>=2.13' > /tmp/overrides.txt; \
     uv pip install --system --torch-backend cpu --overrides /tmp/overrides.txt ".[$extras]"; \
     rm /tmp/overrides.txt; \
     python -c "import warqa_worker, pytesseract, rapidocr, catt_tashkeel"
 
-RUN useradd --create-home --uid 10001 warqa && mkdir -p /cache && chown warqa /cache
+# The worker runs as a plain user: every cache goes to /cache. numba (librosa, pulled in by F5-TTS) cannot
+# cache into site-packages; and the import check above leaves root-owned folders in /cache, hence -R.
+ENV NUMBA_CACHE_DIR=/cache/numba \
+    MPLCONFIGDIR=/cache/matplotlib
+
+RUN useradd --create-home --uid 10001 warqa && mkdir -p /cache && chown -R warqa /cache
 USER warqa
 VOLUME ["/cache"]
 

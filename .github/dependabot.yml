@@ -16,6 +16,10 @@ updates:
     commit-message:
       prefix: deps
       prefix-development: deps-dev
+    ignore:
+      # The Node types follow the oldest Node in "engines" (22), so code cannot use a newer API by mistake.
+      - dependency-name: '@types/node'
+        update-types: ['version-update:semver-major']
     groups:
       ai-sdk:
         patterns: ['ai', '@ai-sdk/*', '@openrouter/*', 'ollama-ai-provider*']

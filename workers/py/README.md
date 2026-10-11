@@ -164,7 +164,7 @@ Warqa then calls `/align`.
 | `align` | stable-ts (pulls torch, openai-whisper) | `ffmpeg` for mp3 | Whisper weights (`small` ≈ 460 MB) |
 | `tashkeel` | catt-tashkeel, onnxruntime | – | CATT ONNX zip (ED ≈ 86 MB, EO ≈ 72 MB) |
 | `tts` | piper-tts (**GPL-3.0**) | – | each Piper voice (≈ 60 MB for *medium*) |
-| `habibi` | habibi-tts (pulls f5-tts, torch < 2.9) | `ffmpeg` | Habibi Specialized checkpoint (≈ 1.35 GB per dialect) + Vocos vocoder |
+| `habibi` | habibi-tts (pulls f5-tts and torch; its `torch < 2.9` cap is lifted, see below) | `ffmpeg` | Habibi Specialized checkpoint (≈ 1.35 GB per dialect) + Vocos vocoder |
 | `all` | ocr + align + tashkeel + tts (so it includes GPL piper-tts; not habibi) | | |
 
 Install with `uv sync --extra ocr --extra align` (or `pip install ".[ocr,align]"`).
@@ -174,6 +174,12 @@ conflicts with `onnxruntime`. `pyproject.toml` drops it for uv (`tool.uv.overrid
 Dockerfile does the same with `--overrides`. With plain pip on macOS, install it with
 `pip install --no-deps catt-tashkeel` after the other packages. The legacy `rapidocr-onnxruntime` package
 is replaced by `rapidocr` 3.x because it is capped at Python < 3.13 and has no Arabic model.
+
+`habibi-tts` 0.1.1 asks for `torch < 2.9`, and torch before 2.13 has memory-corruption advisories.
+`tool.uv.override-dependencies` and the Dockerfile lift that cap to `torch >= 2.13`. Habibi reads its
+reference clip with `torchaudio.load`, which goes through `torchcodec` (an F5-TTS dependency) from
+torchaudio 2.9 on; Habibi speech and alignment were checked on torch 2.14 (CPU). With plain pip, install
+`f5-tts` and `torch>=2.13` first, then `pip install --no-deps habibi-tts`.
 
 ## Licences
 
