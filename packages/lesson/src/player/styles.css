@@ -2377,6 +2377,612 @@
     box-shadow: 0 -14px 32px -22px rgba(19, 23, 46, 0.45);
   }
 }
+/* ---------- phase 5: phones, gestures and keys ---------- */
+/* desktop: the phone's sheets, handles, bottom row and waiting line are not there */
+.wq-listen,
+.wq-veil,
+.wq-grip,
+.wq-tr-size,
+.wq-wait,
+.wq-steprate,
+.wq-listen-btn,
+.wq-fin-phone {
+  display: none;
+}
+.wq-steprow,
+.wq-bottomrow {
+  display: contents;
+}
+/* the transcript's steps already seen */
+.wq-tr-seen {
+  display: none;
+}
+.wq-transcript li.wq-seen .wq-tr-seen {
+  display: inline;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--wq-text-2);
+}
+.wq-transcript li.wq-seen p {
+  color: var(--wq-text-2);
+}
+/* a word heard again on its own: ringed, and its pill under the caption */
+.wq-caption .wq-held > .wq-w {
+  padding: 0 0.2em;
+  border-radius: var(--wq-radius-fluo);
+  background: var(--wq-fluo);
+  color: var(--wq-on-fluo);
+  box-shadow: 0 0 0 2px var(--wq-ink);
+}
+.wq-wordpill {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: -6px 0 0;
+  padding: 4px 12px;
+  border-radius: 8px;
+  background: var(--wq-text);
+  color: var(--wq-sheet);
+  font-size: 15px;
+}
+.wq-wordpill .wq-i {
+  color: var(--wq-fluo);
+}
+/* the help: a Close button beside the Esc line; Arabic letters beside the Latin keys */
+.wq-help-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-block-start: 20px;
+}
+.wq-help-foot .wq-help-close {
+  margin: 0;
+}
+.wq-kbd-ar {
+  margin-inline-start: 6px;
+  font-size: 0.9em;
+  color: var(--wq-text-2);
+}
+.wq-help[open] .wq-help-box {
+  animation: wq-up var(--wq-t-sheet) var(--wq-ease-settle);
+}
+/* browsers without dynamic viewport units (Chrome before 108, Safari before 15.4): the classic ones */
+@supports not (height: 1dvh) {
+  @media (max-width: 640px) {
+    .wq-bsheet {
+      max-height: min(760px, 92vh);
+    }
+    .wq-transcript {
+      height: min(52vh, 440px);
+    }
+    .wq-transcript.wq-tr-full {
+      height: calc(100vh - 64px);
+    }
+  }
+}
+@keyframes wq-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+}
+@keyframes wq-sheet-in {
+  from {
+    transform: translateY(105%);
+  }
+}
+
+@media (max-width: 640px) {
+  /* language and look move to Listening */
+  .wq-head .wq-langsel,
+  .wq-head .wq-theme {
+    display: none;
+  }
+  /* the picture and the caption take taps and sideways swipes; the page still scrolls up and down */
+  .wq-viewport,
+  .wq-caption {
+    touch-action: pan-y;
+  }
+  /* a finger holds a word to hear it: no text selection or callout on the words there */
+  .wq-caption.wq-rw .wq-w {
+    -webkit-touch-callout: none;
+    user-select: none;
+  }
+  .wq-transcript .wq-tr-head {
+    touch-action: none;
+  }
+  /* the bar: step and speed, the timeline (32 px targets), the controls, then Listening · Transcript */
+  .wq-bar {
+    grid-template-areas:
+      "step step step"
+      "segs segs segs"
+      "back play next"
+      "bottom bottom bottom";
+    column-gap: 28px;
+  }
+  .wq-steprow {
+    grid-area: step;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+    min-width: 0;
+  }
+  .wq-steprow .wq-stepname {
+    flex: 1;
+    min-width: 0;
+  }
+  .wq-steprate {
+    display: inline;
+    font-size: 12px;
+    color: var(--wq-text-2);
+  }
+  .wq-seg {
+    height: 32px;
+  }
+  .wq-seg i {
+    height: 6px;
+  }
+  .wq-speedwrap,
+  .wq-cc {
+    display: none;
+  }
+  .wq-bottomrow {
+    grid-area: bottom;
+    display: flex;
+    gap: 8px;
+  }
+  .wq-bottomrow .wq-listen-btn,
+  .wq-bottomrow .wq-txt-bar {
+    flex: 1;
+    display: inline-flex;
+    justify-content: center;
+    gap: 8px;
+    min-height: 48px;
+    padding: 0 12px;
+    border: 1px solid var(--wq-control-border);
+    border-radius: 10px;
+    background: var(--wq-sheet);
+    font-size: 15px;
+    font-weight: 500;
+  }
+  .wq-bottomrow .wq-i {
+    width: 20px;
+    height: 20px;
+  }
+  .wq-listen-btn .wq-lbl {
+    display: inline;
+  }
+  .wq-listen-btn[aria-expanded="true"],
+  .wq-txt-bar[aria-pressed="true"] {
+    border-color: var(--wq-ink);
+    background: var(--wq-ink-tint);
+    color: var(--wq-ink);
+  }
+  /* a question waits under the picture: the controls give way to where you are */
+  .wq-asking .wq-back,
+  .wq-asking .wq-play,
+  .wq-asking .wq-next,
+  .wq-asking .wq-segs,
+  .wq-asking .wq-steprow,
+  .wq-asking .wq-bottomrow,
+  .wq-asking .wq-caption,
+  .wq-asking .wq-wordpill {
+    display: none;
+  }
+  /* (the bar is one row then: the controls that sized its columns are gone) */
+  .wq-asking .wq-bar {
+    display: flex;
+  }
+  .wq-asking .wq-wait {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 13px;
+    color: var(--wq-text-2);
+  }
+  .wq-wait-bar {
+    flex: 1;
+    height: 6px;
+    border-radius: 3px;
+    background: var(--wq-seyes);
+    overflow: hidden;
+  }
+  .wq-wait-bar i {
+    display: block;
+    height: 100%;
+    background: var(--wq-ink);
+  }
+  /* paused and the start screen in page pixels (the stage itself is scaled to about a quarter) */
+  .wq-paused {
+    gap: calc(8px / var(--k, 1));
+  }
+  .wq-paused-btn {
+    width: calc(64px / var(--k, 1));
+    height: calc(64px / var(--k, 1));
+    box-shadow: 0 calc(12px / var(--k, 1)) calc(28px / var(--k, 1)) calc(-14px / var(--k, 1)) rgba(19, 23, 46, 0.55);
+  }
+  .wq-paused-btn .wq-i {
+    width: calc(28px / var(--k, 1));
+    height: calc(28px / var(--k, 1));
+  }
+  .wq-paused p {
+    padding: calc(3px / var(--k, 1)) calc(10px / var(--k, 1));
+    font-size: calc(12px / var(--k, 1));
+  }
+  .wq-cover small {
+    font-size: calc(12px / var(--k, 1));
+  }
+  .wq-go {
+    gap: calc(8px / var(--k, 1));
+    padding: calc(10px / var(--k, 1)) calc(18px / var(--k, 1));
+    border-radius: calc(10px / var(--k, 1));
+    font-size: calc(16px / var(--k, 1));
+  }
+  .wq-go .wq-i {
+    width: calc(18px / var(--k, 1));
+    height: calc(18px / var(--k, 1));
+  }
+  /* the veil behind a sheet that takes the screen */
+  .wq-veil {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 25;
+    border: 0;
+    background: color-mix(in srgb, var(--wq-ground) 72%, transparent);
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity calc(var(--wq-t-sheet) * 0.7) var(--wq-ease-lift);
+  }
+  .wq-veiled .wq-veil {
+    opacity: 1;
+    pointer-events: auto;
+    transition: opacity var(--wq-t-sheet) var(--wq-ease-settle);
+  }
+  /* bottom sheets: Listening, and the transcript */
+  .wq-bsheet {
+    position: fixed;
+    inset-inline: 0;
+    inset-block-end: 0;
+    z-index: 30;
+    display: grid;
+    align-content: start;
+    gap: 16px;
+    max-height: min(760px, 92dvh);
+    overflow: auto;
+    padding: 0 20px calc(28px + env(safe-area-inset-bottom));
+    border-radius: 16px 16px 0 0;
+    background: var(--wq-sheet);
+    box-shadow: 0 -18px 40px -24px rgba(19, 23, 46, 0.45);
+    transform: translateY(105%);
+    visibility: hidden;
+    transition:
+      transform calc(var(--wq-t-sheet) * 0.7) var(--wq-ease-lift),
+      visibility 0s calc(var(--wq-t-sheet) * 0.7);
+  }
+  .wq-bsheet.wq-open {
+    transform: none;
+    visibility: visible;
+    transition: transform var(--wq-t-sheet) var(--wq-ease-settle);
+  }
+  .wq-bsheet.wq-dragging,
+  .wq-transcript.wq-dragging {
+    transition: none;
+  }
+  .wq-grip {
+    display: grid;
+    place-items: center;
+    justify-self: center;
+    width: 88px;
+    height: 32px;
+    margin-block-end: -8px;
+    padding: 0;
+    border: 0;
+    background: none;
+    touch-action: none;
+    cursor: grab;
+  }
+  .wq-grip span {
+    width: 40px;
+    height: 4px;
+    border-radius: 2px;
+    background: var(--wq-control-border);
+  }
+  .wq-ls-head {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 8px;
+  }
+  .wq-ls-head h2 {
+    margin: 0;
+    font-variation-settings: "HEXP" 60;
+    font-size: 20px;
+    font-weight: 600;
+  }
+  .wq-ls-head h2:focus {
+    outline: none;
+  }
+  .wq-ls-close {
+    width: 44px;
+    height: 44px;
+    border: 1px solid var(--wq-control-border);
+    border-radius: 10px;
+  }
+  .wq-ls-group {
+    display: grid;
+    gap: 8px;
+  }
+  .wq-ls-label {
+    margin: 0;
+    font-size: 13px;
+    font-weight: 500;
+    color: var(--wq-text-2);
+  }
+  /* the lesson's languages: rows in a box, each in its own language */
+  .wq-ls-radios:has(.wq-ls-lang) {
+    display: grid;
+    border: 1px solid var(--wq-line);
+    border-radius: 10px;
+    overflow: hidden;
+  }
+  .wq-ls-lang {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    min-height: 52px;
+    padding: 0 16px;
+    border: 0;
+    border-block-end: 1px solid var(--wq-line);
+    background: var(--wq-sheet);
+    color: var(--wq-text);
+    font-size: 17px;
+    text-align: start;
+  }
+  .wq-ls-lang:last-child {
+    border-block-end: 0;
+  }
+  .wq-ls-lang .wq-i {
+    visibility: hidden;
+  }
+  .wq-ls-lang[aria-checked="true"] {
+    background: var(--wq-ink-tint);
+    color: var(--wq-ink);
+    font-weight: 600;
+  }
+  .wq-ls-lang[aria-checked="true"] .wq-i {
+    visibility: visible;
+  }
+  /* speed and look: segmented (speed always left to right: 0.75× first) */
+  .wq-ls-radios:has(.wq-seg-r) {
+    display: flex;
+    gap: 4px;
+    padding: 4px;
+    border-radius: 999px;
+    background: var(--wq-ground);
+  }
+  .wq-seg-r {
+    flex: 1;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 40px;
+    padding: 0 8px;
+    border: 0;
+    border-radius: 999px;
+    background: transparent;
+    color: var(--wq-text);
+    font-size: 15px;
+    transition: background var(--wq-t-menu) var(--wq-ease-settle);
+  }
+  .wq-seg-r[data-rate] {
+    font-family: var(--wq-font-mono);
+    font-size: 14px;
+  }
+  .wq-seg-r .wq-i {
+    display: none;
+  }
+  .wq-seg-r[aria-checked="true"] {
+    background: var(--wq-sheet);
+    color: var(--wq-ink);
+    font-weight: 600;
+    box-shadow: 0 1px 2px rgba(19, 23, 46, 0.12);
+  }
+  /* the read-along switch */
+  .wq-ls-switch {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+    min-height: 52px;
+  }
+  .wq-ls-t {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 500;
+  }
+  .wq-ls-hint {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--wq-text-2);
+  }
+  .wq-switch {
+    position: relative;
+    flex: none;
+    width: 56px;
+    height: 32px;
+    padding: 0;
+    border: 0;
+    border-radius: 999px;
+    background: var(--wq-control-border);
+    transition: background var(--wq-t-menu) var(--wq-ease-settle);
+  }
+  .wq-switch[aria-checked="true"] {
+    background: var(--wq-ink);
+  }
+  .wq-knob {
+    position: absolute;
+    inset-block-start: 4px;
+    inset-inline-start: 4px;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(19, 23, 46, 0.3);
+    transition: transform var(--wq-t-menu) var(--wq-ease-settle);
+  }
+  .wq-switch[aria-checked="true"] .wq-knob {
+    transform: translateX(24px);
+  }
+  .wq-rtl .wq-switch[aria-checked="true"] .wq-knob {
+    transform: translateX(-24px);
+  }
+  /* the transcript: half height (the lesson plays on above it), or full; a handle to drag */
+  .wq-transcript {
+    height: min(52dvh, 440px);
+    max-height: none;
+    padding-block-start: 0;
+    gap: 8px;
+    transition: height var(--wq-t-sheet) var(--wq-ease-settle);
+    animation: wq-sheet-in var(--wq-t-sheet) var(--wq-ease-settle);
+    z-index: 30;
+  }
+  .wq-transcript.wq-tr-full {
+    height: calc(100dvh - 64px);
+  }
+  .wq-transcript .wq-grip {
+    flex: none;
+    align-self: center;
+  }
+  .wq-tr-head h2 {
+    flex: 1;
+  }
+  .wq-tr-size {
+    display: inline-flex;
+    align-items: center;
+    min-height: 44px;
+    padding: 0 12px;
+    border: 1px solid var(--wq-control-border);
+    border-radius: 10px;
+    background: transparent;
+    color: var(--wq-text);
+    font-size: 14px;
+  }
+  /* the question under the picture: larger targets, Check across the card; it rises in once the voice stops */
+  .wq-cards-out .wq-card {
+    animation: wq-up var(--wq-t-sheet) var(--wq-ease-settle) var(--wq-t-sheet) both;
+  }
+  .wq-cards-out .wq-prompt,
+  .wq-cards-out .wq-card-screen .wq-prompt {
+    font-size: 18px;
+  }
+  .wq-cards-out .wq-choice {
+    min-height: 52px;
+  }
+  /* one column under the picture: the options stacked, Check across; no key hints on a phone */
+  .wq-cards-out .wq-card-band {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .wq-cards-out .wq-choices {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .wq-cards-out .wq-keys {
+    display: none;
+  }
+  .wq-cards-out .wq-card:not(.wq-finish-learn) .wq-actions {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  .wq-cards-out .wq-card:not(.wq-finish-learn) .wq-actions .wq-btn {
+    justify-content: center;
+    min-height: 52px;
+  }
+  /* the finish: the score large, each kind of question as diamonds, the three ways on full width */
+  .wq-cards-out .wq-finish .wq-finish-score,
+  .wq-cards-out .wq-finish .wq-finish-list {
+    display: none;
+  }
+  .wq-cards-out .wq-finish .wq-actions {
+    align-self: stretch;
+  }
+  .wq-cards-out .wq-finish .wq-fin-phone {
+    display: grid;
+    justify-items: center;
+    gap: 10px;
+    width: 100%;
+  }
+  .wq-fin-big {
+    display: flex;
+    align-items: baseline;
+    gap: 10px;
+    margin: 0;
+  }
+  .wq-fin-n {
+    font-family: var(--wq-font-mono);
+    font-size: 64px;
+    font-weight: 600;
+    line-height: 1;
+  }
+  .wq-fin-n:last-child {
+    background: linear-gradient(transparent 62%, var(--wq-fluo) 62%);
+  }
+  .wq-fin-of {
+    font-size: 26px;
+    font-weight: 500;
+  }
+  .wq-fin-phone .wq-fin-label {
+    margin: 0;
+    font-size: 17px;
+    font-weight: 500;
+  }
+  .wq-fin-dl {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto;
+    width: 100%;
+    margin: 0;
+    padding: 6px 14px;
+    border: 1px solid var(--wq-line);
+    border-radius: 10px;
+    background: var(--wq-ground);
+    font-size: 15px;
+  }
+  .wq-fin-dl dt,
+  .wq-fin-dl dd {
+    display: flex;
+    align-items: center;
+    min-height: 40px;
+    margin: 0;
+  }
+  .wq-fin-dl dd {
+    gap: 10px;
+  }
+  .wq-fin-count {
+    font-variant-numeric: tabular-nums;
+  }
+  .wq-diamonds {
+    display: inline-flex;
+    gap: 6px;
+  }
+  .wq-diamonds i {
+    width: 11px;
+    height: 11px;
+    border: 2px solid var(--wq-input-border);
+    transform: rotate(45deg);
+  }
+  .wq-diamonds i.wq-dia-on {
+    border-color: var(--wq-good);
+    background: var(--wq-good);
+  }
+}
+
 @media (prefers-reduced-motion: reduce) {
   .wq-player *,
   .wq-player *::before,

@@ -122,6 +122,13 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **The player on a phone (redesign 5, part 1).** Tap the picture to pause or play, swipe to turn the page (mirrored
+  in Arabic and Darija), press and hold a word to hear it again on its own. Listening, a sheet under the thumb, holds
+  the lesson's language, the speed, the read-along and Sheet or Board; the transcript opens at half height and expands
+  or drags to full. A question waits under the picture with larger targets and Check across it, the controls giving
+  way to "Waiting for your answer"; the finish shows the score large with a diamond per question. Paused and the start
+  screen are readable on a phone; the words under the picture are on by default there. On a computer, `<` and `>`
+  change the speed; the help pauses the lesson, has a Close button and shows the Arabic letters of the letter keys.
 - **The web app's and the learner's states (redesign 4h, part 3).** When the books are open in another tab, a card
   says so with Use Warqa in this tab focused. When the browser's storage is almost full, a banner shows the space used
   with a meter and what to do; Your data lists each book with its size, a backup and delete. Importing a backup of a

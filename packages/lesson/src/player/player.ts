@@ -22,6 +22,7 @@ import type { Segment } from '../core/types.js';
 import { key as segKey } from '../core/types.js';
 import { type Lesson, type LessonInput, parseLesson, type Strings, type Timings } from '../schema/lesson.js';
 import { h, icon, markIcon, rich, svg } from './dom.js';
+import { dragSheet, onHold, onSurface } from './gestures.js';
 import { type PanelConfig, RatingPanel } from './panel.js';
 import { type CardController, openCard, type Score } from './quiz.js';
 import { type CardPlace, SceneRenderer } from './scene.js';
@@ -115,6 +116,9 @@ const THEME_KEY = 'warqa:theme';
 const SPEED_KEY = 'warqa:speed';
 /** Playback speeds; the voice keeps its pitch. */
 export const SPEEDS: readonly number[] = [0.75, 1, 1.25, 1.5];
+
+/** The letters on an Arabic keyboard's keys (the shortcuts match the key, not the letter). */
+const AR_KEYS: Record<string, string> = { C: 'ؤ', T: 'ف', F: 'ب', R: 'ق', S: 'س' };
 let players = 0;
 
 export class Player {
@@ -134,6 +138,23 @@ export class Player {
   /** No recorded voice in this language: the words light up at reading speed under the stage, said so. */
   private voiceNote!: HTMLDivElement;
   private noVoice = false;
+  /** Phones: the Listening sheet (language, speed, read-along, Sheet or Board), its button, and the veil. */
+  private listenEl!: HTMLElement;
+  private listenBtn: HTMLButtonElement | null = null;
+  private veil!: HTMLButtonElement;
+  /** Phones: the transcript at full height (else half). */
+  private trFull = false;
+  /** Phones: "waiting for your answer" in place of the controls while a question waits under the stage. */
+  private waitEl: HTMLElement | null = null;
+  /** A word heard again on its own (press and hold), and its pill. */
+  private heldAudio: HTMLAudioElement | null = null;
+  private wordPill!: HTMLElement;
+  private heldTimers: ReturnType<typeof setTimeout>[] = [];
+  /** Steps seen (left after being shown). */
+  private seen = new Set<number>();
+  /** Gesture listeners to remove; a sheet's drag, removed when the sheet is drawn again. */
+  private offs: (() => void)[] = [];
+  private dragOffs = new Map<string, () => void>();
   private cover!: HTMLButtonElement;
   private helpEl!: HTMLDialogElement;
   private panel: RatingPanel | null = null;
@@ -151,7 +172,14 @@ export class Player {
   /** Phones: question cards sit under the stage instead of inside the small picture. */
   private cardsOut = false;
   private phone: MediaQueryList | null = null;
-  private onPhone = () => this.placeCards(true);
+  private onPhone = () => {
+    this.placeCards(true);
+    this.translatePaused();
+    if (!this.phone?.matches) {
+      this.toggleListen(false);
+      this.setTrFull(false);
+    }
+  };
   private onOutside = (e: PointerEvent) => {
     if (!(e.target as Element).closest?.('.wq-speedwrap')) this.toggleSpeedMenu(false);
   };
@@ -236,15 +264,17 @@ export class Player {
       /* storage unavailable */
     }
     this.reducedMotion = typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+    this.phone = typeof matchMedia === 'function' ? matchMedia('(max-width: 640px)') : null;
     try {
-      this.captionsOn = localStorage.getItem(CAPTIONS_KEY) === '1';
+      // on a phone the words under the picture are on until the learner turns them off
+      const saved = localStorage.getItem(CAPTIONS_KEY);
+      this.captionsOn = saved === null ? !!this.phone?.matches && !opts.bare : saved === '1';
     } catch {
       /* storage unavailable */
     }
     this.buildDom();
     this.applyLang(this.lang);
     this.loadScores();
-    this.phone = typeof matchMedia === 'function' ? matchMedia('(max-width: 640px)') : null;
     this.placeCards(false);
     this.phone?.addEventListener?.('change', this.onPhone);
     this.keyHandler = this.keyHandler.bind(this);
@@ -380,6 +410,11 @@ export class Player {
     }
     this.applyTheme();
     this.redraw();
+    for (const b of this.listenEl?.querySelectorAll<HTMLElement>('[data-look]') ?? []) {
+      const on = (b.dataset.look === 'sheet') === (theme === 'sheet');
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
   }
 
   /** Phones put the question cards under the stage, full size; the picture then keeps its whole width. */
@@ -448,6 +483,13 @@ export class Player {
     (this.speedBtn.querySelector('.wq-rate') as HTMLElement).textContent = this.fmtRate(this.rate);
     for (const b of this.speedMenu.querySelectorAll('button'))
       b.setAttribute('aria-checked', String(Number(b.dataset.rate) === this.rate));
+    const rate = this.bar.querySelector('.wq-steprate');
+    if (rate) rate.textContent = this.fmtRate(this.rate);
+    for (const b of this.listenEl?.querySelectorAll<HTMLElement>('[data-rate]') ?? []) {
+      const on = Number(b.dataset.rate) === this.rate;
+      b.setAttribute('aria-checked', String(on));
+      b.tabIndex = on ? 0 : -1;
+    }
   }
 
   private toggleSpeedMenu(open = this.speedMenu.hidden) {
@@ -483,6 +525,27 @@ export class Player {
     this.cardHost = h('div', { class: 'wq-cards' });
     // captions sit under the stage, never on the picture
     this.captionEl = h('p', { class: 'wq-caption', hidden: true, dir: 'auto' });
+    // a word heard again on its own: its pill under the caption
+    this.wordPill = h('p', { class: 'wq-wordpill', hidden: true, dir: 'auto' });
+    // (for the pointer only: each sheet has its own Close)
+    this.veil = h('button', {
+      class: 'wq-veil',
+      type: 'button',
+      tabindex: '-1',
+      'aria-hidden': 'true',
+    }) as HTMLButtonElement;
+    this.veil.addEventListener('click', () => {
+      this.toggleListen(false);
+      if (this.trFull) this.toggleTranscript();
+    });
+    // (focusable itself: a tap on its text keeps the focus inside, and Esc still closes it)
+    this.listenEl = h('section', {
+      class: 'wq-listen wq-bsheet',
+      role: 'dialog',
+      'aria-modal': 'true',
+      tabindex: '-1',
+    });
+    this.listenEl.addEventListener('keydown', (e) => this.sheetKeys(e));
     this.voiceNote = h(
       'div',
       { class: 'wq-novoice', hidden: true },
@@ -517,7 +580,7 @@ export class Player {
       this.soundNote,
       this.cover,
     );
-    this.pausedEl.addEventListener('click', () => this.togglePlay());
+    // (a tap on the paused picture is the stage's: onSurface, which a click would undo here)
     this.helpEl = h('dialog', { class: 'wq-help' }) as HTMLDialogElement;
     this.transcriptEl = h('aside', { class: 'wq-transcript', hidden: true });
     this.head = h('header', { class: 'wq-head' });
@@ -534,13 +597,17 @@ export class Player {
           h('div', { class: 'wq-viewport' }, this.frame, this.tapEl),
           this.voiceNote,
           this.captionEl,
+          this.wordPill,
           this.bar,
         ),
         this.transcriptEl,
       ),
+      this.veil,
+      this.listenEl,
       this.helpEl,
       this.live,
     );
+    this.bindGestures();
     const panel = this.panelConfig();
     if (panel) {
       this.panel = new RatingPanel(
@@ -578,7 +645,7 @@ export class Player {
     const t = this.t;
     const b = this.lesson;
     this.stage.setAttribute('aria-label', t('lesson.aria'));
-    (this.pausedEl.querySelector('p') as HTMLElement).textContent = t('lesson.paused');
+    this.translatePaused();
     this.soundNote.textContent = t('lesson.soundFailed');
     (this.tapEl.querySelector('span') as HTMLElement).textContent = t('lesson.tapSound');
     this.voiceNote.hidden = !this.noVoice;
@@ -611,7 +678,17 @@ export class Player {
     this.buildHead();
     this.buildBar();
     this.buildHelp();
-    this.setCaptions(this.captionsOn);
+    this.buildListen();
+    this.setCaptions(this.captionsOn, false);
+  }
+
+  /** "Paused · tap to continue" on a phone or a touch screen; with the Space key elsewhere. */
+  private translatePaused() {
+    const touch =
+      !!this.phone?.matches || (typeof matchMedia === 'function' && matchMedia('(pointer: coarse)').matches);
+    (this.pausedEl.querySelector('p') as HTMLElement).textContent = this.t(
+      touch ? 'lesson.pausedTouch' : 'lesson.paused',
+    );
   }
 
   /** The strip above the stage: all lessons, the title, language, Sheet or Board, transcript, full screen. */
@@ -746,13 +823,35 @@ export class Player {
         this.speedBtn.focus();
       }
     });
+    // phones: Listening (language, speed, read-along, look) beside Transcript, under the controls
+    this.listenBtn = h(
+      'button',
+      {
+        class: 'wq-icon wq-listen-btn',
+        type: 'button',
+        'aria-expanded': String(this.listenEl.classList.contains('wq-open')),
+        'aria-controls': `wq-listen-${this.uid}`,
+        onclick: () => this.toggleListen(),
+      },
+      icon('voice'),
+      h('span', { class: 'wq-lbl' }, t('listen.title')),
+    ) as HTMLButtonElement;
+    this.waitEl = h(
+      'div',
+      { class: 'wq-wait', 'aria-hidden': 'true' },
+      h('bdi', { class: 'wq-mono', dir: 'ltr' }),
+      h('span', { class: 'wq-wait-bar' }, h('i')),
+      h('span', {}, t('bar.waiting')),
+    );
     this.bar.replaceChildren(
       ...([
         this.playBtn,
         this.iconBtn('wq-back', t('bar.back'), 'back', () => this.prev()),
         this.iconBtn('wq-next', t('bar.next'), 'next', () => this.next()),
         this.segsEl,
-        this.stepName,
+        // the step, and on phones the speed at its end
+        h('div', { class: 'wq-steprow' }, this.stepName, h('bdi', { class: 'wq-steprate wq-mono', dir: 'ltr' })),
+        this.waitEl,
         h('div', { class: 'wq-speedwrap' }, this.speedBtn, this.speedMenu),
         this.iconBtn(
           'wq-cc',
@@ -764,14 +863,20 @@ export class Player {
         ),
         // the teacher's rating, in the bar where the strip is hidden (the studio's preview)
         this.panel ? this.iconBtn('wq-rate-bar', t('panel.rate'), 'edit', () => this.toggleRating()) : null,
-        // on phones (and without the strip) the transcript button sits here, next to the captions
-        this.iconBtn(
-          'wq-txt wq-txt-bar',
-          t('bar.transcript'),
-          'transcript',
-          () => this.toggleTranscript(),
-          { 'aria-pressed': String(!this.transcriptEl.hidden) },
-          t('bar.text'),
+        // on phones (and without the strip) the transcript button sits here, next to the captions; on phones it
+        // shares the bottom row with Listening
+        h(
+          'div',
+          { class: 'wq-bottomrow' },
+          this.listenBtn,
+          this.iconBtn(
+            'wq-txt wq-txt-bar',
+            t('bar.transcript'),
+            'transcript',
+            () => this.toggleTranscript(),
+            { 'aria-pressed': String(!this.transcriptEl.hidden) },
+            t('bar.text'),
+          ),
         ),
       ].filter(Boolean) as Node[]),
     );
@@ -807,11 +912,20 @@ export class Player {
 
   private buildHelp() {
     const t = this.t;
+    // on an Arabic keyboard the letter keys carry Arabic letters: shown beside the Latin one
+    const arabic = this.lang === 'ar' || this.lang === 'ary';
     const row = (keys: string[], label: MessageKey) => [
       h(
         'dt',
         {},
-        keys.map((k) => h('kbd', {}, k)),
+        keys.map((k) =>
+          h(
+            'kbd',
+            { dir: 'ltr' },
+            k,
+            arabic && AR_KEYS[k] ? h('span', { class: 'wq-kbd-ar', lang: 'ar' }, AR_KEYS[k]) : null,
+          ),
+        ),
       ),
       h('dd', {}, t(label)),
     ];
@@ -836,9 +950,11 @@ export class Player {
               row([prevK, nextK], 'help.prevNext'),
               row(['Shift', prevK, nextK], 'help.prevNextQ'),
               row(['Home'], 'help.restart'),
+              row(['<', '>'], 'help.speed'),
               row(['C'], 'help.captions'),
               row(['T'], 'help.transcript'),
               row(['F'], 'help.fullscreen'),
+              ...(this.panel ? [row(['R'], 'help.rate')] : []),
               row(['?'], 'help.help'),
             ),
           ),
@@ -858,7 +974,12 @@ export class Player {
             ),
           ),
         ),
-        h('p', { class: 'wq-help-close' }, t('help.close')),
+        h(
+          'div',
+          { class: 'wq-help-foot' },
+          h('p', { class: 'wq-help-close' }, t('help.close')),
+          h('button', { type: 'button', class: 'wq-btn', onclick: () => this.helpEl.close() }, t('common.close')),
+        ),
       ),
     );
     this.helpEl.addEventListener('click', (e) => {
@@ -881,21 +1002,354 @@ export class Player {
           h('bdi', { class: 'wq-tr-n', dir: 'ltr' }, String(i + 1)),
           q ? h('span', { class: 'wq-tr-q', 'aria-hidden': 'true' }) : null,
           h('bdi', { class: 'wq-tr-t' }, rich(cb.beat.title)),
+          h('span', { class: 'wq-tr-seen' }, `· ${t('transcript.watched')}`),
         ),
         h('p', {}, rich(narrationText(cb.beat.narration))),
       );
       list.append(li);
     });
     this.transcriptEl.setAttribute('aria-labelledby', `wq-tr-${this.uid}`);
-    this.transcriptEl.replaceChildren(
+    const grip = this.grip(() => this.toggleTranscript());
+    const head = h(
+      'div',
+      { class: 'wq-tr-head' },
+      h('h2', { id: `wq-tr-${this.uid}` }, t('transcript.title')),
+      // phones: half height or full
+      h(
+        'button',
+        {
+          type: 'button',
+          class: 'wq-tr-size',
+          onclick: () => this.setTrFull(!this.trFull),
+        },
+        t(this.trFull ? 'transcript.collapse' : 'transcript.expand'),
+      ),
+      this.iconBtn('', t('transcript.close'), 'close', () => this.toggleTranscript()),
+    );
+    this.transcriptEl.replaceChildren(grip, head, h('p', { class: 'wq-tr-hint' }, t('transcript.hint')), list);
+    // dragged by its handle or head: it stops at half height, then full; down from half closes
+    this.dragOffs.get('tr')?.();
+    const trOffs = [grip, head].map((g) =>
+      dragSheet(g, {
+        active: () => !!this.phone?.matches,
+        stops: () => {
+          const vh = window.innerHeight;
+          return [0, Math.min(vh * 0.52, 440), vh - 64];
+        },
+        height: () => this.transcriptEl.getBoundingClientRect().height,
+        follow: (px) => {
+          this.transcriptEl.style.height = `${px}px`;
+          this.transcriptEl.classList.add('wq-dragging');
+        },
+        done: (px) => {
+          this.transcriptEl.style.height = '';
+          this.transcriptEl.classList.remove('wq-dragging');
+          if (px === 0) this.toggleTranscript();
+          else this.setTrFull(px > Math.min(window.innerHeight * 0.52, 440) + 1);
+        },
+      }),
+    );
+    this.dragOffs.set('tr', () => {
+      for (const off of trOffs) off();
+    });
+  }
+
+  /** A bottom sheet's handle (phones): a button that closes it, and what a finger drags. */
+  private grip(close: () => void): HTMLElement {
+    return h(
+      'button',
+      // (for fingers: each sheet has its own Close button for the keyboard and screen readers)
+      { type: 'button', class: 'wq-grip', 'data-grip': '', tabindex: '-1', 'aria-hidden': 'true', onclick: close },
+      h('span', { 'aria-hidden': 'true' }),
+    );
+  }
+
+  /** Phones: the transcript at half height (the lesson plays on above it) or full (a veil behind it). */
+  private setTrFull(full: boolean) {
+    if (this.trFull === full) return;
+    this.trFull = full;
+    this.transcriptEl.classList.toggle('wq-tr-full', full);
+    this.root.classList.toggle('wq-veiled', full && !this.transcriptEl.hidden);
+    const b = this.transcriptEl.querySelector('.wq-tr-size');
+    if (b) b.textContent = this.t(full ? 'transcript.collapse' : 'transcript.expand');
+  }
+
+  /** The Listening sheet (phones): the lesson's language, speed, the read-along, Sheet or Board. */
+  private buildListen() {
+    const t = this.t;
+    const titleId = `wq-listen-t-${this.uid}`;
+    this.listenEl.id = `wq-listen-${this.uid}`;
+    this.listenEl.setAttribute('aria-labelledby', titleId);
+    const group = (label: string, id: string, items: HTMLElement[], ltr = false) =>
       h(
         'div',
-        { class: 'wq-tr-head' },
-        h('h2', { id: `wq-tr-${this.uid}` }, t('transcript.title')),
-        this.iconBtn('', t('transcript.close'), 'close', () => this.toggleTranscript()),
+        { class: 'wq-ls-group' },
+        h('p', { class: 'wq-ls-label', id }, label),
+        h(
+          'div',
+          { class: 'wq-ls-radios', role: 'radiogroup', 'aria-labelledby': id, ...(ltr ? { dir: 'ltr' } : {}) },
+          items,
+        ),
+      );
+    const radio = (label: string, on: boolean, pick: () => void, extra: Record<string, unknown> = {}) => {
+      const b = h(
+        'button',
+        { type: 'button', role: 'radio', 'aria-checked': String(on), tabindex: on ? '0' : '-1', ...extra },
+        h('span', {}, label),
+        icon('check', 18),
+      );
+      b.addEventListener('click', pick);
+      return b;
+    };
+    const langs = this.langs();
+    const langRows = langs.map((l) =>
+      radio(
+        LANG_INFO[l as keyof typeof LANG_INFO]?.name ?? langInfo(l).name,
+        l === this.lang,
+        () => {
+          this.setLang(l);
+          // the sheet is drawn again in the new language: the focus stays on the chosen language
+          this.listenEl.querySelector<HTMLElement>(`[data-lang="${l}"]`)?.focus();
+        },
+        { 'data-lang': l, lang: l, dir: dirOf(l), class: 'wq-ls-lang' },
       ),
-      h('p', { class: 'wq-tr-hint' }, t('transcript.hint')),
-      list,
+    );
+    const switchId = `wq-ls-ra-${this.uid}`;
+    const hintId = `wq-ls-rah-${this.uid}`;
+    const readAlong = h(
+      'button',
+      {
+        type: 'button',
+        class: 'wq-switch',
+        role: 'switch',
+        'aria-checked': String(this.captionsOn),
+        'aria-labelledby': switchId,
+        'aria-describedby': hintId,
+        onclick: () => this.setCaptions(!this.captionsOn),
+      },
+      h('span', { class: 'wq-knob' }),
+    );
+    this.listenEl.replaceChildren(
+      ...([
+        this.grip(() => this.toggleListen(false)),
+        h(
+          'div',
+          { class: 'wq-ls-head' },
+          h('h2', { id: titleId, tabindex: '-1' }, t('listen.title')),
+          this.iconBtn('wq-ls-close', t('common.close'), 'close', () => this.toggleListen(false)),
+        ),
+        langs.length > 1 ? group(t('listen.lang'), `wq-ls-l-${this.uid}`, langRows) : null,
+        group(
+          t('speed.title'),
+          `wq-ls-s-${this.uid}`,
+          SPEEDS.map((r) =>
+            radio(this.fmtRate(r), r === this.rate, () => this.setSpeed(r), {
+              'data-rate': String(r),
+              class: 'wq-seg-r',
+            }),
+          ),
+          true,
+        ),
+        // with no voice the words under the picture are the narration: nothing to switch
+        this.noVoice
+          ? null
+          : h(
+              'div',
+              { class: 'wq-ls-switch' },
+              h(
+                'div',
+                {},
+                h('p', { class: 'wq-ls-t', id: switchId }, t('listen.readAlong')),
+                h('p', { class: 'wq-ls-hint', id: hintId }, t('listen.readAlongHint')),
+              ),
+              readAlong,
+            ),
+        group(t('listen.look'), `wq-ls-k-${this.uid}`, [
+          radio(t('theme.sheet'), this.theme === 'sheet', () => this.setTheme('sheet'), {
+            'data-look': 'sheet',
+            class: 'wq-seg-r',
+          }),
+          radio(t('theme.board'), this.theme !== 'sheet', () => this.setTheme('board'), {
+            'data-look': 'board',
+            class: 'wq-seg-r',
+          }),
+        ]),
+      ].filter(Boolean) as Node[]),
+    );
+    this.dragOffs.get('ls')?.();
+    this.dragOffs.set(
+      'ls',
+      dragSheet(this.listenEl.querySelector<HTMLElement>('.wq-grip')!, {
+        stops: () => [0, this.listenEl.scrollHeight],
+        height: () => this.listenEl.getBoundingClientRect().height,
+        follow: (px) => {
+          this.listenEl.style.transform = `translateY(${this.listenEl.scrollHeight - px}px)`;
+          this.listenEl.classList.add('wq-dragging');
+        },
+        done: (px) => {
+          this.listenEl.style.transform = '';
+          this.listenEl.classList.remove('wq-dragging');
+          if (px === 0) this.toggleListen(false);
+        },
+      }),
+    );
+  }
+
+  /** Open or close the Listening sheet (phones). One sheet at a time: it closes the transcript. */
+  toggleListen(open = !this.listenEl.classList.contains('wq-open')): void {
+    if (!this.listenEl) return;
+    const was = this.listenEl.classList.contains('wq-open');
+    if (open === was) return;
+    if (open && !this.transcriptEl.hidden) this.toggleTranscript();
+    this.listenEl.classList.toggle('wq-open', open);
+    this.root.classList.toggle('wq-veiled', open);
+    this.listenBtn?.setAttribute('aria-expanded', String(open));
+    if (open)
+      (
+        this.listenEl.querySelector<HTMLElement>('[role="radio"][aria-checked="true"]') ??
+        this.listenEl.querySelector<HTMLElement>('h2')
+      )?.focus({ preventScroll: true });
+    else if (this.listenEl.contains(document.activeElement)) this.listenBtn?.focus({ preventScroll: true });
+  }
+
+  /** Inside a sheet: Esc closes it, Tab stays in it, arrows move within a group of choices. */
+  private sheetKeys(e: KeyboardEvent) {
+    if (e.code === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      this.toggleListen(false);
+      return;
+    }
+    if (e.code === 'Tab') {
+      const items = [
+        ...this.listenEl.querySelectorAll<HTMLElement>('button:not([tabindex="-1"]), [tabindex="0"]'),
+      ].filter((x) => x.offsetParent !== null);
+      const first = items[0];
+      const last = items.at(-1);
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last?.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first?.focus();
+      }
+      return;
+    }
+    const radio = (e.target as HTMLElement).closest<HTMLElement>('[role="radio"]');
+    const group = radio?.parentElement;
+    if (!radio || !group) return;
+    const rtl = getComputedStyle(group).direction === 'rtl';
+    const all = [...group.querySelectorAll<HTMLElement>('[role="radio"]')];
+    const k = all.indexOf(radio);
+    const to =
+      e.code === 'ArrowDown' || e.code === (rtl ? 'ArrowLeft' : 'ArrowRight')
+        ? k + 1
+        : e.code === 'ArrowUp' || e.code === (rtl ? 'ArrowRight' : 'ArrowLeft')
+          ? k - 1
+          : e.code === 'Home'
+            ? 0
+            : e.code === 'End'
+              ? all.length - 1
+              : null;
+    if (to === null) return;
+    e.preventDefault();
+    e.stopPropagation();
+    const next = all[(to + all.length) % all.length];
+    next?.click();
+    next?.focus();
+  }
+
+  /** Fingers on the picture and the caption: tap to pause or play, swipe to turn the page, hold a word. */
+  private bindGestures() {
+    const viewport = this.frame.parentElement!;
+    // controls, cards, pick targets, the start and paused layers, widgets that take input
+    const ignore = (t: Element) => {
+      const c = t.closest(
+        'button, a, input, select, textarea, [role="button"], [role="radio"], [tabindex], .wq-cards, .wq-card, .wq-picks, .wq-cover, .wq-tap',
+      );
+      // (only what is inside the picture: the player itself takes the focus too)
+      return !!c && viewport.contains(c);
+    };
+    const pickOpen = () => !!this.overlay.querySelector('.wq-picks');
+    const turn = (step: 1 | -1) => {
+      if (!this.started || this.opts.bare || this.reviewMode) return;
+      if (step > 0) this.next();
+      else this.prev();
+    };
+    this.offs.push(
+      onSurface(viewport, {
+        tap: () => {
+          // while a question waits, a tap on the picture is not play or pause; the editor's stage and review frames
+          // are still pictures
+          if (!this.started || this.opts.bare || this.reviewMode || (this.beat().ask && this.cardShown)) return;
+          this.togglePlay();
+        },
+        swipe: turn,
+        ignore,
+        dir: () => this.dir,
+        swipeOff: pickOpen,
+      }),
+      onSurface(this.captionEl, { swipe: turn, dir: () => this.dir, swipeOff: pickOpen }),
+      onHold(
+        this.captionEl,
+        '.wq-w',
+        (w) => this.sayWord(w),
+        () => this.canHold(),
+      ),
+    );
+  }
+
+  /** A word can be heard again on its own when the caption reads along over a recording (not estimated times). */
+  private canHold(): boolean {
+    const cb = this.beat();
+    return this.capWords.length > 0 && !cb.timing.synthetic && !!this.data.audio?.[this.lang]?.[cb.id];
+  }
+
+  /** Press and hold a word: the lesson pauses, the word is said again from the recording, a pill shows it. */
+  private sayWord(w: HTMLElement) {
+    const cb = this.beat();
+    const src = this.data.audio?.[this.lang]?.[cb.id];
+    const entry = this.capWords.find((c) => c.el.contains(w));
+    const words = cb.timing.words;
+    if (!src || !entry || !words?.[entry.k]) return;
+    const from = words[entry.k]![0];
+    const to = words[entry.k + 1]?.[0] ?? cb.timing.dur;
+    this.pause();
+    for (const id of this.heldTimers) clearTimeout(id);
+    this.heldTimers = [];
+    this.heldAudio?.pause();
+    for (const x of this.captionEl.querySelectorAll('.wq-held')) x.classList.remove('wq-held');
+    const a = new Audio(src);
+    a.playbackRate = this.rate;
+    this.heldAudio = a;
+    // from the word's start (once the file can seek), until the sound's own clock reaches the next word
+    const start = () => {
+      a.currentTime = from;
+      void a.play().catch(() => {});
+    };
+    if (a.readyState >= 1) start();
+    else a.addEventListener('loadedmetadata', start, { once: true });
+    a.addEventListener('timeupdate', () => {
+      if (a.currentTime >= to - 0.02) a.pause();
+    });
+    // (timeupdate is coarse: a safety stop once it plays)
+    a.addEventListener(
+      'playing',
+      () => this.heldTimers.push(setTimeout(() => a.pause(), ((to - a.currentTime) / this.rate) * 1000 + 60)),
+      { once: true },
+    );
+    const ms = Math.max(250, ((to - from) / this.rate) * 1000);
+    const word = (w.textContent ?? '').trim();
+    entry.el.classList.add('wq-held');
+    this.wordPill.replaceChildren(icon('voice', 16), h('span', {}, word));
+    this.wordPill.hidden = false;
+    this.live.textContent = this.t('word.again', { word });
+    navigator.vibrate?.(10);
+    this.heldTimers.push(
+      setTimeout(() => {
+        this.wordPill.hidden = true;
+        entry.el.classList.remove('wq-held');
+      }, ms + 1000),
     );
   }
 
@@ -931,6 +1385,8 @@ export class Player {
     this.usePalette();
     this.stopAudio();
     this.closeCard();
+    // the step being left was seen (the transcript marks it; a jump does not mark the ones skipped)
+    if (this.started && i !== this.i) this.seen.add(this.i);
     this.i = i;
     this.time = 0;
     this.resting = false;
@@ -1111,6 +1567,12 @@ export class Player {
   }
 
   private stopAudio() {
+    // a word heard again stops with the lesson's sound
+    if (this.heldAudio) {
+      this.heldAudio.pause();
+      this.heldAudio.removeAttribute('src');
+      this.heldAudio = null;
+    }
     if (this.audio) {
       this.audio.pause();
       this.audio.removeAttribute('src');
@@ -1159,6 +1621,8 @@ export class Player {
     this.cardShown = true;
     if (cb.beat.move === 'finish' && !cb.beat.questions?.length) this.finishCard();
     else this.openQuestions(cb);
+    // the bar follows at once (the clock may have stopped for the question)
+    this.updateUi();
   }
 
   /** Draw the picture at the current time. */
@@ -1208,9 +1672,31 @@ export class Player {
     const cur = this.transcriptEl.querySelector('li.wq-cur');
     if (cur?.getAttribute('data-i') !== String(this.i)) {
       cur?.classList.remove('wq-cur');
+      for (const li of this.transcriptEl.querySelectorAll<HTMLElement>('li[data-i]')) {
+        const n = Number(li.dataset.i);
+        li.classList.toggle('wq-seen', n !== this.i && this.seen.has(n));
+      }
       const now = this.transcriptEl.querySelector(`li[data-i="${this.i}"]`);
       now?.classList.add('wq-cur');
-      if (!this.transcriptEl.hidden) now?.scrollIntoView?.({ block: 'nearest' });
+      // the current step stays in the middle of the list as the lesson plays
+      if (!this.transcriptEl.hidden) now?.scrollIntoView?.({ block: this.playing ? 'center' : 'nearest' });
+    }
+    // phones: while a question waits under the picture, the controls give way to where you are
+    const waiting = !!(
+      cb.ask &&
+      this.cardShown &&
+      this.cardsOut &&
+      cb.beat.questions?.length &&
+      !this.cardHost.querySelector('.wq-finish')
+    );
+    this.root.classList.toggle('wq-asking', waiting);
+    if (waiting && this.waitEl) {
+      (this.waitEl.firstChild as HTMLElement).textContent = this.t('bar.stepOf', {
+        i: this.i + 1,
+        n: this.compiled.beats.length,
+      });
+      (this.waitEl.querySelector('i') as HTMLElement).style.width =
+        `${((this.i + 1) / this.compiled.beats.length) * 100}%`;
     }
   }
 
@@ -1294,7 +1780,8 @@ export class Player {
           return Object.keys(n.subs).filter((s) => /^(tick|tok|item|bar|step|event|node|cell):/.test(s));
         },
         overlay: this.overlay,
-        done: () => this.next(),
+        // the last step's question: Continue is the end of the lesson
+        done: () => (this.i < this.compiled.beats.length - 1 ? this.next() : this.finishCard()),
       },
     );
     this.pausedEl.hidden = true;
@@ -1320,6 +1807,57 @@ export class Player {
       };
       requestAnimationFrame(tick);
     }
+  }
+
+  /** The finish score on a phone: "4 of 5" with the numbers large, then checks and practice as diamonds. */
+  private bigScore(
+    right: number,
+    total: number,
+    sum: (k: 'check' | 'practice') => { r: number; n: number },
+  ): HTMLElement {
+    const t = this.t;
+    const fmt = (n: number) => formatNumber(n, this.lang, { digits: this.data.book?.digits ?? 'latn' });
+    // the words between the numbers come from the catalog ("{right} of {total}", "{right} من {total}")
+    const parts = t('finish.scoreNum', { right: '@R@', total: '@T@' }).split(/(@R@|@T@)/);
+    // said as one sentence; the large drawing of it is for the eyes
+    const said = h('p', { class: 'wq-sr' }, t('finish.score', { right, total }));
+    const num = h(
+      'p',
+      { class: 'wq-fin-big', 'aria-hidden': 'true' },
+      parts.map((x) =>
+        x === '@R@'
+          ? h('span', { class: 'wq-fin-n' }, fmt(right))
+          : x === '@T@'
+            ? h('span', { class: 'wq-fin-n' }, fmt(total))
+            : x.trim()
+              ? h('span', { class: 'wq-fin-of' }, x.trim())
+              : null,
+      ),
+    );
+    const rows = (['check', 'practice'] as const)
+      .map((k) => ({ k, s: sum(k) }))
+      .filter((x) => x.s.n)
+      .map(({ k, s: sc }) => [
+        h('dt', {}, t(k === 'check' ? 'finish.checks' : 'finish.practice')),
+        h(
+          'dd',
+          {},
+          h(
+            'span',
+            { class: 'wq-diamonds', 'aria-hidden': 'true' },
+            Array.from({ length: Math.min(sc.n, 12) }, (_, i) => h('i', { class: i < sc.r ? 'wq-dia-on' : '' })),
+          ),
+          h('bdi', { class: 'wq-fin-count' }, t('quiz.progress', { k: sc.r, n: sc.n })),
+        ),
+      ]);
+    return h(
+      'div',
+      { class: 'wq-fin-phone' },
+      said,
+      num,
+      h('p', { class: 'wq-fin-label', 'aria-hidden': 'true' }, t('finish.scoreLabel')),
+      rows.length ? h('dl', { class: 'wq-fin-dl' }, rows.flat()) : null,
+    );
   }
 
   private closeCard() {
@@ -1360,6 +1898,8 @@ export class Player {
         total
           ? h('p', { class: 'wq-finish-score' }, t('finish.score', { right, total }))
           : h('p', {}, t('finish.noScore')),
+        // phones: the score large, then each kind of question with a diamond per question
+        total ? this.bigScore(right, total, sum) : null,
         total
           ? h(
               'ul',
@@ -1859,6 +2399,7 @@ export class Player {
         /* storage unavailable */
       }
     this.bar.querySelector('.wq-cc')?.setAttribute('aria-pressed', String(on));
+    this.listenEl?.querySelector('.wq-switch')?.setAttribute('aria-checked', String(on));
     // with no voice the captions cannot be turned off: no button for it
     this.bar.querySelector<HTMLElement>('.wq-cc')?.toggleAttribute('hidden', this.noVoice);
     this.render?.call(this);
@@ -1866,9 +2407,13 @@ export class Player {
 
   /** The transcript is a side sheet that pushes the stage (a bottom sheet on phones); the stage scales down. */
   toggleTranscript(): void {
+    if (this.transcriptEl.hidden) this.toggleListen(false);
     this.transcriptEl.hidden = !this.transcriptEl.hidden;
     const open = !this.transcriptEl.hidden;
     this.root.classList.toggle('wq-with-transcript', open);
+    // phones: it opens at half height; the veil only behind the full height
+    if (!open) this.setTrFull(false);
+    this.root.classList.toggle('wq-veiled', open && this.trFull);
     for (const b of this.root.querySelectorAll('.wq-txt')) b.setAttribute('aria-pressed', String(open));
     if (open) {
       const cur = this.transcriptEl.querySelector('li.wq-cur');
@@ -1900,7 +2445,11 @@ export class Player {
 
   toggleHelp(): void {
     if (this.helpEl.open) this.helpEl.close();
-    else this.helpEl.showModal();
+    else {
+      // reading the list pauses the lesson (it does not start again by itself)
+      if (this.playing) this.pause();
+      this.helpEl.showModal();
+    }
   }
 
   toggleFull(): void {
@@ -1913,6 +2462,14 @@ export class Player {
   private keyHandler(e: KeyboardEvent) {
     if (e.defaultPrevented || e.ctrlKey || e.metaKey || e.altKey) return;
     if (this.helpEl.open || this.panel?.open) return;
+    // the Listening sheet is modal: the lesson's keys wait behind it (Esc closes it wherever the focus is)
+    if (this.listenEl.classList.contains('wq-open')) {
+      if (e.code === 'Escape') {
+        e.preventDefault();
+        this.toggleListen(false);
+      }
+      return;
+    }
     const target = e.target as HTMLElement;
     if (target?.tagName === 'SELECT' || target?.tagName === 'TEXTAREA') return;
     const cb = this.beat();
@@ -1933,7 +2490,13 @@ export class Player {
       else this.prev();
     } else if (e.code === 'Home') this.restart();
     else if (e.code === 'KeyC' && !this.noVoice) this.setCaptions(!this.captionsOn);
-    else if (e.code === 'KeyR' && this.panel && !asking) this.toggleRating();
+    else if (e.key === '<' || e.key === '>') {
+      // slower or faster, said aloud
+      const k = SPEEDS.indexOf(this.rate) + (e.key === '>' ? 1 : -1);
+      const r = SPEEDS[Math.max(0, Math.min(SPEEDS.length - 1, k))]!;
+      this.setSpeed(r);
+      this.live.textContent = this.t('speed.now', { rate: this.fmtRate(r) });
+    } else if (e.code === 'KeyR' && this.panel && !asking) this.toggleRating();
     else if (e.code === 'KeyT' && !asking) this.toggleTranscript();
     else if (e.code === 'KeyF' && !asking) this.toggleFull();
     else if (e.code === 'Escape' && this.speedMenu && !this.speedMenu.hidden) this.toggleSpeedMenu(false);
@@ -2033,6 +2596,9 @@ export class Player {
 
   destroy(): void {
     this.destroyed = true;
+    for (const off of [...this.offs, ...this.dragOffs.values()]) off();
+    for (const id of this.heldTimers) clearTimeout(id);
+    this.heldAudio?.pause();
     this.phone?.removeEventListener?.('change', this.onPhone);
     document.removeEventListener('pointerdown', this.onOutside, true);
     this.stopAudio();
