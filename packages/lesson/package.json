@@ -13,6 +13,10 @@
       "types": "./dist/player/index.d.ts",
       "default": "./dist/player/index.js"
     },
+    "./gestures": {
+      "types": "./dist/player/gestures.d.ts",
+      "default": "./dist/player/gestures.js"
+    },
     "./bundle/*": "./dist/bundle/*",
     "./package.json": "./package.json"
   },

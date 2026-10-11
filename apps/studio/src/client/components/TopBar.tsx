@@ -6,7 +6,7 @@ import { setLang, UI_LANGS, type UiLang, useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
 import { STEPS, usePlace } from '../place';
 import { mode } from '../prefs';
-import { Link, match, useLocation } from '../router';
+import { go, Link, match, useLocation } from '../router';
 import { useJobs } from './JobBoard';
 import { Menu } from './Menu';
 import { Icon, Mark } from './ui';
@@ -66,10 +66,17 @@ export function TopBar({ onGoTo }: { onGoTo: () => void }) {
   const { path } = useLocation();
   const place = usePlace();
   const jobs = useJobs();
-  const { topbarStatus } = useExtras();
+  const { topbarStatus, menuItems } = useExtras();
   const theme = useSyncExternalStore(subscribeTheme, effectiveTheme);
   const book = place.book;
   const ai = path === '/ai' || path === '/settings';
+  // phones: back to the place under this one (named after it), and this place's own title
+  const strips = useStrips();
+  const parent = strips[strips.length - 1];
+  const here =
+    place.lesson?.title ??
+    book?.title ??
+    (ai ? t('nav.ai') : path.startsWith('/learn') ? t('learn.home.title') : t('nav.books'));
   const learner = mode() === 'learn';
   // remember where you are, for AI and voices' strip
   const [bookId, bookName, bookStep] = [book?.id, book?.title, book?.step];
@@ -82,9 +89,21 @@ export function TopBar({ onGoTo }: { onGoTo: () => void }) {
   }, [path, bookId, bookName, bookStep]);
   return (
     <header className="topbar">
-      <a className="skip" href="#main">
-        {t('nav.skip')}
-      </a>
+      {/* the first stop on every page; on a book, straight to its step */}
+      {book && path === `/project/${encodeURIComponent(book.id)}` ? (
+        <a className="skip" href="#step">
+          {t('nav.skipStep')}
+        </a>
+      ) : (
+        <a className="skip" href="#main">
+          {t('nav.skip')}
+        </a>
+      )}
+      {parent && (
+        <Link to={parent.to} className="topbar-back" aria-label={parent.title} title={parent.title}>
+          <Icon name="back" />
+        </Link>
+      )}
       {/* someone learning on their own comes home to What I'm learning */}
       <Link
         to={learner ? '/learn' : '/'}
@@ -100,13 +119,17 @@ export function TopBar({ onGoTo }: { onGoTo: () => void }) {
           ورقة
         </span>
       </Link>
+      <p className="topbar-place" dir="auto">
+        {here}
+      </p>
       <button type="button" className="goto-btn" onClick={onGoTo} aria-keyshortcuts={isMac ? 'Meta+K' : 'Control+K'}>
         <Icon name="search" size={18} />
         <span className="goto-btn-text">{t('goto.button')}</span>
         <kbd>{isMac ? '⌘ K' : 'Ctrl K'}</kbd>
       </button>
       <div className="topbar-tools">
-        {topbarStatus}
+        {/* the host's status (the web app's): on a phone only its warnings button stays */}
+        {topbarStatus && <div className="topbar-status">{topbarStatus}</div>}
         {book && (
           <button
             type="button"
@@ -154,6 +177,29 @@ export function TopBar({ onGoTo }: { onGoTo: () => void }) {
         >
           <Icon name={theme === 'dark' ? 'sheet-theme' : 'board-theme'} />
         </button>
+        {/* phones: AI and voices, the interface language, Sheet or Board (and the host's own) in one menu */}
+        <Menu
+          className="phone-menu"
+          label={t('nav.menu')}
+          button={<Icon name="more" size={20} />}
+          items={[
+            // (through the unsaved-work guard, as the desktop link)
+            { key: 'ai', label: t('nav.ai'), onSelect: () => void go('/ai') },
+            ...UI_LANGS.map((l) => ({
+              key: `lang-${l}`,
+              label: LANG_NAMES[l],
+              lang: l,
+              checked: l === lang,
+              onSelect: () => setLang(l),
+            })),
+            {
+              key: 'theme',
+              label: t(theme === 'dark' ? 'theme.toSheet' : 'theme.toBoard'),
+              onSelect: () => setTheme(theme === 'dark' ? 'light' : 'dark'),
+            },
+            ...(menuItems ?? []),
+          ]}
+        />
       </div>
     </header>
   );

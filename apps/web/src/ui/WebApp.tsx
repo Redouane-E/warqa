@@ -6,7 +6,7 @@ import { Button, Mark } from '../../../studio/src/client/components/ui';
 import { getLang, I18nContext, makeI18n, subscribeLang } from '../../../studio/src/client/i18n';
 import type { Bridge } from '../bridge/client';
 import { FAKE_MODEL } from '../worker/fake';
-import { HomeActions, ProjectActions, StorageBanner, WebStatus } from './Chrome';
+import { HomeActions, openYourData, ProjectActions, StorageBanner, WebStatus, YourDataLabel } from './Chrome';
 import { useW } from './i18n';
 import { watchSpace } from './storage';
 import { webApi } from './webApi';
@@ -123,6 +123,8 @@ export function WebApp({ bridge, serviceWorker }: { bridge: Bridge; serviceWorke
     () => ({
       topbarStatus: <WebStatus bridge={bridge} serviceWorker={sw} />,
       banner: <StorageBanner />,
+      // phones: the status line is in the menu
+      menuItems: [{ key: 'data', label: <YourDataLabel />, onSelect: openYourData }],
       homeActions: <HomeActions />,
       projectActions: (id: string) => <ProjectActions id={id} />,
       ...(__WARQA_REPO__ ? { desktopUrl: `${__WARQA_REPO__}#readme` } : {}),

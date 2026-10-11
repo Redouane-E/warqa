@@ -24,7 +24,7 @@ import { Button, Field, Icon, LangTag, Loading, Notice } from '../components/ui'
 import { useExtras } from '../extras';
 import { useI18n } from '../i18n';
 import type { MsgKey } from '../messages';
-import { bookPlaceOf, STEPS, useSetPlace } from '../place';
+import { bookPlaceOf, STEP_EVENT, STEPS, useSetPlace } from '../place';
 import { confirmLeave, Link, match, navigate, useLocation } from '../router';
 import { CheckStep } from './Check';
 import { bookTitle } from './Home';
@@ -1564,6 +1564,28 @@ function Stepper({
   const toast = useToast();
   const [saving, setSaving] = useState(false);
   const ref = useRef<HTMLElement>(null);
+  // one tab stop on the rail (the current step); the arrow keys move between the six, Home and End to the ends
+  const [focusAt, setFocusAt] = useState(-1);
+  const at = focusAt >= 0 ? focusAt : STEPS.indexOf(current);
+  const railKeys = (e: React.KeyboardEvent<HTMLOListElement>) => {
+    if (e.altKey || e.ctrlKey || e.metaKey || e.shiftKey) return;
+    const rtl = getComputedStyle(e.currentTarget).direction === 'rtl';
+    const k =
+      e.key === 'ArrowDown' || e.key === (rtl ? 'ArrowLeft' : 'ArrowRight')
+        ? at + 1
+        : e.key === 'ArrowUp' || e.key === (rtl ? 'ArrowRight' : 'ArrowLeft')
+          ? at - 1
+          : e.key === 'Home'
+            ? 0
+            : e.key === 'End'
+              ? STEPS.length - 1
+              : null;
+    if (k === null) return;
+    e.preventDefault();
+    const n = (k + STEPS.length) % STEPS.length;
+    setFocusAt(n);
+    e.currentTarget.querySelectorAll<HTMLElement>('.station')[n]?.focus();
+  };
   // biome-ignore lint/correctness/useExhaustiveDependencies: scroll when the current step changes
   useEffect(() => {
     // on narrow screens the stations scroll sideways: keep the current one visible
@@ -1600,7 +1622,7 @@ function Stepper({
   };
   return (
     <nav className="stepper" aria-label={t('project.steps')} ref={ref}>
-      <ol>
+      <ol onKeyDown={railKeys} onBlur={(e) => !e.currentTarget.contains(e.relatedTarget) && setFocusAt(-1)}>
         {STEPS.map((s, i) => {
           const st = p.steps[s];
           return (
@@ -1609,6 +1631,7 @@ function Stepper({
                 type="button"
                 className={`station is-${st} ${p.next === s ? 'is-next' : ''}`}
                 aria-current={current === s ? 'step' : undefined}
+                tabIndex={i === at ? 0 : -1}
                 onClick={() => onSelect(s)}
               >
                 <span className="station-dot" aria-hidden="true">
@@ -1616,6 +1639,10 @@ function Stepper({
                 </span>
                 <span className="station-text">
                   <span className="station-name">{t(`step.${s}` as MsgKey)}</span>
+                  {/* phones: six equal columns, a short name under each dot */}
+                  <span className="station-short" aria-hidden="true">
+                    {t(`step.short.${s}` as MsgKey)}
+                  </span>
                   <span className="station-state">
                     {t(STATE_KEY[st])}
                     {meta(s).startsWith('pen:') ? (
@@ -1769,6 +1796,13 @@ export function ProjectPage({ id }: { id: string }) {
     () => new Set((p?.jobs ?? []).filter((j) => j.status === 'running' || j.status === 'queued').map((j) => j.type)),
     [p],
   );
+  // Alt + 1…6 (App): the same way as a click on the rail (once the book is shown)
+  const selectRef = useRef<(s: StepId) => void>(() => {});
+  useEffect(() => {
+    const on = (e: Event) => void selectRef.current((e as CustomEvent<StepId>).detail);
+    window.addEventListener(STEP_EVENT, on);
+    return () => window.removeEventListener(STEP_EVENT, on);
+  }, []);
 
   if (error && !p)
     return (
@@ -1795,6 +1829,7 @@ export function ProjectPage({ id }: { id: string }) {
     setStep(s);
     navigate(`/project/${encodeURIComponent(id)}?step=${s}`, { replace: true });
   };
+  selectRef.current = select;
   const title = bookTitle(p.title, lang, p.defaultLang);
   // stay on the step whose work was just started, so its results show when it finishes
   const runHere: Run = (type, args) => {
@@ -1864,6 +1899,8 @@ export function ProjectPage({ id }: { id: string }) {
         />
         {/* Read, Plan, Make and Translate & narrate are their own cards, each with its title (redesign 4b–4e) */}
         <section
+          id="step"
+          tabIndex={-1}
           className={`step-panel${bare ? ' step-bare' : ' sheet'}`}
           {...(bare ? { 'aria-label': t(`step.${current}` as MsgKey) } : { 'aria-labelledby': 'step-title' })}
         >

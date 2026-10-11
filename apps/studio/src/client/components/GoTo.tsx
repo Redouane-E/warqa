@@ -15,6 +15,7 @@ import { STEPS, usePlace } from '../place';
 import { go, navigate } from '../router';
 import { useJobs } from './JobBoard';
 import { useToast } from './overlays';
+import { SHORTCUTS_EVENT } from './Shortcuts';
 import { useOnline } from './states';
 import { trapTab, useEscape } from './tools';
 import { Icon } from './ui';
@@ -300,6 +301,17 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
       icon: 'voice',
       run: to('/ai#voices'),
     });
+    out.push({
+      id: 'g-shortcuts',
+      group: 'settings',
+      label: t('goto.shortcuts'),
+      hint: t('goto.shortcutsHint'),
+      icon: 'info',
+      run: () => {
+        onClose();
+        window.dispatchEvent(new Event(SHORTCUTS_EVENT));
+      },
+    });
     return out;
   }, [
     book,
@@ -407,6 +419,7 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
             aria-activedescendant={active >= 0 && ordered.length ? optionId(active) : undefined}
             aria-autocomplete="list"
             aria-label={t('goto.title')}
+            aria-describedby={`${listId}-foot`}
             placeholder={t('goto.placeholder')}
             value={q}
             onChange={(e) => setQ(e.target.value)}
@@ -416,6 +429,10 @@ export function GoTo({ open, onClose }: { open: boolean; onClose: () => void }) 
         <div className="goto-list" id={listId} role="listbox" aria-label={t('goto.title')}>
           {ordered.length ? lists : <p className="goto-empty">{t('goto.none')}</p>}
         </div>
+        {/* how the list works, and that what costs says so (not on phones: no keys there) */}
+        <p className="goto-foot" id={`${listId}-foot`}>
+          {t('goto.hints')}
+        </p>
       </div>
     </>
   );

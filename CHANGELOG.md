@@ -122,6 +122,14 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **The studio on a phone, and its keys (redesign 5, part 2).** On a phone the header is a back arrow named after the
+  page below, the page's title, the spend, Go to and a menu (AI and voices, the interface language, Sheet or Board,
+  and in the web app Your data); a book's six steps fit in one row with short names; a deeper page comes in from the
+  side and going back slides it away. Side sheets open from the bottom with a handle and two heights (a beat's details
+  at half height, the stage in view), and follow a drag; menus are lists at the bottom; dialogs sit under the thumb;
+  Go to takes the whole screen. On a computer, ? lists every key in a sheet (also from Go to), Alt + 1…6 jumps to a
+  book's steps (asking first when there is unsaved work), the step rail is one stop moved with the arrow keys, the
+  skip link goes to the step, Ctrl S works with an Arabic layout, and Go to says how it works under its list.
 - **The player on a phone (redesign 5, part 1).** Tap the picture to pause or play, swipe to turn the page (mirrored
   in Arabic and Darija), press and hold a word to hear it again on its own. Listening, a sheet under the thumb, holds
   the lesson's language, the speed, the read-along and Sheet or Board; the transcript opens at half height and expands

@@ -89,6 +89,8 @@ export function Menu({
       >
         {button}
       </button>
+      {/* phones: the menu is a list at the bottom; the veil around it takes the tap that closes it */}
+      {open && <div className="menu-veil" aria-hidden="true" />}
       {open && (
         <div className={`menu menu-${align}`} id={id}>
           {/* the text above is not a menu item: the menu points to it, so it is read when the menu opens */}

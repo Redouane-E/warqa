@@ -3270,6 +3270,82 @@ select {
   padding: 16px;
   color: var(--wq-text-2);
 }
+/* how Go to works, under its list (phones have no keys: hidden there) */
+.goto-foot {
+  margin: 0;
+  padding: 10px 16px;
+  border-block-start: 1px solid var(--wq-seyes);
+  font-size: 12.5px;
+  color: var(--wq-text-2);
+}
+.step-panel:focus {
+  outline: none;
+}
+
+/* Keyboard shortcuts (redesign phase 5): groups of keys and what they do */
+.shortcuts .keys-group {
+  display: grid;
+  gap: 6px;
+}
+.shortcuts .keys-group + .keys-group {
+  margin-block-start: 18px;
+}
+.keys-title {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--wq-text-2);
+}
+.keys-list {
+  display: grid;
+  margin: 0;
+}
+.keys-row {
+  display: grid;
+  grid-template-columns: minmax(120px, auto) minmax(0, 1fr);
+  align-items: center;
+  gap: 4px 16px;
+  min-block-size: 44px;
+  padding-block: 6px;
+  border-block-end: 1px solid var(--wq-seyes);
+}
+.keys-row dt {
+  justify-self: start;
+  white-space: nowrap;
+}
+.keys-row dd {
+  margin: 0;
+  font-size: 14.5px;
+}
+.kbd-cap {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-inline-size: 28px;
+  min-block-size: 28px;
+  justify-content: center;
+  padding: 0 7px;
+  border: 1px solid var(--wq-control-border);
+  border-block-end-width: 2px;
+  border-radius: 6px;
+  background: var(--wq-sheet);
+  font-family: var(--wq-font-mono);
+  font-size: 13px;
+  color: var(--wq-text);
+}
+.kbd-cap.is-main {
+  border-color: var(--wq-ink);
+  color: var(--wq-ink);
+}
+.kbd-ar {
+  font-family: var(--wq-font-ui);
+  font-size: 12px;
+  color: var(--wq-text-2);
+}
+.kbd-sep {
+  color: var(--wq-text-3);
+  font-size: 13px;
+}
 
 /* Hand-off: the rail's highlighter sweeps into the current step, in the reading direction */
 .station[aria-current="step"] .station-name {
@@ -8715,4 +8791,303 @@ select {
 .photo-tiles > li.is-photo {
   border-color: #c9a400;
   background: var(--wq-fluo-tint);
+}
+
+/* ---------- phase 5: the studio on a phone (and the sheets' exit everywhere) ---------- */
+.topbar-back,
+.topbar-place,
+.phone-menu,
+.menu-veil,
+.sheet-grip,
+.station-short {
+  display: none;
+}
+/* a side sheet leaves as it came: to the inline end (down on a phone) */
+.side-sheet.is-closing {
+  animation: sheet-out calc(var(--wq-t-sheet) * 0.7) var(--wq-ease-lift) forwards;
+}
+:root[dir="rtl"] .side-sheet.is-closing {
+  animation-name: sheet-out-rtl;
+}
+.sheet-veil.is-closing {
+  opacity: 0;
+  transition: opacity calc(var(--wq-t-sheet) * 0.7) var(--wq-ease-lift);
+}
+@keyframes sheet-out {
+  to {
+    transform: translateX(100%);
+  }
+}
+@keyframes sheet-out-rtl {
+  to {
+    transform: translateX(-100%);
+  }
+}
+@keyframes sheet-down {
+  to {
+    transform: translateY(100%);
+  }
+}
+
+@media (max-width: 760px) {
+  /* the header: back to the place under this one, this place's title, the spend, Go to, the menu (solid: a
+     blurred bar would hold the menu's bottom sheet inside itself) */
+  .topbar {
+    gap: 4px;
+    padding-inline: 4px;
+    /* (the prefixed one first: the minifier keeps the last of the two) */
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    background: var(--wq-sheet);
+  }
+  .topbar-back {
+    display: grid;
+    place-items: center;
+    flex: none;
+    inline-size: 44px;
+    block-size: 44px;
+    border-radius: 10px;
+    color: var(--wq-text);
+  }
+  .topbar-back + .brand {
+    display: none;
+  }
+  .brand .brand-latin,
+  .brand .brand-ar {
+    display: none;
+  }
+  .topbar-place {
+    display: block;
+    flex: 1;
+    min-inline-size: 0;
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .topbar-tools > :not(.spend-chip, .phone-menu, .topbar-status),
+  .goto-btn .goto-btn-text,
+  .goto-btn kbd {
+    display: none;
+  }
+  .goto-btn {
+    inline-size: 44px;
+    block-size: 44px;
+    padding: 0;
+    justify-content: center;
+    border-color: transparent;
+    background: transparent;
+  }
+  .phone-menu {
+    display: block;
+  }
+  /* an open menu rises above a half-height sheet; its veil takes the taps around it */
+  .topbar:has(.menu-button[aria-expanded="true"]) {
+    z-index: 75;
+  }
+  .menu-veil {
+    display: block;
+    position: fixed;
+    inset: 0;
+    z-index: 69;
+    background: color-mix(in srgb, var(--wq-ground) 70%, transparent);
+  }
+  .phone-menu .menu-button {
+    inline-size: 44px;
+    block-size: 44px;
+    justify-content: center;
+    padding: 0;
+  }
+  /* no strips on a phone: the back arrow names the place under */
+  .strips {
+    display: none;
+  }
+  /* a deeper place comes in from the inline end; going up, the place slides back */
+  .place[data-move="in"] {
+    animation: place-push var(--wq-t-sheet) var(--wq-ease-settle);
+  }
+  .place[data-move="up"] {
+    animation: place-up var(--wq-t-sheet) var(--wq-ease-settle);
+  }
+  :root[dir="rtl"] .place[data-move="in"] {
+    animation-name: place-push-rtl;
+  }
+  :root[dir="rtl"] .place[data-move="up"] {
+    animation-name: place-up-rtl;
+  }
+  /* the six steps in equal columns, a short name under each dot */
+  .stepper ol {
+    display: grid;
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+    overflow: visible;
+  }
+  .stepper li {
+    min-inline-size: 0;
+  }
+  .stepper .station {
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    min-inline-size: 0;
+    min-block-size: 56px;
+    padding: 4px 0;
+    text-align: center;
+  }
+  .stepper .station-text {
+    min-inline-size: 0;
+  }
+  /* the full name and state stay for screen readers; the short name is what shows */
+  .stepper .station-name,
+  .stepper .station-state {
+    position: absolute;
+    inline-size: 1px;
+    block-size: 1px;
+    overflow: hidden;
+    clip-path: inset(50%);
+    white-space: nowrap;
+  }
+  .stepper .station-short {
+    display: block;
+    font-size: 11px;
+    line-height: 1.3;
+    overflow-wrap: anywhere;
+  }
+  .stepper .station[aria-current="step"] .station-short {
+    padding: 0 0.3em;
+    border-radius: var(--wq-radius-fluo);
+    background: var(--wq-fluo);
+    color: var(--wq-on-fluo);
+    font-weight: 600;
+  }
+  /* Go to takes the whole screen; no key hints on a phone */
+  .goto {
+    inset: 0;
+    inline-size: 100%;
+    max-block-size: none;
+    border: 0;
+    border-radius: 0;
+  }
+  .goto-field {
+    min-block-size: 56px;
+  }
+  .goto-foot {
+    display: none;
+  }
+  /* bottom sheets: a handle; half height (the place above in view) or full; dragged, they follow the finger */
+  .side-sheet {
+    max-block-size: none;
+    block-size: calc(100dvh - 48px);
+    transition: block-size var(--wq-t-sheet) var(--wq-ease-settle);
+  }
+  .side-sheet.is-half {
+    block-size: 52dvh;
+  }
+  .side-sheet.is-dragging {
+    transition: none;
+  }
+  .side-sheet.is-closing,
+  :root[dir="rtl"] .side-sheet.is-closing {
+    animation-name: sheet-down;
+  }
+  .sheet-grip {
+    display: grid;
+    place-items: center;
+    align-self: center;
+    flex: none;
+    inline-size: 88px;
+    block-size: 28px;
+    margin-block-end: -8px;
+    padding: 0;
+    border: 0;
+    background: none;
+    touch-action: none;
+  }
+  .sheet-grip span {
+    inline-size: 40px;
+    block-size: 4px;
+    border-radius: 2px;
+    background: var(--wq-control-border);
+  }
+  .side-sheet-head {
+    touch-action: none;
+  }
+  /* menus: a list at the bottom, 56 px rows, a veil behind */
+  .menu {
+    position: fixed;
+    inset-inline: 0;
+    inset-block: auto 0;
+    z-index: 70;
+    inline-size: auto;
+    max-inline-size: none;
+    /* (the desktop nudge that keeps an anchored menu inside the window does not apply) */
+    translate: none !important;
+    max-block-size: 70dvh;
+    overflow: auto;
+    padding: 8px 8px calc(16px + env(safe-area-inset-bottom));
+    border-radius: 16px 16px 0 0;
+    box-shadow: var(--wq-shadow-dialog);
+    animation: sheet-up var(--wq-t-sheet) var(--wq-ease-settle);
+  }
+  .menu-item {
+    min-block-size: 56px;
+    font-size: 16px;
+  }
+  /* dialogs sit at the bottom, under the thumb */
+  .dialog {
+    inline-size: 100%;
+    max-inline-size: 100%;
+    margin: auto 0 0;
+    border-radius: 16px 16px 0 0;
+    padding-block-end: calc(24px + env(safe-area-inset-bottom));
+  }
+}
+@supports not (height: 1dvh) {
+  @media (max-width: 760px) {
+    .side-sheet {
+      block-size: calc(100vh - 48px);
+    }
+    .side-sheet.is-half {
+      block-size: 52vh;
+    }
+    .menu {
+      max-block-size: 70vh;
+    }
+  }
+}
+@keyframes place-push {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes place-push-rtl {
+  from {
+    transform: translateX(-100%);
+  }
+}
+@keyframes place-up {
+  from {
+    transform: translateX(-30%);
+    opacity: 0;
+  }
+}
+@keyframes place-up-rtl {
+  from {
+    transform: translateX(30%);
+    opacity: 0;
+  }
+}
+@keyframes fade-out {
+  to {
+    opacity: 0;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .side-sheet.is-closing {
+    animation: fade-out 120ms linear forwards !important;
+  }
+  .place[data-move] {
+    animation: veil-in 120ms linear !important;
+  }
 }

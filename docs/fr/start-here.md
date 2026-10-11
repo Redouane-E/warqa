@@ -148,6 +148,20 @@ Commencez petit : un chapitre de 10 à 20 pages.
     **Télécharger le .zip** pour le partager. Le zip fonctionne hors ligne. Pour Moodle, le paquet SCORM
     transmet les scores (voir [exports.md](../en/exports.md)).
 
+## Les touches, et Warqa sur un téléphone
+
+- **Ctrl K** (**⌘ K** sur un Mac) ouvre **Aller à** : un livre, un chapitre, une étape de la leçon, un réglage ou
+  une action, depuis n’importe où. **?** (**؟** sur un clavier arabe) liste toutes les touches. **Alt + 1…6** mène
+  aux étapes d’un livre ; sur le rail des étapes, les flèches passent de l’une à l’autre. Dans l’éditeur de
+  leçon, **Ctrl S** (**⌘ S**) enregistre, **J** et **K** passent d’une étape de la leçon à l’autre, **Entrée**
+  ouvre ses détails. **Échap** ferme le menu ou le panneau du dessus et ne quitte jamais un écran. Les touches
+  suivent leur place sur le clavier : elles marchent aussi avec une disposition arabe.
+- **Sur un téléphone**, l’en-tête porte une flèche de retour (au nom de l’écran du dessous), le titre de
+  l’écran, la dépense, Aller à et un menu (IA et voix, la langue de l’interface, Feuille ou Tableau). Les six
+  étapes d’un livre tiennent sur une ligne. Les panneaux s’ouvrent par le bas avec une poignée : tirez-la, ou
+  touchez-la, pour passer de la demi-hauteur à la pleine hauteur ; les détails d’une étape de la leçon s’ouvrent
+  à mi-hauteur pour garder l’image en vue. Menus et questions apparaissent en bas, sous le pouce.
+
 ## En cas de problème
 
 | Ce que vous voyez | Que faire |

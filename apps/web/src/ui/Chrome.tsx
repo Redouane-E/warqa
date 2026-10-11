@@ -20,8 +20,14 @@ import { webApi } from './webApi';
 /** A size inside a sentence: kept left to right ("460 MB") in an Arabic one (an isolate, written as escapes). */
 const ltr = (s: string) => `\u2066${s}\u2069`;
 
-/** Opens Your data from anywhere (the storage banner's buttons). */
-const openYourData = () => window.dispatchEvent(new Event('warqa:your-data'));
+/** Opens Your data from anywhere (the storage banner's buttons, the phone's menu). */
+export const openYourData = () => window.dispatchEvent(new Event('warqa:your-data'));
+
+/** "Your data" in the interface's language (the phone's menu item). */
+export function YourDataLabel() {
+  const w = useW();
+  return <>{w('banner.privacy')}</>;
+}
 
 /** The space this browser uses: a row with the amount, a meter (ink up to the warning line), and when low what to do. */
 function SpaceCard({ space, actions }: { space: Space; actions?: boolean }) {

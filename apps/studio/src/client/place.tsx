@@ -7,6 +7,8 @@ import { useI18n } from './i18n';
 import { bookTitle } from './pages/Home';
 
 export const STEPS: StepId[] = ['read', 'plan', 'make', 'voice', 'check', 'share'];
+/** Said on window to change the book page's step (Alt + 1…6): the page asks first about unsaved work. */
+export const STEP_EVENT = 'warqa:step';
 
 export interface BookPlace {
   id: string;

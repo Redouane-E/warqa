@@ -137,6 +137,18 @@ Start small: one chapter of 10 to 20 pages.
     works offline. Other ways: a SCORM package for Moodle (it reports scores, see [exports.md](exports.md)),
     flashcards for Anki, videos (desktop version) and a backup of the whole book.
 
+## Keys, and Warqa on a phone
+
+- **Ctrl K** (**⌘ K** on a Mac) opens **Go to**: a book, a chapter, a beat, a setting or an action, from
+  anywhere. **?** (**؟** on an Arabic keyboard) lists every key. **Alt + 1…6** jumps to a book's steps; on the
+  step rail the arrow keys move between the six. In the lesson editor, **Ctrl S** (**⌘ S**) saves, **J** and
+  **K** move between beats, **Enter** opens a beat's details. **Esc** closes the menu or sheet on top and never
+  leaves a page. Keys follow their place on the keyboard, so they work with an Arabic layout too.
+- **On a phone** the header has a back arrow (named after the page below), the page's title, the spend, Go to
+  and a menu (AI and voices, the interface language, Sheet or Board). A book's six steps fit in one row. Panels
+  open from the bottom with a handle: drag it, or tap it, to go between half and full height; a beat's details
+  open at half height so the stage stays in view. Menus and questions appear at the bottom, under your thumb.
+
 ## When something goes wrong
 
 | What you see | What to do |

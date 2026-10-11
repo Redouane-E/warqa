@@ -272,6 +272,14 @@
   gap: 4px 8px;
 }
 @media (max-width: 760px) {
+  /* on a phone the status is its warnings button (Your data is in the menu) */
+  .web-status .web-dot,
+  .web-status .web-runs,
+  .web-status .web-sep,
+  .web-status .web-data-btn,
+  .web-status .web-chip-test {
+    display: none;
+  }
   .space-banner {
     margin-inline: 12px;
     padding: 14px 14px;

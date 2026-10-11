@@ -1,12 +1,16 @@
 // Places where a host can add its own controls to the studio screens. The local studio adds none; the web app adds
 // its status line, backup, import and example-book actions, and the start guide's test model.
+
 import { createContext, type ReactNode, useContext } from 'react';
+import type { MenuItem } from './components/Menu';
 
 export interface StudioExtras {
   /** Under the top bar, on every screen. */
   banner?: ReactNode;
   /** In the top bar, before the spend chip (the web app's "Runs in this browser · Your data"). */
   topbarStatus?: ReactNode;
+  /** In the phone's Menu, after the studio's own items (the web app's "Your data"). */
+  menuItems?: MenuItem[];
   /** Next to "New book" on the home screen. */
   homeActions?: ReactNode;
   /** In a project's header, next to Settings. */

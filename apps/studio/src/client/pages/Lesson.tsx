@@ -521,7 +521,9 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
   const beatsLen = lesson?.beats.length ?? 0;
   useEffect(() => {
     const key = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+      // the physical key: an Arabic keyboard types "س" there
+      // (not AltGr, which Windows reports as Ctrl + Alt: it types ś or ș)
+      if ((e.metaKey || e.ctrlKey) && !e.altKey && (e.code === 'KeyS' || e.key.toLowerCase() === 's')) {
         e.preventDefault();
         if (dirty) void save();
         return;
@@ -969,6 +971,8 @@ export function LessonPage({ id, lid }: { id: string; lid: string }) {
         </div>
         <SideSheet
           open={sheetOpen}
+          // on a phone the stage stays in view above it; the handle takes it to full height
+          snap="half"
           onClose={() => {
             setFocusSheet(false);
             setInspecting(false);

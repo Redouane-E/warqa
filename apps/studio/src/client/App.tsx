@@ -10,9 +10,11 @@ import {
 } from 'react';
 import type { StatusInfo } from '../shared/types';
 import { api } from './api';
+import { stripBase } from './base';
 import { GoTo } from './components/GoTo';
 import { JobsProvider } from './components/JobBoard';
 import { OverlayProvider } from './components/overlays';
+import { SHORTCUTS_EVENT, Shortcuts } from './components/Shortcuts';
 import { OfflineBanner } from './components/states';
 import { applyTheme, StackStrips, TopBar, useStrips } from './components/TopBar';
 import { inField, toolOpen } from './components/tools';
@@ -25,7 +27,7 @@ import { LearnCoursePage, LearnHomePage, LearnNewPage, LearnPlayerPage } from '.
 import { LessonPage } from './pages/Lesson';
 import { ProjectPage } from './pages/Project';
 import { WelcomePage } from './pages/Welcome';
-import { PlaceProvider } from './place';
+import { PlaceProvider, STEP_EVENT, STEPS } from './place';
 import { go, match, navigate, useLocation } from './router';
 
 /* ---------- server status (providers, presets, engines) shared by every screen ---------- */
@@ -76,6 +78,7 @@ export function App({ extras = {} }: { extras?: StudioExtras } = {}) {
   const i18n = useMemo(() => makeI18n(lang), [lang]);
   const [status, setStatus] = useState<StatusInfo | null>(null);
   const [goto, setGoto] = useState(false);
+  const [shortcuts, setShortcuts] = useState(false);
   const { path } = useLocation();
   const mainRef = useRef<HTMLElement>(null);
   const first = useRef(true);
@@ -101,10 +104,37 @@ export function App({ extras = {} }: { extras?: StudioExtras } = {}) {
       if (mod && !e.altKey && !e.shiftKey && (e.code === 'KeyK' || e.key.toLowerCase() === 'k')) {
         e.preventDefault();
         setGoto((v) => !v);
+        return;
+      }
+      if (e.defaultPrevented || e.ctrlKey || e.metaKey || inField(e) || toolOpen()) return;
+      // ? (؟ on an Arabic keyboard): every shortcut — except where a lesson player has its own ? (the learner's
+      // player, or the focus inside a player)
+      const target = e.target as Element | null;
+      const here = stripBase(location.pathname);
+      const inPlayer = !!target?.closest?.('.wq-player') || /^\/learn\/[^/]+\/[^/]+/.test(here);
+      if ((e.key === '?' || e.key === '؟') && !e.altKey && !inPlayer && !here.startsWith('/welcome')) {
+        e.preventDefault();
+        setShortcuts((v) => !v);
+        return;
+      }
+      // Alt + 1…6 on a book: its steps (the physical key: Option + digit types a character on a Mac)
+      const m = /^Digit([1-6])$/.exec(e.code);
+      const book = /^\/project\/([^/]+)/.exec(stripBase(location.pathname))?.[1];
+      if (m && e.altKey && !e.shiftKey && book) {
+        e.preventDefault();
+        const to = STEPS[Number(m[1]) - 1]!;
+        // on the book itself its page changes step (asking first when a step has unsaved work, as the rail does)
+        if (here === `/project/${book}`) window.dispatchEvent(new CustomEvent(STEP_EVENT, { detail: to }));
+        else void go(`/project/${book}?step=${to}`);
       }
     };
     window.addEventListener('keydown', key);
-    return () => window.removeEventListener('keydown', key);
+    const open = () => setShortcuts(true);
+    window.addEventListener(SHORTCUTS_EVENT, open);
+    return () => {
+      window.removeEventListener('keydown', key);
+      window.removeEventListener(SHORTCUTS_EVENT, open);
+    };
   }, []);
 
   // move focus to the new place after navigation (screen readers announce it)
@@ -143,6 +173,7 @@ export function App({ extras = {} }: { extras?: StudioExtras } = {}) {
                     {extras.banner}
                     <Places mainRef={mainRef} />
                     <GoTo open={goto} onClose={() => setGoto(false)} />
+                    <Shortcuts open={shortcuts} onClose={() => setShortcuts(false)} />
                   </>
                 )}
               </PlaceProvider>
@@ -169,6 +200,7 @@ function Places({ mainRef }: { mainRef: React.RefObject<HTMLElement | null> }) {
     window.addEventListener('keydown', key);
     return () => window.removeEventListener('keydown', key);
   }, [strips]);
+  // phones: a deeper place comes in from the inline end, going up slides it back (the place's key starts it)
   // the place's key: a new place lays a new sheet on top (the Stack motion)
   const level = path.startsWith('/project/')
     ? path
@@ -176,10 +208,22 @@ function Places({ mainRef }: { mainRef: React.RefObject<HTMLElement | null> }) {
         .slice(0, path.includes('/lesson/') ? 5 : 3)
         .join('/')
     : path;
+  // phones: a deeper place comes in from the inline end, going up slides it back; decided once per place (the
+  // renders that follow, as the place loads, keep it)
+  const depth = strips.length;
+  const moved = useRef({ level, depth, move: 'same' });
+  if (moved.current.level !== level)
+    moved.current = {
+      level,
+      depth,
+      move: depth > moved.current.depth ? 'in' : depth < moved.current.depth ? 'up' : 'same',
+    };
+  else moved.current.depth = depth;
+  const move = moved.current.move;
   return (
     <div className="places">
       <StackStrips />
-      <main id="main" ref={mainRef} tabIndex={-1} key={level} className="place">
+      <main id="main" ref={mainRef} tabIndex={-1} key={level} className="place" data-move={move}>
         <Routes />
       </main>
     </div>

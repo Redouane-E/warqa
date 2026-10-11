@@ -54,7 +54,8 @@ test.describe('on a phone', () => {
       await expect(page.locator('.welcome-hero')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
       await page.getByRole('button', { name: lang === 'ar' ? 'تخطَّ الدليل' : 'Skip the guide' }).click();
-      await expect(page.locator('.web-status')).toBeVisible();
+      // (on a phone the browser's status is its warnings button; Your data is in the menu)
+      await expect(page.locator('.web-status-menu .menu-button')).toBeVisible();
       expect(await page.evaluate(() => document.documentElement.scrollWidth)).toBeLessThanOrEqual(390);
     });
   }
