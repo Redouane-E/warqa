@@ -33,7 +33,7 @@ Warqa serves **three audiences**:
   - [x] 4g AI and voices, Book settings
   - [x] 4h states
 - [x] Phase 5: phones, gestures and keys
-- [ ] Phase 6: tests, docs and release
+- [x] Phase 6: tests, docs and release (v0.2.0 released 2026-10-11)
 - [ ] Vision backlog (each item gets its own design session first)
 
 ## How to run a phase in a new session
