@@ -16,7 +16,7 @@
     "test": "vitest run"
   },
   "dependencies": {
-    "@modelcontextprotocol/sdk": "^1.32.0",
+    "@modelcontextprotocol/sdk": "^1.32.1",
     "@warqa/i18n": "workspace:*",
     "@warqa/lesson": "workspace:*",
     "@warqa/pipeline": "workspace:*",
