@@ -8,7 +8,7 @@
     "test:chromium": "playwright test --project=chromium"
   },
   "devDependencies": {
-    "@playwright/test": "^1.63.0",
+    "@playwright/test": "^1.64.0",
     "@axe-core/playwright": "^4.13.0",
     "@warqa/pipeline": "workspace:*",
     "@warqa/lesson": "workspace:*"
