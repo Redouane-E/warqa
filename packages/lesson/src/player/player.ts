@@ -128,6 +128,12 @@ export class Player {
   private captionEl!: HTMLParagraphElement;
   private pausedEl!: HTMLDivElement;
   private soundNote!: HTMLParagraphElement;
+  /** The browser would not play sound before a tap (autoplay): the lesson waits under "Tap to play the sound". */
+  private tapEl!: HTMLDivElement;
+  private soundBlocked = false;
+  /** No recorded voice in this language: the words light up at reading speed under the stage, said so. */
+  private voiceNote!: HTMLDivElement;
+  private noVoice = false;
   private cover!: HTMLButtonElement;
   private helpEl!: HTMLDialogElement;
   private panel: RatingPanel | null = null;
@@ -267,6 +273,10 @@ export class Player {
 
   private applyLang(lang: string) {
     this.lang = lang;
+    // nothing recorded in this language (the editor's bare stage aside): the captions are the narration
+    this.noVoice = !this.opts.bare && !Object.keys(this.data.audio?.[lang] ?? {}).length;
+    // nothing to tap for in a language with no voice
+    if (this.noVoice && this.tapEl) this.setSoundBlocked(false);
     this.dir = dirOf(lang);
     const digits = this.data.book?.digits ?? 'latn';
     this.t = translator(lang, { digits });
@@ -297,6 +307,17 @@ export class Player {
     this.translateChrome();
     this.buildSegments();
     this.buildTranscript();
+  }
+
+  /** The language's name inside a sentence of its own ("français" in French, lowercase), else its menu name. */
+  private langInText(): string {
+    try {
+      const n = new Intl.DisplayNames([this.lang], { type: 'language' }).of(this.lang);
+      if (n && n !== this.lang) return n;
+    } catch {
+      /* no display names for this language */
+    }
+    return LANG_INFO[this.lang as keyof typeof LANG_INFO]?.name ?? langInfo(this.lang).name;
   }
 
   /** Switch language, keeping the place: the same beat, at the last mark passed. */
@@ -462,6 +483,12 @@ export class Player {
     this.cardHost = h('div', { class: 'wq-cards' });
     // captions sit under the stage, never on the picture
     this.captionEl = h('p', { class: 'wq-caption', hidden: true, dir: 'auto' });
+    this.voiceNote = h(
+      'div',
+      { class: 'wq-novoice', hidden: true },
+      h('span', { class: 'wq-novoice-chip' }),
+      h('p', { class: 'wq-novoice-line' }),
+    );
     // paused: no dark veil, the picture stays readable
     this.pausedEl = h(
       'div',
@@ -470,6 +497,14 @@ export class Player {
       h('p', {}),
     );
     this.soundNote = h('p', { class: 'wq-soundnote', hidden: true, role: 'status' });
+    this.tapEl = h(
+      'div',
+      { class: 'wq-tap', hidden: true },
+      h('button', { class: 'wq-tap-btn', type: 'button' }, icon('voice', 22), h('span', {})),
+    );
+    // the tap is the gesture the browser waited for: the sound starts inside it, from where the lesson stands
+    // (anywhere on the dimmed picture counts)
+    this.tapEl.addEventListener('click', () => this.play());
     this.live = h('div', { class: 'wq-sr', 'aria-live': 'polite' });
     this.cover = h('button', { class: 'wq-cover', type: 'button' });
     this.cover.addEventListener('click', () => this.begin());
@@ -492,7 +527,15 @@ export class Player {
       h(
         'div',
         { class: 'wq-main' },
-        h('div', { class: 'wq-stagecol' }, h('div', { class: 'wq-viewport' }, this.frame), this.captionEl, this.bar),
+        h(
+          'div',
+          { class: 'wq-stagecol' },
+          // the tap button sits over the stage at its own size (the stage itself is scaled down on phones)
+          h('div', { class: 'wq-viewport' }, this.frame, this.tapEl),
+          this.voiceNote,
+          this.captionEl,
+          this.bar,
+        ),
         this.transcriptEl,
       ),
       this.helpEl,
@@ -537,6 +580,10 @@ export class Player {
     this.stage.setAttribute('aria-label', t('lesson.aria'));
     (this.pausedEl.querySelector('p') as HTMLElement).textContent = t('lesson.paused');
     this.soundNote.textContent = t('lesson.soundFailed');
+    (this.tapEl.querySelector('span') as HTMLElement).textContent = t('lesson.tapSound');
+    this.voiceNote.hidden = !this.noVoice;
+    (this.voiceNote.firstChild as HTMLElement).textContent = t('lesson.noVoice');
+    (this.voiceNote.lastChild as HTMLElement).textContent = t('lesson.noVoiceLine', { lang: this.langInText() });
     const mins = b.minutes ?? Math.max(1, Math.round(this.compiled.beats.reduce((a, c) => a + c.timing.dur, 0) / 60));
     this.cover.replaceChildren(
       h(
@@ -919,11 +966,24 @@ export class Player {
         this.audio = new Audio(src);
         this.audio.preload = 'auto';
         this.audio.playbackRate = this.rate;
-        this.audioStartedAt = performance.now();
         if (this.time > 0.05) this.audio.currentTime = this.time;
       }
-      this.audio.play().catch(() => this.soundFailed());
-    }
+      // the "never started" clock counts from this play (after a tap the file may still be loading)
+      this.audioStartedAt = performance.now();
+      const audio = this.audio;
+      audio
+        .play()
+        .then(() => this.setSoundBlocked(false))
+        .catch((e: unknown) => {
+          const name = (e as { name?: string } | null)?.name;
+          // a play() cut short by a pause, a seek or a new beat (AbortError), or one for a sound already replaced:
+          // nothing failed
+          if (name === 'AbortError' || audio !== this.audio) return;
+          // the browser wants a tap first (autoplay): wait for it; anything else: go on without sound
+          if (name === 'NotAllowedError') this.setSoundBlocked(true);
+          else this.soundFailed();
+        });
+    } else this.setSoundBlocked(false);
     this.prefetch();
     this.lastNow = performance.now();
     cancelAnimationFrame(this.raf);
@@ -1005,6 +1065,10 @@ export class Player {
   setBare(on: boolean): void {
     this.opts.bare = on;
     this.root.classList.toggle('wq-bare', on);
+    // the bare stage (the editor) says nothing about voices
+    this.noVoice = !on && !Object.keys(this.data.audio?.[this.lang] ?? {}).length;
+    this.voiceNote.hidden = !this.noVoice;
+    this.setCaptions(this.captionsOn, false);
     this.placeCards(true);
     this.setPlaying(this.playing);
   }
@@ -1022,7 +1086,8 @@ export class Player {
     this.playing = v;
     this.root.classList.toggle('wq-playing', v);
     // the stage alone (the studio's editor, video frames) has no bar to resume from: no "Paused" note on it
-    this.pausedEl.hidden = v || !this.started || this.reviewMode || !!this.opts.bare || this.beat().ask;
+    this.pausedEl.hidden =
+      v || !this.started || this.reviewMode || !!this.opts.bare || this.beat().ask || this.soundBlocked;
     if (this.playBtn) this.playBtn.replaceChildren(icon(v ? 'pause' : 'play'));
     if (!v) cancelAnimationFrame(this.raf);
   }
@@ -1030,6 +1095,19 @@ export class Player {
   private soundFailed() {
     this.audioFailed = true;
     this.soundNote.hidden = false;
+  }
+
+  /** Sound refused until a tap: the clock stops (the narration and the picture stay together), the picture dims. */
+  private setSoundBlocked(v: boolean) {
+    if (this.soundBlocked === v) return;
+    this.soundBlocked = v;
+    this.root.classList.toggle('wq-sound-blocked', v);
+    const had = this.tapEl.contains(document.activeElement);
+    this.tapEl.hidden = !v;
+    if (v) {
+      this.setPlaying(false);
+      this.tapEl.querySelector('button')?.focus({ preventScroll: true });
+    } else if (had) this.playBtn?.focus({ preventScroll: true });
   }
 
   private stopAudio() {
@@ -1126,7 +1204,7 @@ export class Player {
         h('bdi', { class: 'wq-stepname-t' }, rich(cb.beat.title)),
       );
     }
-    if (this.captionsOn) this.updateCaption(cb);
+    if (this.captionsOn || this.noVoice) this.updateCaption(cb);
     const cur = this.transcriptEl.querySelector('li.wq-cur');
     if (cur?.getAttribute('data-i') !== String(this.i)) {
       cur?.classList.remove('wq-cur');
@@ -1769,16 +1847,20 @@ export class Player {
     }
   }
 
-  setCaptions(on: boolean): void {
+  setCaptions(on: boolean, remember = true): void {
     this.captionsOn = on;
     this.capKey = '';
-    this.captionEl.hidden = !on;
-    try {
-      localStorage.setItem(CAPTIONS_KEY, on ? '1' : '0');
-    } catch {
-      /* storage unavailable */
-    }
+    // with no voice the captions stay: they are what is said
+    this.captionEl.hidden = !(on || this.noVoice);
+    if (remember)
+      try {
+        localStorage.setItem(CAPTIONS_KEY, on ? '1' : '0');
+      } catch {
+        /* storage unavailable */
+      }
     this.bar.querySelector('.wq-cc')?.setAttribute('aria-pressed', String(on));
+    // with no voice the captions cannot be turned off: no button for it
+    this.bar.querySelector<HTMLElement>('.wq-cc')?.toggleAttribute('hidden', this.noVoice);
     this.render?.call(this);
   }
 
@@ -1850,7 +1932,7 @@ export class Player {
       if (e.code === nextCode) this.next();
       else this.prev();
     } else if (e.code === 'Home') this.restart();
-    else if (e.code === 'KeyC') this.setCaptions(!this.captionsOn);
+    else if (e.code === 'KeyC' && !this.noVoice) this.setCaptions(!this.captionsOn);
     else if (e.code === 'KeyR' && this.panel && !asking) this.toggleRating();
     else if (e.code === 'KeyT' && !asking) this.toggleTranscript();
     else if (e.code === 'KeyF' && !asking) this.toggleFull();

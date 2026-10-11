@@ -239,7 +239,22 @@ export function exportCsv(project: Project, lang: string, out = project.path(`fl
  * small pictures are kept: they cost time or money.
  */
 export const BACKUP_SKIP =
-  /^dist\/|^dist-panel\/|^dist-panel-key\.json$|^cache\/(?!llm\/|tts\/)|^dist[^/]*\.zip$|^flashcards\.|\.mp4$|^qa\/.*\.png$|^qa\/.*index\.txt$|(^|\/)\.(?!ledger\.jsonl$)/;
+  /^dist\/|^dist-panel\/|^dist-panel-key\.json$|^cache\/(?!llm\/|tts\/)|^dist[^/]*\.zip$|^flashcards\.|\.mp4$|^qa\/.*\.png$|^qa\/.*index\.txt$|(^|\/)\.(?!ledger\.jsonl$)|^warqa-backup\.json$/;
+
+/**
+ * Beside `warqa.json` in a backup: when it was made (an import that finds the book already here says since when its
+ * changes would be lost). Never kept in the book itself (BACKUP_SKIP), always written afresh.
+ */
+export const BACKUP_META = 'warqa-backup.json';
+export interface BackupMeta {
+  format: 1;
+  /** ISO date and time the backup was made. */
+  exported: string;
+}
+export function backupMeta(now = new Date()): Uint8Array {
+  const meta: BackupMeta = { format: 1, exported: now.toISOString() };
+  return new TextEncoder().encode(`${JSON.stringify(meta)}\n`);
+}
 
 /** A book as one zip (its folder, without what BACKUP_SKIP leaves out), to move it or keep a copy. */
 export function archiveProject(project: Project): Uint8Array {
@@ -256,5 +271,6 @@ export function archiveProject(project: Project): Uint8Array {
     // audio, images and fonts are compressed already: stored as they are
     files[`${name}/${r}`] = /\.(mp3|wav|png|jpe?g|webp|woff2?)$/i.test(r) ? [data, { level: 0 }] : data;
   }
+  files[`${name}/${BACKUP_META}`] = backupMeta();
   return zipSync(files, { level: 6 });
 }

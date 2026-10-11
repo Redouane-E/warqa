@@ -1,37 +1,185 @@
 // The web app's additions to the studio screens: the quiet status line in the top bar (Your data, warnings, the
 // start guide), the example book and backup import on the home screen, and backup and delete on a book's screen.
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react';
-import { errorText } from '../../../studio/src/client/api';
+import { errorText, saveFile } from '../../../studio/src/client/api';
+import { useJobs } from '../../../studio/src/client/components/JobBoard';
 import { Menu } from '../../../studio/src/client/components/Menu';
-import { useConfirm, useToast } from '../../../studio/src/client/components/overlays';
+import { useChoose, useConfirm, useToast } from '../../../studio/src/client/components/overlays';
 import { SideSheet } from '../../../studio/src/client/components/SideSheet';
 import { Button, Icon, Notice } from '../../../studio/src/client/components/ui';
 import { useI18n } from '../../../studio/src/client/i18n';
+import { BOOKS_CHANGED, bookTitle } from '../../../studio/src/client/pages/Home';
+import { usePlace } from '../../../studio/src/client/place';
 import { setOnboarded } from '../../../studio/src/client/prefs';
 import { navigate } from '../../../studio/src/client/router';
 import type { Bridge } from '../bridge/client';
 import { useW } from './i18n';
+import { checkSpace, isLow, type Space, useSpace, WARN_SHARE } from './storage';
 import { webApi } from './webApi';
 
-/** Your data, in a side sheet: what is stored where, how much, and how to delete it all. */
+/** A size inside a sentence: kept left to right ("460 MB") in an Arabic one (an isolate, written as escapes). */
+const ltr = (s: string) => `\u2066${s}\u2069`;
+
+/** Opens Your data from anywhere (the storage banner's buttons). */
+const openYourData = () => window.dispatchEvent(new Event('warqa:your-data'));
+
+/** The space this browser uses: a row with the amount, a meter (ink up to the warning line), and when low what to do. */
+function SpaceCard({ space, actions }: { space: Space; actions?: boolean }) {
+  const w = useW();
+  const { bytes, num } = useI18n();
+  const share = Math.min(1, space.usage / space.quota);
+  const p = Math.round(share * 100);
+  const low = isLow(space);
+  return (
+    <section
+      className={`space-card${low ? ' is-low' : ''}`}
+      aria-labelledby={actions ? 'space-title-b' : 'space-title'}
+    >
+      <h3 id={actions ? 'space-title-b' : 'space-title'} className="space-title">
+        {low && <Icon name="warn" size={18} />}
+        {low ? w('space.title') : w('space.row')}
+      </h3>
+      <p className="space-row">
+        {low && <span>{w('space.row')}</span>}
+        <span className="mono">
+          {w('space.amount', { used: ltr(bytes(space.usage)), quota: ltr(bytes(space.quota)) })}
+        </span>
+      </p>
+      <div className="space-meter" role="img" aria-label={w('space.meter', { p: num(p) })}>
+        <span className="space-fill" style={{ inlineSize: `${Math.min(share, WARN_SHARE) * 100}%` }} />
+        {share > WARN_SHARE && <span className="space-over" style={{ inlineSize: `${(share - WARN_SHARE) * 100}%` }} />}
+      </div>
+      {low && (
+        <p className="space-body">{w('space.body', { free: ltr(bytes(Math.max(0, space.quota - space.usage))) })}</p>
+      )}
+      {low && actions && (
+        <div className="space-actions">
+          <Button variant="primary" icon="download" onClick={openYourData}>
+            {w('space.backup')}
+          </Button>
+          <Button variant="quiet" onClick={openYourData}>
+            {w('space.see')}
+          </Button>
+        </div>
+      )}
+    </section>
+  );
+}
+
+const SPACE_HIDDEN = 'warqa-web:space-hidden';
+
+/** Under the top bar while the browser's storage is almost full (hidden for the session if you close it). */
+export function StorageBanner() {
+  const { t } = useI18n();
+  const space = useSpace();
+  const jobs = useJobs();
+  const [hidden, setHidden] = useState(() => {
+    try {
+      return sessionStorage.getItem(SPACE_HIDDEN) === '1';
+    } catch {
+      return false;
+    }
+  });
+  // measured again when work ends (a build, an export: the books grow)
+  const pid = jobs.current?.projectId;
+  useEffect(() => (pid ? jobs.onEnd(pid, () => void checkSpace()) : undefined), [pid, jobs]);
+  return (
+    <div className="space-host" role="status">
+      {isLow(space) && !hidden && (
+        <div className="space-banner">
+          <SpaceCard space={space} actions />
+          <button
+            type="button"
+            className="icon-btn space-hide"
+            aria-label={t('common.close')}
+            onClick={() => {
+              setHidden(true);
+              try {
+                sessionStorage.setItem(SPACE_HIDDEN, '1');
+              } catch {
+                /* storage unavailable: hidden until the page reloads */
+              }
+            }}
+          >
+            <Icon name="close" size={16} />
+          </button>
+        </div>
+      )}
+    </div>
+  );
+}
+
+type BookSize = NonNullable<Awaited<ReturnType<typeof webApi.storage>>['list']>[number];
+
+/** Your data, in a side sheet: what is stored where, how much, each book's size, and how to delete it all. */
 function YourData({ open, onClose }: { open: boolean; onClose: () => void }) {
   const w = useW();
-  const { t, bytes } = useI18n();
+  const { t, bytes, lang } = useI18n();
   const confirm = useConfirm();
+  const toast = useToast();
+  const space = useSpace();
+  const place = usePlace();
   const [size, setSize] = useState<number | null>(null);
+  const [list, setList] = useState<BookSize[]>([]);
   const [busy, setBusy] = useState(false);
+  const [rowBusy, setRowBusy] = useState('');
   const [done, setDone] = useState('');
   const [error, setError] = useState('');
-
+  const load = () =>
+    webApi
+      .storage(true)
+      .then((s) => {
+        setSize(s.books);
+        setList(s.list ?? []);
+      })
+      .catch(() => {
+        setSize(null);
+        setList([]);
+      });
+  // biome-ignore lint/correctness/useExhaustiveDependencies: on each opening
   useEffect(() => {
     if (!open) return;
     setDone('');
     setError('');
-    webApi
-      .storage()
-      .then((s) => setSize(s.books))
-      .catch(() => setSize(null));
+    void load();
+    void checkSpace();
   }, [open]);
+
+  const backup = async (b: BookSize) => {
+    setRowBusy(`save:${b.id}`);
+    try {
+      await saveFile(webApi.archiveUrl(b.id), `${b.id}.warqa.zip`);
+    } catch (e) {
+      toast({ text: errorText(e, t), tone: 'error' });
+    }
+    setRowBusy('');
+  };
+  const remove = async (b: BookSize) => {
+    const title = bookTitle(b.title, lang, b.defaultLang);
+    if (
+      !(await confirm({
+        title: w('space.deleteConfirm', { title }),
+        body: w('space.deleteBody'),
+        confirm: w('project.deleteYes'),
+        cancel: w('project.deleteNo'),
+        danger: true,
+      }))
+    )
+      return;
+    setRowBusy(`del:${b.id}`);
+    try {
+      await webApi.remove(b.id);
+      toast({ text: w('space.deleted', { title }) });
+      // the screens that showed it follow: its own page goes home, Your books loads its list again
+      if (place.book?.id === b.id) navigate('/');
+      window.dispatchEvent(new Event(BOOKS_CHANGED));
+      await load();
+      await checkSpace();
+    } catch (e) {
+      toast({ text: errorText(e, t), tone: 'error' });
+    }
+    setRowBusy('');
+  };
 
   const wipe = async () => {
     // a loss that cannot be undone: the dialog, with keeping everything as the safe choice
@@ -42,6 +190,8 @@ function YourData({ open, onClose }: { open: boolean; onClose: () => void }) {
       setOnboarded(false);
       setDone(w('privacy.wiped'));
       setSize(0);
+      setList([]);
+      void checkSpace();
     } catch (e) {
       setError(errorText(e, t));
     }
@@ -53,7 +203,52 @@ function YourData({ open, onClose }: { open: boolean; onClose: () => void }) {
       <p>{w('privacy.p1')}</p>
       <p>{w('privacy.p2')}</p>
       <p>{w('privacy.p3')}</p>
-      {size !== null && <p className="muted">{w('privacy.stored', { size: bytes(size) })}</p>}
+      {space && <SpaceCard space={space} />}
+      {size !== null && <p className="muted">{w('privacy.stored', { size: ltr(bytes(size)) })}</p>}
+      {list.length > 0 && (
+        <section className="space-books" aria-labelledby="space-books-title">
+          <h3 id="space-books-title" className="space-books-title">
+            {w('space.books')}
+          </h3>
+          <ul>
+            {list.map((b) => {
+              const title = bookTitle(b.title, lang, b.defaultLang);
+              return (
+                <li key={b.id}>
+                  <span className="space-book" dir="auto">
+                    {title}
+                  </span>
+                  <bdi className="mono muted space-book-size" dir="ltr">
+                    {bytes(b.bytes)}
+                  </bdi>
+                  <span className="space-book-acts">
+                    <Button
+                      variant="quiet"
+                      icon="download"
+                      busy={rowBusy === `save:${b.id}`}
+                      disabled={!!rowBusy}
+                      aria-label={`${w('space.backup')}: ${title}`}
+                      onClick={() => void backup(b)}
+                    >
+                      {w('space.backupShort')}
+                    </Button>
+                    <Button
+                      variant="quiet"
+                      icon="close"
+                      busy={rowBusy === `del:${b.id}`}
+                      disabled={!!rowBusy}
+                      aria-label={`${w('project.delete')}: ${title}`}
+                      onClick={() => void remove(b)}
+                    >
+                      {w('project.delete')}
+                    </Button>
+                  </span>
+                </li>
+              );
+            })}
+          </ul>
+        </section>
+      )}
       {done && <Notice tone="good">{done}</Notice>}
       {error && <Notice tone="error">{error}</Notice>}
       <div className="actions">
@@ -85,6 +280,13 @@ export function WebStatus({ bridge, serviceWorker }: { bridge: Bridge; serviceWo
   const toast = useToast();
   useSyncExternalStore(bridge.subscribe, () => bridge.storageError);
   const [data, setData] = useState(false);
+  const space = useSpace();
+  // the storage banner opens Your data
+  useEffect(() => {
+    const open = () => setData(true);
+    window.addEventListener('warqa:your-data', open);
+    return () => window.removeEventListener('warqa:your-data', open);
+  }, []);
   const info = bridge.info;
   // notices from outside React (a failed download, a link that needs the offline worker) become toasts
   useEffect(() => {
@@ -96,6 +298,7 @@ export function WebStatus({ bridge, serviceWorker }: { bridge: Bridge; serviceWo
     return () => window.removeEventListener('warqa:notice', show);
   }, [toast]);
   const warnings = [
+    isLow(space) ? w('space.title') : '',
     info && !info.persistent ? w('banner.notPersistent') : '',
     bridge.storageError ? w('banner.storage', { error: bridge.storageError }) : '',
     !serviceWorker ? w('banner.noSw') : '',
@@ -159,7 +362,9 @@ export function WebStatus({ bridge, serviceWorker }: { bridge: Bridge; serviceWo
 
 export function HomeActions() {
   const w = useW();
-  const { t } = useI18n();
+  const { t, lang, locale } = useI18n();
+  const choose = useChoose();
+  const toast = useToast();
   const input = useRef<HTMLInputElement>(null);
   const [busy, setBusy] = useState<'' | 'demo' | 'import'>('');
   const [error, setError] = useState('');
@@ -180,7 +385,37 @@ export function HomeActions() {
     setBusy('import');
     setError('');
     try {
-      const r = await webApi.importZip(file);
+      let r = await webApi.importZip(file, 'ask');
+      if ('exists' in r) {
+        // the book is here already: replace it (its changes since the backup are lost), keep both, or neither (Esc)
+        const x = r.exists;
+        const title = bookTitle(x.title, lang, x.defaultLang);
+        // the year too when it is not this one ("since 5 Oct 2025")
+        const made = x.exported ? new Date(x.exported) : null;
+        const date = made
+          ? new Intl.DateTimeFormat(locale, {
+              day: 'numeric',
+              month: 'short',
+              ...(made.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}),
+            }).format(made)
+          : '';
+        const c = await choose({
+          title: w('import.exists', { title }),
+          body: date ? w('import.existsBody', { date }) : w('import.existsBodyNoDate'),
+          confirm: w('import.replace'),
+          cancel: w('import.keepBoth'),
+          safeIsAction: true,
+        });
+        if (c === null) {
+          setBusy('');
+          if (input.current) input.current.value = '';
+          return;
+        }
+        r = await webApi.importZip(file, c === 'confirm' ? 'replace' : 'copy');
+        if ('exists' in r) throw new Error(w('import.exists', { title }));
+        if (c === 'confirm') toast({ text: w('import.replaced', { title }) });
+      }
+      void checkSpace();
       navigate(`/project/${encodeURIComponent(r.id)}`);
     } catch (e) {
       setError(w('home.importFailed', { error: errorText(e, t) }));

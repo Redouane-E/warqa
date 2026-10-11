@@ -44,11 +44,90 @@ function listenForInstall() {
   });
 }
 
+/**
+ * Saving the book on this device (its service worker, over http(s) only): saving with how far it is, ready with its
+ * size, failed (with Save again), or off after "Delete it from this device" (the pages then leave the worker
+ * unregistered until asked again). Everything is this book's own, named after its folder on the site ("/demo/"):
+ * books sharing a site, and the web app, keep their copies and workers.
+ */
+const bookScope = () => new URL('./', location.href);
+const offKey = () => `warqa:offline:${bookScope().pathname}`;
+interface Offline {
+  state: 'none' | 'saving' | 'ready' | 'off' | 'failed';
+  done: number;
+  total: number;
+}
+let offline: Offline = { state: 'none', done: 0, total: 0 };
+let offlineListening = false;
+const canSave = () =>
+  typeof navigator !== 'undefined' && 'serviceWorker' in navigator && /^https?:$/.test(location.protocol);
+function listenForOffline(redraw: () => void) {
+  if (offlineListening || !canSave()) return;
+  offlineListening = true;
+  try {
+    if (localStorage.getItem(offKey()) === 'off') offline = { state: 'off', done: 0, total: 0 };
+  } catch {
+    /* storage unavailable */
+  }
+  const sw = navigator.serviceWorker;
+  sw.addEventListener('message', (e) => {
+    const d = e.data as { t?: string; done?: number; total?: number; ready?: boolean; failed?: boolean } | null;
+    if (d?.t !== 'warqa-cache' || offline.state === 'off') return;
+    offline = { state: d.failed ? 'failed' : d.ready ? 'ready' : 'saving', done: d.done ?? 0, total: d.total ?? 0 };
+    redraw();
+  });
+  sw.startMessages?.();
+  // a later visit: ask this book's worker how much is saved (it tops up a copy found incomplete)
+  if (offline.state !== 'off')
+    void sw.getRegistration(bookScope().href).then((r) => {
+      if (r?.scope === bookScope().href) r.active?.postMessage({ t: 'warqa-status' });
+    });
+}
+async function forgetOffline() {
+  try {
+    localStorage.setItem(offKey(), 'off');
+  } catch {
+    /* storage unavailable: the next visit saves it again */
+  }
+  offline = { state: 'off', done: 0, total: 0 };
+  try {
+    const prefix = `warqa:${bookScope().pathname}:`;
+    const keys = await caches.keys();
+    await Promise.all(keys.filter((k) => k.startsWith(prefix)).map((k) => caches.delete(k)));
+    // only this book's worker (another book, or the web app, may have one on the same site)
+    const r = await navigator.serviceWorker.getRegistration(bookScope().href);
+    if (r?.scope === bookScope().href) await r.unregister();
+  } catch {
+    /* nothing saved here */
+  }
+}
+async function saveOffline() {
+  try {
+    localStorage.removeItem(offKey());
+  } catch {
+    /* storage unavailable */
+  }
+  offline = { state: 'saving', done: 0, total: 0 };
+  try {
+    await navigator.serviceWorker.register(new URL('sw.js', bookScope()));
+  } catch {
+    offline = { state: 'failed', done: 0, total: 0 };
+  }
+}
+/** Said once when the saving ends (the panel is redrawn as it goes; this stays). */
+let offlineLive: HTMLElement | null = null;
+let offlineSaid = '';
+
 const THEME_KEY = 'warqa:theme';
 
 /** Render the book's home: its cover and contents. */
 export function renderBook(host: HTMLElement, data: BookPageData, initialLang?: string): void {
   listenForInstall();
+  // the saving panel alone is redrawn as the worker reports (the rest of the page keeps its focus)
+  listenForOffline(() => {
+    const el = host.querySelector('.wq-bh-offline');
+    if (el && drawOffline) el.replaceWith(drawOffline());
+  });
   let lang = initialLang && data.langs.includes(initialLang) ? initialLang : data.defaultLang;
   const progressKey = `warqa:progress:${data.id}`;
   const read = () => {
@@ -101,6 +180,7 @@ export function renderBook(host: HTMLElement, data: BookPageData, initialLang?: 
     theme = themeOf(data.theme) ?? 'sheet';
   }
 
+  let drawOffline: (() => HTMLElement) | null = null;
   const render = () => {
     const t = translator(lang, { digits: data.digits ?? 'latn' });
     const fmt = (n: number) => formatNumber(n, lang, { digits: data.digits ?? 'latn' });
@@ -115,6 +195,85 @@ export function renderBook(host: HTMLElement, data: BookPageData, initialLang?: 
     const title = pick(data.title, lang);
     document.title = title;
     const withLang = (href: string) => `${href}${href.includes('?') ? '&' : '?'}lang=${encodeURIComponent(lang)}`;
+    const mb = (n: number) => `${fmt(Math.round(n / 1e5) / 10)} MB`;
+    // saving on this device: a bar while it saves, then ready with its size and a way to delete it; after that,
+    // a way to save it again
+    drawOffline = () => {
+      const o = offline;
+      // redrawn in place; the focus goes to what replaced the button that had it
+      const redraw = (focus?: string) => {
+        host.querySelector('.wq-bh-offline')?.replaceWith(drawOffline!());
+        if (focus) host.querySelector<HTMLElement>(focus)?.focus();
+      };
+      const ready = o.state === 'ready' ? t('book.ready', { size: `\u2066${mb(o.total)}\u2069` }) : '';
+      const said = o.state === 'ready' ? ready : o.state === 'failed' ? t('book.saveFailed') : '';
+      if (!offlineLive) {
+        offlineLive = h('p', { class: 'wq-sr', role: 'status' });
+        document.body.append(offlineLive);
+      }
+      if (said !== offlineSaid) {
+        offlineSaid = said;
+        offlineLive.textContent = said;
+      }
+      if (o.state === 'none' || !canSave()) return h('div', { class: 'wq-bh-offline', hidden: true });
+      const save = h(
+        'button',
+        {
+          type: 'button',
+          class: 'wq-bh-save',
+          onclick: () => {
+            void saveOffline().then(() => redraw('.wq-bh-offline'));
+            redraw('.wq-bh-offline');
+          },
+        },
+        icon('download'),
+        t('book.saveOffline'),
+      );
+      if (o.state === 'off') return h('div', { class: 'wq-bh-offline wq-bh-offline-off', tabindex: '-1' }, save);
+      const share = o.total ? Math.min(1, o.done / o.total) : 0;
+      return h(
+        'section',
+        {
+          class: `wq-bh-offline wq-bh-offline-${o.state}`,
+          tabindex: '-1',
+          'aria-label': o.state === 'saving' ? t('book.saving') : said,
+        },
+        o.state === 'saving'
+          ? h(
+              'div',
+              { class: 'wq-bh-off-row' },
+              h('span', {}, t('book.saving')),
+              h('bdi', { class: 'wq-mono', dir: 'ltr' }, o.total ? `${mb(o.done)} / ${mb(o.total)}` : ''),
+            )
+          : null,
+        o.state === 'saving'
+          ? h('div', { class: 'wq-bh-off-bar', 'aria-hidden': 'true' }, h('i', { style: { width: `${share * 100}%` } }))
+          : null,
+        o.state === 'failed' ? h('p', { class: 'wq-bh-off-row wq-bh-off-failed' }, t('book.saveFailed')) : null,
+        o.state === 'ready' || o.state === 'failed'
+          ? h(
+              'div',
+              { class: 'wq-bh-off-foot' },
+              o.state === 'ready' ? h('span', { class: 'wq-bh-off-ready' }, icon('check', 16), ready) : save,
+              // offline, the saved copy is the only one: no way to delete it from here then
+              o.state === 'ready' && navigator.onLine !== false
+                ? h(
+                    'button',
+                    {
+                      type: 'button',
+                      class: 'wq-bh-forget',
+                      onclick: () => {
+                        void forgetOffline().then(() => redraw('.wq-bh-save'));
+                        redraw('.wq-bh-save');
+                      },
+                    },
+                    t('book.forget'),
+                  )
+                : null,
+            )
+          : null,
+      );
+    };
     const setLang = (l: string) => {
       lang = l;
       try {
@@ -241,6 +400,7 @@ export function renderBook(host: HTMLElement, data: BookPageData, initialLang?: 
                 icon('download'),
                 t('book.install'),
               ),
+              drawOffline(),
             ),
           ),
           h(

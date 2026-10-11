@@ -5,7 +5,7 @@ import { tmpdir } from 'node:os';
 import { join, resolve } from 'node:path';
 import { unzipSync } from 'fflate';
 import { describe, expect, it } from 'vitest';
-import { ankiText, archiveProject, csvText } from '../export/packages.js';
+import { ankiText, archiveProject, BACKUP_META, BACKUP_SKIP, csvText } from '../export/packages.js';
 import { type FakeModel, Llm } from '../models/llm.js';
 import { Project } from '../project/index.js';
 import { estimateJudge } from '../stages/build.js';
@@ -184,5 +184,14 @@ describe('sharing', () => {
     expect(names).not.toContain('.env');
     expect(names).not.toContain('.git/config');
     expect(names).toContain('.ledger.jsonl');
+    // when it was made, written afresh beside warqa.json (an old one left in the folder is not copied)
+    writeFileSync(p.path(BACKUP_META), '{"format":1,"exported":"2001-01-01T00:00:00.000Z"}');
+    const zip = unzipSync(archiveProject(p));
+    const meta = Object.entries(zip).find(([n]) => n.endsWith(`/${BACKUP_META}`));
+    expect(Object.keys(zip).filter((n) => n.endsWith(`/${BACKUP_META}`))).toHaveLength(1);
+    const made = JSON.parse(new TextDecoder().decode(meta![1])) as { exported: string };
+    expect(Date.now() - Date.parse(made.exported)).toBeLessThan(60_000);
+    // and an import never keeps it in the book
+    expect(BACKUP_SKIP.test(BACKUP_META)).toBe(true);
   });
 });

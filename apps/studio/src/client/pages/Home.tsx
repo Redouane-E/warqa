@@ -19,6 +19,9 @@ const STEP_KEYS: Record<StepId, 'step.read' | 'step.plan' | 'step.make' | 'step.
     share: 'step.share',
   };
 
+/** Said on window when books were added or deleted outside Your books (the web app's Your data). */
+export const BOOKS_CHANGED = 'warqa:books-changed';
+
 export const bookTitle = (title: Record<string, string> | string, ui: string, fallback: string): string =>
   typeof title === 'string' ? title : (title[ui] ?? title[fallback] ?? Object.values(title)[0] ?? '');
 
@@ -288,6 +291,15 @@ export function HomePage() {
         else setData(d);
       })
       .catch((e) => setError(errorText(e, tRef.current)));
+    // books deleted from elsewhere (the web app's Your data): the list follows
+    const again = () => {
+      api
+        .projects()
+        .then(setData)
+        .catch(() => {});
+    };
+    window.addEventListener(BOOKS_CHANGED, again);
+    return () => window.removeEventListener(BOOKS_CHANGED, again);
   }, []);
 
   const all = data?.projects ?? [];

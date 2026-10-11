@@ -112,10 +112,168 @@
 .boot-card .brand-ar {
   font-size: 30px;
 }
+/* the books open in another tab: a ground card with its picture, one sentence and the one button */
+.boot-state {
+  display: grid;
+  justify-items: center;
+  gap: 12px;
+  padding: 28px 20px;
+  border: 1px solid var(--wq-line);
+  border-radius: 6px;
+  background: var(--wq-sheet);
+}
+.boot-pic-back {
+  fill: var(--wq-sheet);
+  stroke: var(--wq-input-border);
+  stroke-width: 2;
+}
+.boot-pic-front {
+  fill: var(--wq-sheet);
+  stroke: var(--wq-ink);
+  stroke-width: 2;
+}
+.boot-pic-bar {
+  stroke: var(--wq-ink);
+  stroke-width: 2;
+}
+.boot-title {
+  margin: 0;
+  font-family: var(--font-display);
+  font-variation-settings: "HEXP" 60;
+  font-weight: 600;
+  font-size: 18px;
+  color: var(--wq-ink);
+}
+:lang(ar) .boot-title {
+  font-variation-settings: normal;
+}
+.boot-body {
+  margin: 0;
+  max-inline-size: 36ch;
+  font-size: 14px;
+  color: var(--wq-text);
+}
 .boot-error {
   max-inline-size: 100%;
   overflow-x: auto;
   white-space: pre-wrap;
   font-size: 13px;
   color: var(--bad);
+}
+
+/* the browser's storage almost full (redesign 4h): a card with a meter, under the top bar and in Your data */
+.space-banner {
+  position: relative;
+  max-inline-size: 1440px;
+  margin: 12px auto 0;
+  margin-inline: max(24px, calc((100% - 1392px) / 2));
+  padding: 16px 20px;
+  border: 1px solid var(--wq-line);
+  border-inline-start: 4px solid var(--wq-margin);
+  border-radius: var(--wq-radius-sheet);
+  background: var(--wq-sheet);
+}
+.space-hide {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 8px;
+}
+.space-card {
+  display: grid;
+  gap: 10px;
+}
+.space-banner .space-card {
+  padding-inline-end: 36px;
+}
+.web-data .space-card {
+  padding: 14px 16px;
+  border: 1px solid var(--wq-line);
+  border-radius: var(--wq-radius-control);
+}
+.web-data .space-card.is-low {
+  border-inline-start: 4px solid var(--wq-margin);
+}
+.space-title {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--wq-ink);
+}
+.space-card.is-low .space-title svg {
+  color: var(--wq-margin);
+}
+.space-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  margin: 0;
+  font-size: 14px;
+  color: var(--wq-text);
+}
+.space-meter {
+  display: flex;
+  block-size: 10px;
+  border-radius: var(--wq-radius-pill);
+  background: var(--wq-ink-tint);
+  overflow: hidden;
+}
+.space-fill {
+  background: var(--wq-ink);
+}
+.space-over {
+  background: var(--wq-margin);
+}
+.space-body {
+  margin: 0;
+  max-inline-size: 70ch;
+  font-size: 15px;
+}
+.space-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 12px;
+}
+.space-books {
+  display: grid;
+  gap: 6px;
+}
+.space-books-title {
+  margin: 8px 0 0;
+  font-size: 15px;
+  font-weight: 600;
+  color: var(--wq-ink);
+}
+.space-books ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.space-books li {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 2px 12px;
+  padding: 8px 0;
+  border-block-end: 1px solid var(--wq-seyes);
+}
+.space-book {
+  min-inline-size: 0;
+  overflow-wrap: anywhere;
+  font-weight: 500;
+}
+.space-book-acts {
+  grid-column: 1 / -1;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+}
+@media (max-width: 760px) {
+  .space-banner {
+    margin-inline: 12px;
+    padding: 14px 14px;
+  }
 }

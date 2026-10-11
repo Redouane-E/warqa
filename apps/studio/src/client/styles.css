@@ -449,6 +449,10 @@ abbr {
   color: var(--bad);
   border-color: color-mix(in srgb, var(--bad) 55%, transparent);
 }
+/* a loss offered beside a safe action (Replace beside Keep both): red text, no frame */
+.btn-danger-text {
+  color: var(--bad);
+}
 .spinner {
   display: inline-block;
   inline-size: 14px;
@@ -3066,6 +3070,11 @@ select {
 @media (min-width: 1280px) {
   .has-sheet .places {
     margin-inline-end: clamp(360px, 40vw, 440px);
+  }
+  /* the banners under the top bar make room too (offline, storage) */
+  .has-sheet .offline-banner,
+  .has-sheet .space-banner {
+    margin-inline-end: calc(clamp(360px, 40vw, 440px) + 24px);
   }
 }
 

@@ -28,3 +28,5 @@ The player emits DOM events `warqa:beat`, `warqa:answer`, `warqa:finish` and `wa
 ## Hosting
 
 Any static host works (GitHub Pages, Netlify, Cloudflare Pages, a school server). Serve with HTTP Range support for audio seeking (`warqa preview` does); the offline cache also answers Range requests.
+
+Over http(s), the book saves itself on the learner's device on the first visit: its home shows **Saving on this device** with how many MB are saved, then **Ready offline** with the book's size and **Delete it from this device** (which clears the saved files; the book is then not saved again until the learner chooses **Save on this device for offline use**). A lesson in a language with no recorded voice says so under the stage, and its words light up at reading speed. If the browser refuses to play sound before a tap, the lesson waits under **Tap to play the sound**.

@@ -14,7 +14,15 @@ export interface ConfirmOptions {
   cancel?: string;
   /** Red, for loss (deleting, replacing a teacher's work). */
   danger?: boolean;
+  /**
+   * The safe choice is itself an action ("Keep both"): it is the main button, and the loss a red text button.
+   * Esc then means neither (`choose` tells them apart).
+   */
+  safeIsAction?: boolean;
 }
+
+/** What a three-way dialog gave: its action, the safe choice, or nothing (Esc). */
+export type Choice = 'confirm' | 'cancel' | null;
 
 export interface ToastOptions {
   text: ReactNode;
@@ -27,24 +35,27 @@ export interface ToastOptions {
 
 interface Overlays {
   confirm(o: ConfirmOptions): Promise<boolean>;
+  choose(o: ConfirmOptions): Promise<Choice>;
   toast(o: ToastOptions): void;
 }
 
 const OverlayContext = createContext<Overlays>({
   confirm: async () => false,
+  choose: async () => null,
   toast: () => {},
 });
 
 export const useConfirm = () => useContext(OverlayContext).confirm;
+export const useChoose = () => useContext(OverlayContext).choose;
 export const useToast = () => useContext(OverlayContext).toast;
 
 interface Pending extends ConfirmOptions {
-  resolve: (ok: boolean) => void;
+  resolve: (c: Choice) => void;
   /** Where the focus was: it goes back there when the dialog closes. */
   opener: HTMLElement | null;
 }
 
-function ConfirmDialog({ pending, onDone }: { pending: Pending; onDone: (ok: boolean) => void }) {
+function ConfirmDialog({ pending, onDone }: { pending: Pending; onDone: (c: Choice) => void }) {
   const { t } = useI18n();
   const ref = useRef<HTMLDialogElement>(null);
   const safe = useRef<HTMLButtonElement>(null);
@@ -55,10 +66,10 @@ function ConfirmDialog({ pending, onDone }: { pending: Pending; onDone: (ok: boo
     safe.current?.focus();
   }, []);
   // close it properly, then give the focus back to what opened it (a sheet's focus trap stays whole)
-  const done = (ok: boolean) => {
+  const done = (c: Choice) => {
     ref.current?.close();
     if (pending.opener?.isConnected) pending.opener.focus({ preventScroll: true });
-    onDone(ok);
+    onDone(c);
   };
   return (
     <dialog
@@ -68,7 +79,7 @@ function ConfirmDialog({ pending, onDone }: { pending: Pending; onDone: (ok: boo
       aria-describedby={pending.body ? 'dialog-body' : undefined}
       onCancel={(e) => {
         e.preventDefault();
-        done(false);
+        done(null);
       }}
     >
       <h2 id="dialog-title">{pending.title}</h2>
@@ -78,16 +89,29 @@ function ConfirmDialog({ pending, onDone }: { pending: Pending; onDone: (ok: boo
         </div>
       )}
       <div className="dialog-actions">
-        <button ref={safe} type="button" className="btn btn-default" onClick={() => done(false)}>
-          {pending.cancel ?? t('common.cancel')}
-        </button>
-        <button
-          type="button"
-          className={`btn ${pending.danger ? 'btn-danger-solid' : 'btn-primary'}`}
-          onClick={() => done(true)}
-        >
-          {pending.confirm}
-        </button>
+        {pending.safeIsAction ? (
+          <>
+            <button type="button" className="btn btn-quiet btn-danger-text" onClick={() => done('confirm')}>
+              {pending.confirm}
+            </button>
+            <button ref={safe} type="button" className="btn btn-primary" onClick={() => done('cancel')}>
+              {pending.cancel ?? t('common.cancel')}
+            </button>
+          </>
+        ) : (
+          <>
+            <button ref={safe} type="button" className="btn btn-default" onClick={() => done('cancel')}>
+              {pending.cancel ?? t('common.cancel')}
+            </button>
+            <button
+              type="button"
+              className={`btn ${pending.danger ? 'btn-danger-solid' : 'btn-primary'}`}
+              onClick={() => done('confirm')}
+            >
+              {pending.confirm}
+            </button>
+          </>
+        )}
       </div>
     </dialog>
   );
@@ -137,9 +161,9 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
   const [pending, setPending] = useState<Pending | null>(null);
   const [toast, setToast] = useState<(ToastOptions & { id: number }) | null>(null);
   const seq = useRef(0);
-  const confirm = useCallback(
+  const choose = useCallback(
     (o: ConfirmOptions) =>
-      new Promise<boolean>((resolve) =>
+      new Promise<Choice>((resolve) =>
         setPending({
           ...o,
           resolve,
@@ -148,9 +172,10 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
       ),
     [],
   );
+  const confirm = useCallback(async (o: ConfirmOptions) => (await choose(o)) === 'confirm', [choose]);
   // one toast at a time: a new one replaces the last
   const show = useCallback((o: ToastOptions) => setToast({ ...o, id: ++seq.current }), []);
-  const value = useMemo(() => ({ confirm, toast: show }), [confirm, show]);
+  const value = useMemo(() => ({ confirm, choose, toast: show }), [confirm, choose, show]);
   const gone = useCallback(() => setToast(null), []);
   return (
     <OverlayContext.Provider value={value}>
@@ -159,8 +184,8 @@ export function OverlayProvider({ children }: { children: ReactNode }) {
         <ConfirmDialog
           key={pending.title}
           pending={pending}
-          onDone={(ok) => {
-            pending.resolve(ok);
+          onDone={(c) => {
+            pending.resolve(c);
             setPending(null);
           }}
         />

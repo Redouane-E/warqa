@@ -7,6 +7,7 @@ import { basename, dirname, join } from 'pathe';
 import type { Jobs } from '../../../studio/src/server/jobs';
 import { keysFile, loadKeys, saveKeys } from '../../../studio/src/server/keys';
 import { Registry } from '../../../studio/src/server/projects';
+import { candidates, idOf, newSlug, sameTitle } from './identity';
 import { vfs } from './vfs';
 
 interface Options {
@@ -21,18 +22,23 @@ interface Options {
 const SKIP = P.BACKUP_SKIP;
 const MAX_IMPORT = 1024 * 1024 * 1024;
 
-const slugOf = (s: string) =>
-  s
-    .normalize('NFKD')
-    .replace(/[̀-ͯ]/g, '')
-    .toLowerCase()
-    .replace(/\.warqa$/, '')
-    .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^[^a-z0-9]+|-+$/g, '')
-    .slice(0, 40) || 'book';
+interface Unzipped {
+  files: Record<string, Uint8Array>;
+  names: string[];
+  /** Where the book's files start in the zip ("integers.warqa/", or "" when warqa.json is at the top). */
+  prefix: string;
+  /** The folder name a new copy takes ("integers"). */
+  slug: string;
+  /** The folders it may already have here, most likely first (see identity.ts). */
+  candidates: string[];
+  /** Its titles: the same book only if one matches. */
+  title?: Record<string, string> | string;
+  /** When the backup was made (backups from before warqa-backup.json: unknown). */
+  exported?: string;
+}
 
-/** Unpack a project zip into a new folder under root; returns the folder. */
-function unpack(root: string, zip: Uint8Array, hint: string): string {
+/** Read a project zip: where its book is, the folder it would take, when it was made. */
+function readZip(zip: Uint8Array, hint: string): Unzipped {
   let files: Record<string, Uint8Array>;
   try {
     files = unzipSync(zip);
@@ -46,22 +52,98 @@ function unpack(root: string, zip: Uint8Array, hint: string): string {
   if (!book) throw new Error('this zip has no warqa.json: it is not a Warqa book project');
   const prefix = book.slice(0, -'warqa.json'.length);
   let id = '';
+  let title: Record<string, string> | string | undefined;
   try {
-    id = String((JSON.parse(new TextDecoder().decode(files[book])) as { id?: string }).id ?? '');
+    const j = JSON.parse(new TextDecoder().decode(files[book])) as { id?: string; title?: typeof title };
+    id = String(j.id ?? '');
+    title = j.title;
   } catch {
     throw new Error('warqa.json in this zip is not valid JSON');
   }
-  const base = slugOf(id || prefix.replace(/\/$/, '').split('/').pop() || hint);
-  let slug = base;
-  for (let n = 2; vfs.existsSync(join(root, `${slug}.warqa`)); n++) slug = `${base}-${n}`;
+  let exported: string | undefined;
+  const meta = files[`${prefix}${P.BACKUP_META}`];
+  if (meta)
+    try {
+      const m = JSON.parse(new TextDecoder().decode(meta)) as Partial<P.BackupMeta>;
+      if (typeof m.exported === 'string' && !Number.isNaN(Date.parse(m.exported))) exported = m.exported;
+    } catch {
+      /* a date we cannot read: unknown */
+    }
+  return {
+    files,
+    names,
+    prefix,
+    slug: newSlug(prefix, id, hint),
+    candidates: candidates(prefix, id),
+    ...(title !== undefined ? { title } : {}),
+    ...(exported ? { exported } : {}),
+  };
+}
+
+/**
+ * Unpack a read zip into a new folder under root ("integers-2" when "integers" is taken); returns the folder. A copy
+ * beside a book of the same name gets an id of its own (its exports then keep their own progress, and a backup of it
+ * comes back to it, not to the original).
+ */
+function unpack(root: string, z: Unzipped): string {
+  let slug = z.slug;
+  for (let n = 2; vfs.existsSync(join(root, `${slug}.warqa`)); n++) slug = `${z.slug}-${n}`;
   const dir = join(root, `${slug}.warqa`);
   try {
-    write(dir, prefix, names, files);
+    write(dir, z.prefix, z.names, z.files);
+    if (slug !== z.slug) {
+      const p = new P.Project(dir);
+      p.book.id = idOf(slug);
+      p.saveBook();
+    }
   } catch (e) {
     vfs.rmSync(dir, { recursive: true, force: true });
     throw e;
   }
   return dir;
+}
+
+/** The book here that a zip is a backup of: a folder it may have (identity.ts) holding a book with one of its titles. */
+function bookHere(root: string, z: Unzipped): { dir: string; book: P.Project['book'] } | null {
+  for (const slug of z.candidates) {
+    const dir = join(root, `${slug}.warqa`);
+    if (!vfs.existsSync(dir) || !P.Project.isProject(dir)) continue;
+    try {
+      const book = new P.Project(dir).book;
+      if (sameTitle(z.title, book.title)) return { dir, book };
+    } catch {
+      /* a book that cannot be read is not offered for replacement */
+    }
+  }
+  return null;
+}
+
+/**
+ * Put a read zip in place of the book in `dir`: written beside it first (a hidden folder the books list skips), so a
+ * broken zip never costs the book; then the old folder goes and the new one takes its name.
+ */
+async function replace(dir: string, z: Unzipped): Promise<void> {
+  const tmp = join(dirname(dir), `.importing-${basename(dir)}`);
+  vfs.rmSync(tmp, { recursive: true, force: true });
+  try {
+    write(tmp, z.prefix, z.names, z.files);
+  } catch (e) {
+    vfs.rmSync(tmp, { recursive: true, force: true });
+    throw e;
+  }
+  // the old book steps aside, the new one takes its name, then the old one goes (no moment without a book)
+  const old = join(dirname(dir), `.replaced-${basename(dir)}`);
+  vfs.rmSync(old, { recursive: true, force: true });
+  vfs.renameSync(dir, old);
+  try {
+    vfs.renameSync(tmp, dir);
+  } catch (e) {
+    vfs.renameSync(old, dir);
+    vfs.rmSync(tmp, { recursive: true, force: true });
+    throw e;
+  }
+  vfs.rmSync(old, { recursive: true, force: true });
+  await vfs.flush();
 }
 
 function write(dir: string, prefix: string, names: string[], files: Record<string, Uint8Array>) {
@@ -100,7 +182,7 @@ export function webRoutes({ root, base, jobs }: Options): Hono {
     if (existing) return c.json({ id: 'integers', created: false });
     const res = await fetch(new URL(`${base}example/integers.zip`, self.location.origin));
     if (!res.ok) throw new Error(`the example book is missing from this site (HTTP ${res.status})`);
-    const dir = unpack(root, new Uint8Array(await res.arrayBuffer()), 'integers');
+    const dir = unpack(root, readZip(new Uint8Array(await res.arrayBuffer()), 'integers'));
     // its narration is already recorded; no speech engine is needed to replay it
     const p = new P.Project(dir);
     p.config.tts.provider = 'none';
@@ -108,13 +190,44 @@ export function webRoutes({ root, base, jobs }: Options): Hono {
     return c.json({ id: registry.idFor(dir) ?? basename(dir, '.warqa'), created: true });
   });
 
-  /** A project backup (zip) back into the browser. */
+  /**
+   * A project backup (zip) back into the browser. `mode`: `copy` (the default) adds it as a new book ("-2" when its
+   * name is taken); `ask` answers 409 with the book already here instead; `replace` puts it in that book's place
+   * (refused while that book has work in progress, as deleting it is).
+   */
   app.post('/import', async (c) => {
+    const mode = c.req.query('mode') ?? 'copy';
+    if (!['ask', 'copy', 'replace'].includes(mode)) throw new Error(`unknown import mode "${mode}"`);
     const body = await c.req.parseBody();
     const file = body.file;
     if (!(file instanceof File) || !file.size) throw new Error('choose a .zip file');
     if (file.size > MAX_IMPORT) throw new Error('this file is larger than 1 GB');
-    const dir = unpack(root, new Uint8Array(await file.arrayBuffer()), file.name.replace(/\.zip$/i, ''));
+    const z = readZip(new Uint8Array(await file.arrayBuffer()), file.name.replace(/\.zip$/i, ''));
+    const found = mode === 'copy' ? null : bookHere(root, z);
+    if (found && mode === 'ask') {
+      const { dir: here, book } = found;
+      return c.json(
+        {
+          error: 'this book is already here',
+          exists: {
+            id: registry.idFor(here) ?? basename(here, '.warqa'),
+            title: book.title,
+            defaultLang: book.defaultLang,
+            ...(z.exported ? { exported: z.exported } : {}),
+          },
+        },
+        409,
+      );
+    }
+    if (found && mode === 'replace') {
+      const here = found.dir;
+      const id = registry.idFor(here) ?? basename(here, '.warqa');
+      if (jobs.list(id).some((j) => j.status === 'running' || j.status === 'queued'))
+        throw new Error('this book has work in progress: stop it first');
+      await replace(here, z);
+      return c.json({ id: registry.idFor(here) ?? basename(here, '.warqa'), replaced: true });
+    }
+    const dir = unpack(root, z);
     return c.json({ id: registry.idFor(dir) ?? basename(dir, '.warqa') });
   });
 
@@ -126,6 +239,8 @@ export function webRoutes({ root, base, jobs }: Options): Hono {
     // audio, images and fonts are compressed already: store them as they are
     for (const [rel, data] of vfs.files(dir, (r) => SKIP.test(r)))
       files[`${name}/${rel}`] = /\.(mp3|wav|png|jpe?g|webp|woff2?)$/i.test(rel) ? [data, { level: 0 }] : data;
+    // when it was made: an import that finds this book already here says since when changes would be lost
+    files[`${name}/${P.BACKUP_META}`] = P.backupMeta();
     const zip = zipSync(files, { level: 6 });
     return c.body(zip, 200, {
       'content-type': 'application/zip',
@@ -144,14 +259,32 @@ export function webRoutes({ root, base, jobs }: Options): Hono {
     return c.json({ deleted: id });
   });
 
-  /** How much this browser stores for Warqa. */
+  /** How much this browser stores for Warqa (`?books=1`: each book's size too, largest first). */
   app.get('/storage', async (c) => {
     const est = await navigator.storage?.estimate?.().catch(() => undefined);
+    const list =
+      c.req.query('books') === '1'
+        ? [...registry.scan()]
+            .map(([id, dir]) => {
+              let title: Record<string, string> | string = id;
+              let defaultLang = 'en';
+              try {
+                const b = new P.Project(dir).book;
+                title = b.title;
+                defaultLang = b.defaultLang ?? defaultLang;
+              } catch {
+                /* a book that cannot be read still takes space */
+              }
+              return { id, title, defaultLang, bytes: vfs.size(dir) };
+            })
+            .sort((a, b) => b.bytes - a.bytes)
+        : undefined;
     return c.json({
       books: vfs.size(root),
       usage: est?.usage ?? null,
       quota: est?.quota ?? null,
       pending: vfs.pending,
+      ...(list ? { list } : {}),
     });
   });
 

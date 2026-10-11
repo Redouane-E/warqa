@@ -122,6 +122,14 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **The web app's and the learner's states (redesign 4h, part 3).** When the books are open in another tab, a card
+  says so with Use Warqa in this tab focused. When the browser's storage is almost full, a banner shows the space used
+  with a meter and what to do; Your data lists each book with its size, a backup and delete. Importing a backup of a
+  book already here asks first: Keep both, or Replace (with the date of the backup; backups now carry it in
+  `warqa-backup.json`). In the player, a browser that will not play sound before a tap gets "Tap to play the sound"
+  instead of a silent lesson; a language with no recorded voice says so, and its words light up at reading speed; an
+  exported book shows how much of it is saved on the device, then "Ready offline" with its size and a way to delete
+  it.
 - **Offline, empty and other states (redesign 4h, part 2).** Offline, a banner says reading and editing still work;
   the buttons that call an online model or voice (Make, Draft the plan, Translate, Narrate, Regenerate, Improve, Teach
   me) wait with "needs the internet", Go to leaves them out, and a toast says when you are back online; a book whose

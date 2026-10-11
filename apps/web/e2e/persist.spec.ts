@@ -1,5 +1,6 @@
 // What is saved in the browser survives a reload: books (IndexedDB) and keys, and "forget my keys" forgets.
-import { expect, test } from '@playwright/test';
+import { expect, type Page, test } from '@playwright/test';
+import { strFromU8, strToU8, unzipSync, zipSync } from 'fflate';
 import { confirmDialog, openStudio } from './helpers';
 
 test('books and keys survive a reload; keys can be forgotten', async ({ page }) => {
@@ -54,6 +55,13 @@ test('books and keys survive a reload; keys can be forgotten', async ({ page }) 
   expect(await mistral()).toBe(false);
 });
 
+/** A book's backup, as the page downloads it. */
+const download = (page: Page, id: string) =>
+  page.evaluate(async (b) => {
+    const r = await fetch(`/warqa/api/web/projects/${b}/archive`);
+    return [...new Uint8Array(await r.arrayBuffer())];
+  }, id);
+
 test('a backup imports back as a book', async ({ page }) => {
   await openStudio(page);
   await page.getByRole('button', { name: 'Open the example book' }).click();
@@ -78,14 +86,110 @@ test('a backup imports back as a book', async ({ page }) => {
   });
   await expect(page).toHaveURL(/\/warqa\/project\/integers$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Integers, step by step');
+
+  // the same backup again: the book is here already. Esc imports nothing; Keep both adds a second book; Replace
+  // puts the backup in the book's place
+  const again = async () => {
+    await page.goto('./');
+    await page.getByTestId('import-input').setInputFiles({
+      name: 'integers.warqa.zip',
+      mimeType: 'application/zip',
+      buffer: Buffer.from(zip, 'base64'),
+    });
+    const dialog = page.getByRole('dialog', { name: 'You already have “Integers, step by step”' });
+    await expect(dialog).toBeVisible();
+    // the backup says when it was made; the safe choice has the focus
+    await expect(dialog).toContainText(/with the changes you made since \w{3} \d{1,2}\./);
+    await expect(dialog.getByRole('button', { name: 'Keep both' })).toBeFocused();
+    return dialog;
+  };
+  let dialog = await again();
+  await page.keyboard.press('Escape');
+  await expect(dialog).toBeHidden();
+  await expect(page.locator('.book-card')).toHaveCount(1);
+  dialog = await again();
+  await dialog.getByRole('button', { name: 'Keep both' }).click();
+  await expect(page).toHaveURL(/\/warqa\/project\/integers-2$/);
+  dialog = await again();
+  await dialog.getByRole('button', { name: 'Replace' }).click();
+  await expect(page).toHaveURL(/\/warqa\/project\/integers$/);
+  await expect(page.getByText('The backup replaced “Integers, step by step”.')).toBeVisible();
+  await page.goto('./');
+  await expect(page.locator('.book-card')).toHaveCount(2);
+
+  // the copy kept beside it has an id of its own, and its backup comes back to it, not to the original
+  const copy = unzipSync(new Uint8Array(await download(page, 'integers-2')));
+  expect(JSON.parse(strFromU8(copy['integers-2.warqa/warqa.json']!)).id).toBe('integers-2');
+  await page.getByTestId('import-input').setInputFiles({
+    name: 'integers-2.warqa.zip',
+    mimeType: 'application/zip',
+    buffer: Buffer.from(zipSync(copy)),
+  });
+  await page.getByRole('dialog').getByRole('button', { name: 'Replace' }).click();
+  await expect(page).toHaveURL(/\/warqa\/project\/integers-2$/);
+
+  // a different book that happens to have the same folder name is never offered for replacement: a copy
+  const other = unzipSync(new Uint8Array(Buffer.from(zip, 'base64')));
+  const book = JSON.parse(strFromU8(other['integers.warqa/warqa.json']!));
+  other['integers.warqa/warqa.json'] = strToU8(JSON.stringify({ ...book, title: { en: 'Fractions' } }));
+  await page.goto('./');
+  await page.getByTestId('import-input').setInputFiles({
+    name: 'integers.warqa.zip',
+    mimeType: 'application/zip',
+    buffer: Buffer.from(zipSync(other)),
+  });
+  await expect(page).toHaveURL(/\/warqa\/project\/integers-3$/);
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Fractions');
 });
 
 test('one tab at a time: another tab can take the books over', async ({ page, context }) => {
   await openStudio(page);
   const other = await context.newPage();
   await other.goto('./');
-  await expect(other.getByText('Warqa is already open in another tab.')).toBeVisible();
+  await expect(other.getByRole('heading', { name: 'Warqa is open in another tab' })).toBeVisible();
+  await expect(other.getByRole('button', { name: 'Use Warqa in this tab' })).toBeFocused();
   await other.getByRole('button', { name: 'Use Warqa in this tab' }).click();
   await expect(other.getByRole('heading', { name: 'Your books' })).toBeVisible();
   await expect(page.getByText('Warqa is now open in another tab.')).toBeVisible();
+});
+
+test('storage almost full: a banner with what to do; Your data lists each book with its size', async ({ page }) => {
+  // 460 of 500 MB used (92 %): measured in the page
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator.storage, 'estimate', {
+      value: async () => ({ usage: 460e6, quota: 500e6 }),
+    });
+  });
+  await openStudio(page);
+  await page.getByRole('button', { name: 'Open the example book' }).click();
+  await expect(page).toHaveURL(/project\/integers/);
+  await page.goto('./');
+  const banner = page.locator('.space-banner');
+  await expect(banner.getByRole('heading', { name: 'Browser storage almost full' })).toBeVisible();
+  await expect(banner.getByRole('img', { name: '92 percent used' })).toBeVisible();
+  // (each size is isolated left to right inside the sentence)
+  await expect(banner).toContainText(/\u2066460 MB\u2069 of \u2066500 MB\u2069/);
+  await expect(banner).toContainText(/There is room for about \u206640 MB\u2069 more\./);
+  // the status menu counts it
+  await expect(page.locator('.web-status-menu .web-count')).toHaveText(/\d/);
+
+  // what uses space: Your data, each book with its size; deleting one is asked first
+  await banner.getByRole('button', { name: 'See what uses space' }).click();
+  const sheet = page.getByRole('dialog', { name: 'Your data' });
+  const row = sheet.locator('.space-books li', { hasText: 'Integers, step by step' });
+  await expect(row).toContainText(/\d+(\.\d+)? (kB|MB)/);
+  await row.getByRole('button', { name: 'Delete: Integers, step by step' }).click();
+  await confirmDialog(page, 'Delete the book');
+  await expect(page.getByText('“Integers, step by step” was deleted from this browser.')).toBeVisible();
+  await expect(sheet.locator('.space-books li')).toHaveCount(0);
+  // Your books behind the sheet follows
+  await expect(page.locator('.book-card')).toHaveCount(0);
+  await sheet.getByRole('button', { name: 'Close' }).first().click();
+
+  // closed: gone for the session
+  await banner.getByRole('button', { name: 'Close' }).click();
+  await expect(banner).toHaveCount(0);
+  await page.reload();
+  await expect(page.getByRole('heading', { level: 1 })).toBeVisible();
+  await expect(page.locator('.space-banner')).toHaveCount(0);
 });

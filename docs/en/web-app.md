@@ -41,7 +41,14 @@ without CORS headers, so the web app rewrites them).
   project). **Import a backup** on the home screen brings it back, here or in another browser; the same zip is a
   normal project folder for the desktop version. A backup leaves out what is made again (the exported site,
   caches, videos) and hidden files; an import does the same, so export the book again after importing it.
+- Importing a backup of a book that is already here asks first: **Keep both** adds it as a second book,
+  **Replace** puts it in the book's place (the changes made since the backup are lost; the dialog gives the
+  backup's date), Esc imports nothing. A book with work in progress is not replaced.
+- When the browser's storage is almost full (85 % used, or less than 100 MB left), a banner says how much is
+  left. **Your data** shows the space used and each book with its size, with **Backup** and **Delete**.
 - Your books can be open in one tab at a time; a second tab offers to take them over (the first one saves first).
+- Offline, reading and editing still work; making lessons, translating, narrating with an online voice and the
+  other work that calls a cloud model wait for the network, and say so on their buttons.
 
 ## What needs the desktop version
 

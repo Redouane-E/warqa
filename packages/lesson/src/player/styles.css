@@ -1432,6 +1432,7 @@
 /* the stage alone, edge to edge (video export, QA shots, thumbnails) */
 .wq-bare .wq-head,
 .wq-bare .wq-caption,
+.wq-bare .wq-novoice,
 .wq-bare .wq-bar,
 .wq-bare .wq-transcript {
   display: none !important;
@@ -1478,6 +1479,44 @@
   background: var(--wq-sheet);
   color: var(--wq-text);
   font-size: 26px;
+}
+/* sound refused until a tap (autoplay): the picture dims under one ink button */
+.wq-sound-blocked .wq-stage,
+.wq-sound-blocked .wq-html {
+  opacity: 0.35;
+}
+.wq-tap {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+}
+.wq-tap[hidden] {
+  display: none;
+}
+.wq-tap .wq-tap-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 52px;
+  padding: 0 22px;
+  border: 0;
+  border-radius: 999px;
+  background: var(--wq-ink);
+  color: var(--wq-on-ink);
+  font-size: 17px;
+  font-weight: 500;
+  cursor: pointer;
+  box-shadow: 0 12px 28px -12px rgba(19, 23, 46, 0.6);
+}
+.wq-tap .wq-tap-btn .wq-i {
+  width: 22px;
+  height: 22px;
+}
+.wq-tap .wq-tap-btn:focus-visible {
+  outline: 3px solid var(--wq-ink);
+  outline-offset: 3px;
 }
 .wq-soundnote {
   position: absolute;
@@ -1559,6 +1598,34 @@
 }
 
 /* ---------- captions: under the stage, never on the picture ---------- */
+/* no recorded voice in this language: a dashed chip and one line above the read-along */
+.wq-novoice {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 6px 12px;
+  text-align: center;
+}
+.wq-novoice[hidden] {
+  display: none;
+}
+.wq-novoice-chip {
+  display: inline-flex;
+  align-items: center;
+  min-height: 28px;
+  padding: 0 12px;
+  border: 1px dashed var(--wq-input-border);
+  border-radius: 999px;
+  color: var(--wq-text);
+  font-size: 13px;
+  white-space: nowrap;
+}
+.wq-novoice-line {
+  margin: 0;
+  color: var(--wq-text);
+  font-size: 15px;
+}
 .wq-caption {
   margin: 0;
   padding: 14px 24px;
@@ -2551,6 +2618,104 @@
 }
 .wq-bh-install[hidden] {
   display: none;
+}
+/* saving the book on this device: how far it is, then ready with its size */
+.wq-bh-offline {
+  display: grid;
+  gap: 10px;
+  max-width: 460px;
+  padding: 16px 18px 0;
+  border: 1px solid var(--wq-line);
+  border-radius: 6px;
+  background: var(--wq-sheet);
+}
+.wq-bh-offline[hidden] {
+  display: none;
+}
+.wq-bh-offline-ready {
+  padding-block-start: 0;
+}
+.wq-bh-offline-ready .wq-bh-off-foot {
+  border-top: 0;
+}
+.wq-bh-offline-off {
+  padding: 0;
+  border: 0;
+  background: none;
+}
+.wq-bh-off-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  gap: 4px 12px;
+  font-size: 14px;
+  color: var(--wq-text);
+}
+.wq-bh-off-bar {
+  height: 8px;
+  border-radius: 999px;
+  background: var(--wq-ink-tint);
+  overflow: hidden;
+}
+.wq-bh-off-bar i {
+  display: block;
+  height: 100%;
+  background: var(--wq-ink);
+  transition: width 0.3s;
+}
+.wq-bh-off-foot {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 12px;
+  margin-inline: -18px;
+  padding: 10px 18px;
+  border-top: 1px solid var(--wq-seyes);
+}
+.wq-bh-offline-failed {
+  padding-block-start: 12px;
+}
+.wq-bh-offline-failed .wq-bh-off-foot {
+  border-top: 0;
+}
+.wq-bh-off-failed {
+  margin: 0;
+  color: var(--wq-pen);
+}
+.wq-bh-offline:focus {
+  outline: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wq-bh-off-bar i {
+    transition: none;
+  }
+}
+.wq-bh-off-ready {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 32px;
+  padding: 0 12px;
+  border-radius: 999px;
+  background: var(--wq-ink-tint);
+  color: var(--wq-ink);
+  font-size: 14px;
+  font-weight: 500;
+}
+.wq-bh-forget,
+.wq-bh-save {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 44px;
+  padding: 0 4px;
+  border: 0;
+  background: transparent;
+  color: var(--wq-ink);
+  font: inherit;
+  font-weight: 500;
+  cursor: pointer;
 }
 .wq-bh-contents {
   display: flex;

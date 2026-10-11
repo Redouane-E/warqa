@@ -6,8 +6,9 @@ export const en = {
   'boot.failed': 'Warqa could not start in this browser.',
   'boot.failedHint':
     'Use an up-to-date Chrome, Edge, Firefox or Safari. Some private windows block the storage Warqa needs.',
-  'boot.busy': 'Warqa is already open in another tab.',
-  'boot.busyHint': 'Your books can be open in one tab at a time, so that no change is ever lost.',
+  'boot.busy': 'Warqa is open in another tab',
+  'boot.busyHint': 'Your books can be open in one tab at a time. The other tab saves before it lets go.',
+  'boot.releasedHint': 'Your books can be open in one tab at a time. Use Warqa in this tab to take them back.',
   'boot.useHere': 'Use Warqa in this tab',
   'boot.released': 'Warqa is now open in another tab.',
 
@@ -35,6 +36,14 @@ export const en = {
   'home.import': 'Import a backup',
   'home.importing': 'Importing…',
   'home.importFailed': 'This backup could not be imported: {error}',
+  'import.exists': 'You already have “{title}”',
+  'import.existsBody':
+    'Replace deletes the copy in this browser, with the changes you made since {date}. Keep both adds the backup as a second book.',
+  'import.existsBodyNoDate':
+    'Replace deletes the copy in this browser and the changes you made to it. Keep both adds the backup as a second book.',
+  'import.replace': 'Replace',
+  'import.keepBoth': 'Keep both',
+  'import.replaced': 'The backup replaced “{title}”.',
 
   'project.delete': 'Delete',
   'project.deleteHint': 'Delete this book from this browser',
@@ -50,6 +59,19 @@ export const en = {
   'privacy.wipe': 'Delete all my books and keys',
   'privacy.wipeConfirm': 'Delete every book and every key from this browser? This cannot be undone.',
   'privacy.wiped': 'Everything was deleted from this browser.',
+  'space.title': 'Browser storage almost full',
+  'space.row': 'Space used in this browser',
+  'space.amount': '{used} of {quota}',
+  'space.meter': '{p} percent used',
+  'space.body':
+    'There is room for about {free} more. Download a backup of the books you finished, then delete them here.',
+  'space.backup': 'Download a backup',
+  'space.backupShort': 'Backup',
+  'space.see': 'See what uses space',
+  'space.books': 'Books in this browser',
+  'space.deleteConfirm': 'Delete “{title}” from this browser?',
+  'space.deleteBody': 'Download a backup first if you want to keep it.',
+  'space.deleted': '“{title}” was deleted from this browser.',
 } as const;
 
 export type WebKey = keyof typeof en;
@@ -59,8 +81,11 @@ export const fr: Record<WebKey, string> = {
   'boot.failed': 'Warqa n’a pas pu démarrer dans ce navigateur.',
   'boot.failedHint':
     'Utilisez un Chrome, Edge, Firefox ou Safari à jour. Certaines fenêtres privées bloquent le stockage dont Warqa a besoin.',
-  'boot.busy': 'Warqa est déjà ouvert dans un autre onglet.',
-  'boot.busyHint': 'Vos livres ne s’ouvrent que dans un onglet à la fois, pour qu’aucune modification ne se perde.',
+  'boot.busy': 'Warqa est ouvert dans un autre onglet',
+  'boot.busyHint':
+    'Vos livres ne s’ouvrent que dans un onglet à la fois. L’autre onglet enregistre avant de les céder.',
+  'boot.releasedHint':
+    'Vos livres ne s’ouvrent que dans un onglet à la fois. Utilisez Warqa dans cet onglet pour les reprendre.',
   'boot.useHere': 'Utiliser Warqa dans cet onglet',
   'boot.released': 'Warqa est maintenant ouvert dans un autre onglet.',
 
@@ -88,6 +113,14 @@ export const fr: Record<WebKey, string> = {
   'home.import': 'Importer une sauvegarde',
   'home.importing': 'Importation…',
   'home.importFailed': 'Cette sauvegarde n’a pas pu être importée : {error}',
+  'import.exists': 'Vous avez déjà « {title} »',
+  'import.existsBody':
+    'Remplacer supprime la copie de ce navigateur, avec les modifications faites depuis le {date}. Garder les deux ajoute la sauvegarde comme second livre.',
+  'import.existsBodyNoDate':
+    'Remplacer supprime la copie de ce navigateur et vos modifications. Garder les deux ajoute la sauvegarde comme second livre.',
+  'import.replace': 'Remplacer',
+  'import.keepBoth': 'Garder les deux',
+  'import.replaced': 'La sauvegarde a remplacé « {title} ».',
 
   'project.delete': 'Supprimer',
   'project.deleteHint': 'Supprimer ce livre de ce navigateur',
@@ -105,6 +138,19 @@ export const fr: Record<WebKey, string> = {
   'privacy.wipe': 'Supprimer tous mes livres et mes clés',
   'privacy.wipeConfirm': 'Supprimer tous les livres et toutes les clés de ce navigateur ? C’est définitif.',
   'privacy.wiped': 'Tout a été supprimé de ce navigateur.',
+  'space.title': 'Stockage du navigateur presque plein',
+  'space.row': 'Espace utilisé dans ce navigateur',
+  'space.amount': '{used} sur {quota}',
+  'space.meter': '{p} % utilisés',
+  'space.body':
+    'Il reste de la place pour environ {free}. Téléchargez une sauvegarde des livres terminés, puis supprimez-les d’ici.',
+  'space.backup': 'Télécharger une sauvegarde',
+  'space.backupShort': 'Sauvegarde',
+  'space.see': 'Voir ce qui prend de la place',
+  'space.books': 'Livres dans ce navigateur',
+  'space.deleteConfirm': 'Supprimer « {title} » de ce navigateur ?',
+  'space.deleteBody': 'Téléchargez d’abord une sauvegarde si vous voulez le garder.',
+  'space.deleted': '« {title} » a été supprimé de ce navigateur.',
 };
 
 export const ar: Record<WebKey, string> = {
@@ -112,8 +158,9 @@ export const ar: Record<WebKey, string> = {
   'boot.failed': 'تعذّر تشغيل ورقة في هذا المتصفح.',
   'boot.failedHint':
     'استعمل نسخة حديثة من Chrome أو Edge أو Firefox أو Safari. بعض النوافذ الخاصة تمنع التخزين الذي تحتاجه ورقة.',
-  'boot.busy': 'ورقة مفتوحة مسبقًا في علامة تبويب أخرى.',
-  'boot.busyHint': 'تُفتح كتبك في علامة تبويب واحدة في كل مرة، حتى لا يضيع أي تعديل.',
+  'boot.busy': 'ورقة مفتوحة في علامة تبويب أخرى',
+  'boot.busyHint': 'تُفتح كتبك في علامة تبويب واحدة في كل مرة. تحفظ علامة التبويب الأخرى ما فيها قبل أن تتركها.',
+  'boot.releasedHint': 'تُفتح كتبك في علامة تبويب واحدة في كل مرة. استعمل ورقة في علامة التبويب هذه لاستعادتها.',
   'boot.useHere': 'استعمل ورقة في علامة التبويب هذه',
   'boot.released': 'ورقة مفتوحة الآن في علامة تبويب أخرى.',
 
@@ -140,6 +187,14 @@ export const ar: Record<WebKey, string> = {
   'home.import': 'استيراد نسخة احتياطية',
   'home.importing': 'جارٍ الاستيراد…',
   'home.importFailed': 'تعذّر استيراد هذه النسخة الاحتياطية: {error}',
+  'import.exists': 'لديك «{title}» مسبقًا',
+  'import.existsBody':
+    '«استبدل» يحذف النسخة الموجودة في هذا المتصفح مع التعديلات التي أجريتها منذ {date}. «احتفظ بالاثنين» يضيف النسخة الاحتياطية ككتاب ثانٍ.',
+  'import.existsBodyNoDate':
+    '«استبدل» يحذف النسخة الموجودة في هذا المتصفح وتعديلاتك عليها. «احتفظ بالاثنين» يضيف النسخة الاحتياطية ككتاب ثانٍ.',
+  'import.replace': 'استبدل',
+  'import.keepBoth': 'احتفظ بالاثنين',
+  'import.replaced': 'حلّت النسخة الاحتياطية محلّ «{title}».',
 
   'project.delete': 'حذف',
   'project.deleteHint': 'حذف هذا الكتاب من هذا المتصفح',
@@ -155,6 +210,18 @@ export const ar: Record<WebKey, string> = {
   'privacy.wipe': 'احذف كل كتبي ومفاتيحي',
   'privacy.wipeConfirm': 'هل تحذف كل الكتب وكل المفاتيح من هذا المتصفح؟ لا يمكن التراجع عن ذلك.',
   'privacy.wiped': 'حُذف كل شيء من هذا المتصفح.',
+  'space.title': 'تخزين المتصفح ممتلئ تقريبًا',
+  'space.row': 'المساحة المستعملة في هذا المتصفح',
+  'space.amount': '{used} من {quota}',
+  'space.meter': 'استُعمل {p}٪',
+  'space.body': 'بقيت مساحة لحوالي {free}. نزّل نسخة احتياطية من الكتب التي أنهيتها، ثم احذفها من هنا.',
+  'space.backup': 'تنزيل نسخة احتياطية',
+  'space.backupShort': 'نسخة احتياطية',
+  'space.see': 'اعرض ما يشغل المساحة',
+  'space.books': 'الكتب في هذا المتصفح',
+  'space.deleteConfirm': 'هل تحذف «{title}» من هذا المتصفح؟',
+  'space.deleteBody': 'نزّل نسخة احتياطية أولًا إن أردت الاحتفاظ به.',
+  'space.deleted': 'حُذف «{title}» من هذا المتصفح.',
 };
 
 export const WEB_CATALOGS: Record<string, Record<WebKey, string>> = { en, fr, ar };

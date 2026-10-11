@@ -145,7 +145,11 @@ export function makeI18n(lang: UiLang): I18n {
       return code;
     },
     bytes: (n) =>
-      n > 1e6 ? `${num(n / 1e6, { maximumFractionDigits: 1 })} MB` : `${num(Math.max(1, Math.round(n / 1e3)))} kB`,
+      n >= 1e9
+        ? `${num(n / 1e9, { maximumFractionDigits: 1 })} GB`
+        : n > 1e6
+          ? `${num(n / 1e6, { maximumFractionDigits: 1 })} MB`
+          : `${num(Math.max(1, Math.round(n / 1e3)))} kB`,
   };
 }
 
