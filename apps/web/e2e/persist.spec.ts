@@ -55,25 +55,26 @@ test('books and keys survive a reload; keys can be forgotten', async ({ page }) 
   expect(await mistral()).toBe(false);
 });
 
-/** A book's backup, as the page downloads it. */
-const download = (page: Page, id: string) =>
-  page.evaluate(async (b) => {
-    const r = await fetch(`/warqa/api/web/projects/${b}/archive`);
-    return [...new Uint8Array(await r.arrayBuffer())];
-  }, id);
+/** A book's backup, as the page downloads it. It crosses from the page as base64: an array of numbers takes a
+ * minute for a few megabytes. */
+const download = async (page: Page, id: string) =>
+  Buffer.from(
+    await page.evaluate(async (b) => {
+      const r = await fetch(`/warqa/api/web/projects/${b}/archive`);
+      const a = new Uint8Array(await r.arrayBuffer());
+      let s = '';
+      for (let i = 0; i < a.length; i += 0x8000) s += String.fromCharCode(...a.subarray(i, i + 0x8000));
+      return btoa(s);
+    }, id),
+    'base64',
+  );
 
 test('a backup imports back as a book', async ({ page }) => {
   await openStudio(page);
   await page.getByRole('button', { name: 'Open the example book' }).click();
   await expect(page).toHaveURL(/project\/integers/);
   // download the backup, delete the book, import the backup
-  const zip = await page.evaluate(async () => {
-    const r = await fetch('/warqa/api/web/projects/integers/archive');
-    const b = new Uint8Array(await r.arrayBuffer());
-    let s = '';
-    for (let i = 0; i < b.length; i += 0x8000) s += String.fromCharCode(...b.subarray(i, i + 0x8000));
-    return btoa(s);
-  });
+  const zip = await download(page, 'integers');
   await page.goto('project/integers');
   await page.getByRole('button', { name: 'Delete this book from this browser' }).click();
   await confirmDialog(page, 'Delete the book');
@@ -82,7 +83,7 @@ test('a backup imports back as a book', async ({ page }) => {
   await page.getByTestId('import-input').setInputFiles({
     name: 'integers.warqa.zip',
     mimeType: 'application/zip',
-    buffer: Buffer.from(zip, 'base64'),
+    buffer: zip,
   });
   await expect(page).toHaveURL(/\/warqa\/project\/integers$/);
   await expect(page.getByRole('heading', { level: 1 })).toHaveText('Integers, step by step');
@@ -94,7 +95,7 @@ test('a backup imports back as a book', async ({ page }) => {
     await page.getByTestId('import-input').setInputFiles({
       name: 'integers.warqa.zip',
       mimeType: 'application/zip',
-      buffer: Buffer.from(zip, 'base64'),
+      buffer: zip,
     });
     const dialog = page.getByRole('dialog', { name: 'You already have “Integers, step by step”' });
     await expect(dialog).toBeVisible();
@@ -129,7 +130,7 @@ test('a backup imports back as a book', async ({ page }) => {
   await expect(page).toHaveURL(/\/warqa\/project\/integers-2$/);
 
   // a different book that happens to have the same folder name is never offered for replacement: a copy
-  const other = unzipSync(new Uint8Array(Buffer.from(zip, 'base64')));
+  const other = unzipSync(new Uint8Array(zip));
   const book = JSON.parse(strFromU8(other['integers.warqa/warqa.json']!));
   other['integers.warqa/warqa.json'] = strToU8(JSON.stringify({ ...book, title: { en: 'Fractions' } }));
   await page.goto('./');

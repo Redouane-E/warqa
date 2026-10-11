@@ -28,25 +28,32 @@ async function open(page: Page, url: string) {
 }
 
 /**
- * A finger on a surface: down, (a move,) up — Pointer Events as a phone sends them. Each event is a round trip to the
- * browser, so a tap sends nothing in between and a swipe one move (a slow test run must not turn them into holds).
+ * A finger on a surface: down, (a move,) up — Pointer Events as a phone sends them. A tap or a swipe is sent in one
+ * call to the page: one round trip per event could outlast a swipe (600 ms) or turn a tap into a hold on a busy
+ * machine. A hold waits between the press and the release.
  */
 async function finger(target: Locator, dx: number, dy: number, hold = 0) {
   const box = (await target.boundingBox())!;
   const x = box.x + box.width / 2;
   const y = box.y + box.height / 2;
-  const at = (k: number) => ({
-    pointerType: 'touch',
-    pointerId: 7,
-    isPrimary: true,
-    bubbles: true,
-    clientX: x + dx * k,
-    clientY: y + dy * k,
-  });
-  await target.dispatchEvent('pointerdown', at(0));
-  if (dx || dy) await target.dispatchEvent('pointermove', at(1));
-  if (hold) await target.page().waitForTimeout(hold);
-  await target.dispatchEvent('pointerup', at(1));
+  const fire = (types: string[]) =>
+    target.evaluate(
+      (el, a) => {
+        for (const type of a.types) {
+          const k = type === 'pointerdown' ? 0 : 1;
+          const at = { clientX: a.x + a.dx * k, clientY: a.y + a.dy * k };
+          el.dispatchEvent(
+            new PointerEvent(type, { pointerType: 'touch', pointerId: 7, isPrimary: true, bubbles: true, ...at }),
+          );
+        }
+      },
+      { types, x, y, dx, dy },
+    );
+  const press = dx || dy ? ['pointerdown', 'pointermove'] : ['pointerdown'];
+  if (!hold) return fire([...press, 'pointerup']);
+  await fire(press);
+  await target.page().waitForTimeout(hold);
+  await fire(['pointerup']);
 }
 
 const noSideways = (page: Page) =>

@@ -25,6 +25,8 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
 
 - TypeScript 7 (the native compiler) builds and type-checks the packages; the emitted JavaScript is unchanged.
   `@types/node` stays on Node 22, the oldest Node Warqa supports.
+- Playwright 1.64, in the packages and in the Docker image's base (`mcr.microsoft.com/playwright:v1.64.0-noble`):
+  the two must stay on the same version.
 
 ## [0.2.0] - 2026-10-11
 

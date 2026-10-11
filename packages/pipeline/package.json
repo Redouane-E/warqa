@@ -43,6 +43,6 @@
     "zod": "^4.6.5"
   },
   "optionalDependencies": {
-    "playwright": "^1.63.0"
+    "playwright": "^1.64.0"
   }
 }
