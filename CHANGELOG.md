@@ -122,6 +122,8 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
   - **Stop** takes effect after the beat being written instead of once all the chapter's beats are written,
     and **Make the rest** goes on from the last written beat. A chapter stopped partway says so on the Make
     step, even after a restart.
+- **Docs and visuals (redesign 6).** A new social preview and README picture in the Sheet look (the mark, the wide
+  Readex Pro, a lesson in Arabic); an end-to-end test of the Sheet/Board switch.
 - **The studio on a phone, and its keys (redesign 5, part 2).** On a phone the header is a back arrow named after the
   page below, the page's title, the spend, Go to and a menu (AI and voices, the interface language, Sheet or Board,
   and in the web app Your data); a book's six steps fit in one row with short names; a deeper page comes in from the
@@ -224,6 +226,9 @@ The section of a version becomes the text of its GitHub Release (see [docs/en/re
 - Cost estimates no longer ask for a translator model when a book has a single language.
 
 ### Fixed
+
+- `warqa qa` no longer reports an overflow for a picture that is leaving the stage (the fox book's finish step
+  measured its question's image, squeezed by the finish card); pictures are also measured once they have loaded.
 
 - A lesson made again over an existing one (`--force write`, or "Make again" stopped and then finished) now
   gets its translations made again instead of keeping the strings of the old beats, even when it was stopped

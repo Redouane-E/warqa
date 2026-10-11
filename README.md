@@ -8,6 +8,8 @@ For teachers, students, and anyone learning on their own.
 
 *ورقة* is Arabic for “a sheet of paper”.
 
+<img src="docs/assets/social-preview.png" alt="Warqa: a lesson in Arabic on a ruled sheet, 7 + (−3) = 4 drawn on a number line" width="640">
+
 [**Start here**](docs/en/start-here.md) · [ابدأ من هنا](docs/ar/start-here.md) · [Commencer ici](docs/fr/start-here.md) · [Try it in your browser](https://redouane-e.github.io/warqa/) · [Example lesson](https://redouane-e.github.io/warqa/demo/)
 
 </div>

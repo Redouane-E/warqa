@@ -233,9 +233,11 @@ export class SceneRenderer {
     return { x: cx + (b.x - cx) * p.fit, y: cy + (b.y - cy) * p.fit, w: b.w * p.fit, h: b.h * p.fit };
   }
 
-  /** Nodes whose content had to be scaled down to fit (for QA). */
+  /** Nodes whose content had to be scaled down to fit (for QA); not those leaving the stage (gone by the end). */
   overflows(): { id: string; fit: number }[] {
-    return [...this.placed.values()].filter((p) => p.fit < 0.999).map((p) => ({ id: p.node.id, fit: p.fit }));
+    return [...this.placed.values()]
+      .filter((p) => p.fit < 0.999 && !this.leaving.has(p.node.id))
+      .map((p) => ({ id: p.node.id, fit: p.fit }));
   }
 
   /** Stage boxes of the visible nodes (for overlap checks). */

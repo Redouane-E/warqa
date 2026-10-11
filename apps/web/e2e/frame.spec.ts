@@ -95,3 +95,26 @@ test('the tray follows you to other screens', async ({ page }) => {
   await page.locator('.tray-pill-open').click();
   await expect(page.getByRole('region', { name: /Exporting/ })).toBeVisible();
 });
+
+test('Sheet or Board: the first visit follows the computer; one button switches, and it is remembered', async ({
+  page,
+}) => {
+  await page.emulateMedia({ colorScheme: 'dark' });
+  await openStudio(page);
+  // nothing chosen yet: the computer's dark mode shows the Board, and the button offers the Sheet
+  await expect(page.locator('html')).not.toHaveAttribute('data-theme', /./);
+  const toSheet = page.getByRole('button', { name: 'Light (Sheet)' });
+  await expect(toSheet).toBeVisible();
+  const ground = () => page.evaluate(() => getComputedStyle(document.body).backgroundColor);
+  const dark = await ground();
+  await toSheet.click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await expect(page.getByRole('button', { name: 'Dark (Board)' })).toBeVisible();
+  expect(await ground()).not.toBe(dark);
+  // remembered
+  await page.reload();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
+  await page.getByRole('button', { name: 'Dark (Board)' }).click();
+  await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+  expect(await ground()).toBe(dark);
+});

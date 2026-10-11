@@ -713,12 +713,13 @@ Tasks:
 
 ### Known issues (carried forward)
 
-- `warqa qa` without `--shots` on the fox book reports an image overflow on the finish step. The image is
-  measured before it has loaded, so it is a timing problem, not a layout one. It predates the redesign
-  (Phase 1's code shows it too). Fix it by waiting for images to load before measuring.
+- ~~`warqa qa` without `--shots` on the fox book reports an image overflow on the finish step.~~ Fixed in
+  Phase 6: the image was the question's, leaving the stage and squeezed by the finish card; leaving nodes are
+  no longer measured (and pictures are measured once loaded).
 - Left for later on purpose:
-  - Chapter thumbnails on the book home: a number badge stands in.
-  - The phone "Listening" sheet: Phase 5; until then phones use buttons under the stage.
+  - Chapter thumbnails on the book home: a number badge stands in (a thumbnail needs a rendered frame per
+    chapter at export time; worth doing with the vision backlog's Shelf).
+  - ~~The phone "Listening" sheet~~: built in Phase 5.
 
 ## Vision backlog (after the redesign)
 

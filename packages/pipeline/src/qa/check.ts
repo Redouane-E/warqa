@@ -83,7 +83,7 @@ export async function loadPlaywright(): Promise<PW> {
   }
 }
 
-const PROBE = `(i) => {
+const PROBE = `async (i) => {
   const p = window.warqa;
   p.freeze(i, 0);
   const cb = p.compiled.beats[i];
@@ -109,7 +109,14 @@ const PROBE = `(i) => {
   const out = [];
   const first = (cb.timing.captions[0] || [0])[0];
   for (let t = 0; t <= Math.min(cb.timing.dur, 8); t += 0.2) { p.freeze(i, t); out.push([+t.toFixed(1), visibleCount()]); }
-  p.freeze(i, cb.ask ? cb.timing.dur : cb.end - 0.05);
+  const endAt = cb.ask ? cb.timing.dur : cb.end - 0.05;
+  p.freeze(i, endAt);
+  // a picture is measured once it has loaded (before, it has no size and seems not to fit): wait, lay out again
+  const pending = [...document.querySelectorAll('.wq-player img')].filter((im) => !im.complete);
+  if (pending.length) {
+    await Promise.all(pending.map((im) => new Promise((ok) => { im.addEventListener('load', ok, { once: true }); im.addEventListener('error', ok, { once: true }); setTimeout(ok, 5000); })));
+    p.freeze(i, endAt);
+  }
   const qa = p.qa();
   return { id: cb.id, ask: cb.ask, move: cb.beat.move, first, dur: cb.timing.dur, end: cb.end, out, boxes: qa.boxes, overflows: qa.overflows, issues: cb.issues };
 }`;
