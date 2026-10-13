@@ -36,7 +36,7 @@
   },
   "devDependencies": {
     "@types/topojson-client": "^3.1.5",
-    "happy-dom": "^20.0.0",
+    "happy-dom": "^20.14.6",
     "topojson-client": "^3.1.0",
     "world-atlas": "^2.0.2"
   }
