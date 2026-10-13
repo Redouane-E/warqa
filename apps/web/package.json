@@ -20,7 +20,7 @@
     "@warqa/i18n": "workspace:*",
     "@warqa/lesson": "workspace:*",
     "@warqa/pipeline": "workspace:*",
-    "ai": "^7.0.133",
+    "ai": "^7.0.137",
     "buffer": "^6.0.3",
     "fflate": "^0.8.3",
     "hono": "^4.13.13",
