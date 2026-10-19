@@ -32,7 +32,7 @@
   "dependencies": {
     "@warqa/brand": "workspace:*",
     "@warqa/i18n": "workspace:*",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   },
   "devDependencies": {
     "@types/topojson-client": "^3.1.5",
