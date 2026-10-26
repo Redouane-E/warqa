@@ -20,6 +20,6 @@
     "@warqa/i18n": "workspace:*",
     "@warqa/lesson": "workspace:*",
     "@warqa/pipeline": "workspace:*",
-    "zod": "^4.6.5"
+    "zod": "^4.6.7"
   }
 }
