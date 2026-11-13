@@ -18,7 +18,7 @@
     "@warqa/i18n": "workspace:*",
     "@warqa/lesson": "workspace:*",
     "@warqa/pipeline": "workspace:*",
-    "hono": "^4.13.13",
+    "hono": "^4.13.16",
     "zod": "^4.6.5"
   },
   "devDependencies": {
