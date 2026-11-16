@@ -15,6 +15,6 @@
     "@warqa/i18n": "workspace:*",
     "@warqa/lesson": "workspace:*",
     "@warqa/pipeline": "workspace:*",
-    "commander": "^15.0.0"
+    "commander": "^15.1.0"
   }
 }
