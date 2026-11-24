@@ -19,7 +19,7 @@
     "@warqa/lesson": "workspace:*",
     "@warqa/pipeline": "workspace:*",
     "hono": "^4.13.13",
-    "zod": "^4.6.5"
+    "zod": "^4.6.6"
   },
   "devDependencies": {
     "@types/react": "^19.3.0",
